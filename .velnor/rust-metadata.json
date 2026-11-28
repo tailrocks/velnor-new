@@ -1014,10 +1014,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
-                "std"
+                "std",
+                "stdio",
+                "thread"
               ]
             },
             {
@@ -1179,10 +1182,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
-                "std"
+                "std",
+                "stdio",
+                "thread"
               ]
             },
             {
@@ -1283,6 +1289,14 @@
               "manifest": "crates/velnor-model/Cargo.toml"
             },
             {
+              "name": "zeroize",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "derive"
+              ]
+            },
+            {
               "name": "zip",
               "kind": "normal",
               "manifest": null,
@@ -1321,6 +1335,24 @@
                 "signal",
                 "test-util"
               ]
+            },
+            {
+              "name": "landlock",
+              "kind": "normal",
+              "manifest": null,
+              "platform": "cfg(target_os = \"linux\")"
+            },
+            {
+              "name": "libc",
+              "kind": "normal",
+              "manifest": null,
+              "platform": "cfg(target_os = \"linux\")"
+            },
+            {
+              "name": "seccompiler",
+              "kind": "normal",
+              "manifest": null,
+              "platform": "cfg(target_os = \"linux\")"
             }
           ],
           "targets": [
@@ -1352,6 +1384,16 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-runner/tests/it/main.rs",
+              "requires_features": true
+            },
+            {
+              "name": "sandbox_live",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner/tests/sandbox_live/main.rs",
               "requires_features": true
             }
           ]
@@ -1408,10 +1450,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
                 "std",
+                "stdio",
+                "thread",
                 "process"
               ]
             },
@@ -1530,10 +1575,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
-                "std"
+                "std",
+                "stdio",
+                "thread"
               ]
             },
             {
@@ -1796,10 +1844,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
                 "std",
+                "stdio",
+                "thread",
                 "process"
               ]
             },
@@ -1934,6 +1985,14 @@
                 "fs",
                 "signal",
                 "test-util"
+              ]
+            },
+            {
+              "name": "velnor-runner-host",
+              "kind": "dev",
+              "manifest": "crates/velnor-runner-host/Cargo.toml",
+              "features": [
+                "test-support"
               ]
             },
             {
@@ -2314,10 +2373,13 @@
               "features": [
                 "event",
                 "fs",
+                "mount",
                 "net",
                 "pipe",
                 "process",
-                "std"
+                "std",
+                "stdio",
+                "thread"
               ]
             },
             {
@@ -2405,7 +2467,7 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "746da4eba58dfb8ee6597b2da6d71995f894c8712db310cf9b7a7aeb3d50cfde",
+    "Cargo.toml": "868aa636c4b3c545bebb7c68461b1453cd5c5e744e461a0f32d677e27456bd63",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "4602dd590ed81d73f1be95921cb695cfd8e8aecb792f7f9e77921f07de3e3d65",
@@ -2419,13 +2481,13 @@
     "crates/velnor-runner-cli/Cargo.toml": "ccfe13408276e0eb86957f99b49b927a777e694f9e25c30c49bd8915c3ec590b",
     "crates/velnor-runner-core/Cargo.toml": "840a5d400de507934a9977b52967e0e593e2e48ca5eadc248fae44cbca6f005e",
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
-    "crates/velnor-runner-host/Cargo.toml": "98e8d5b178f2fa7039a39c77edbd74c5c2f8be7390253dea1da6ec08f04b614b",
+    "crates/velnor-runner-host/Cargo.toml": "4cb50d3e3ff8415ddb92df5afe1ae4eb5d3fe3ffdcb7d99a57f0fafdc745e91e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "50fb117a44114380598cc6f92ce159846ce4e7b81a8b2ddc12731fa67d923e5a",
+    "crates/velnor-runner/Cargo.toml": "7ff15d3098d42dcd9ae35142b8065c666851f62575825fa448fbcf339550782a",
     "crates/velnor-rust/Cargo.toml": "c9be26a0cb2e638e019b6660a3a1204aea86063f479c1ea015724dd6957ba5d8",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "58f00bc7b0bcdca761c3af6e252689d8585a8058facd4fce6e90f737befe56f2"
+  "layout": "a89295f519b30532a726007ebed6da875c8c4059284152c5bd615a7c7bfee6c1"
 }

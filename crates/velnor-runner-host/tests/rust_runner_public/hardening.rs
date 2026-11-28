@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use velnor_runner_host::{HostError, RustRunnerFailure};
-
-use super::support::{Fixture, SECRET_JIT, jit, reservation, wait_for};
+use super::support::{Fixture, SECRET_JIT, facts, jit, reservation, wait_for};
 
 const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_PUBLIC_CHILD";
 
@@ -84,11 +81,11 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
     }
     let fixture = Fixture::new("[]")?;
     let launcher = fixture.launcher();
-    launcher.ensure_machine()?;
-    let mut job = launcher.start_job(reservation(41)?, &jit(SECRET_JIT))?;
+    let user = launcher.ensure_machine()?;
+    let mut job = launcher.start_job(reservation(41)?, &jit(SECRET_JIT), &facts(), &user)?;
     assert!(job.wait().await?.success());
     fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
-    let held = launcher.start_job(reservation(42)?, &jit(SECRET_JIT))?;
+    let held = launcher.start_job(reservation(42)?, &jit(SECRET_JIT), &facts(), &user)?;
     wait_for(&fixture.seen("42.jit.pid")).await?;
     held.stop().await?;
     std::fs::write(fixture.root.join("ps.table"), "4242 sleep 600\n")?;
@@ -101,7 +98,7 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
         "create -a arm64 ubuntu velnor",
         "-m velnor -u root ln -sfn",
         "-m velnor test -x /var/lib/velnor/bin/velnor-runner",
-        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/41.jit",
+        "--stdin-frames -- /var/lib/velnor/bin/velnor-runner run --jit -",
         "-m velnor -u root ps -eo pid=,args=",
         "-m velnor -u root kill -9 4242",
     ] {
@@ -158,39 +155,4 @@ fn assert_environments_are_cleared(fixture: &Fixture) -> Result<(), Box<dyn Erro
         );
     }
     Ok(())
-}
-
-#[test]
-fn rust_runner_jit_directory_is_private() -> Result<(), Box<dyn Error>> {
-    const TEST: &str = "hardening::rust_runner_jit_directory_is_private";
-    if !is_child_of(TEST) {
-        rerun(TEST, "umask 0;", &[])?;
-        return Ok(());
-    }
-    let fresh = Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    fresh.launcher().ensure_machine()?;
-    assert_eq!(mode_of(&fresh.store.join("jit"))?, 0o700);
-    assert!(fresh.store.join("work").is_dir());
-
-    for mode in [0o755, 0o750, 0o710, 0o770, 0o701, 0o777] {
-        let fixture =
-            Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-        std::fs::create_dir_all(fixture.store.join("jit"))?;
-        std::fs::set_permissions(
-            fixture.store.join("jit"),
-            std::fs::Permissions::from_mode(mode),
-        )?;
-        assert_eq!(
-            fixture.launcher().ensure_machine().err(),
-            Some(HostError::RustRunner(
-                RustRunnerFailure::JitDirectoryAccessible
-            )),
-            "{mode:o}"
-        );
-    }
-    Ok(())
-}
-
-fn mode_of(path: &Path) -> Result<u32, Box<dyn Error>> {
-    Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
 }

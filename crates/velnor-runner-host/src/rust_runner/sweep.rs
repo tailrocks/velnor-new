@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::machine::failure;
-use super::store::Store;
 use super::{MachineProcess, RustRunnerLauncher};
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -15,7 +14,7 @@ impl RustRunnerLauncher {
                 return Err(failure(RustRunnerFailure::ProcessesSurvive));
             }
         }
-        Store::open(&self.host_store)?.empty_jit_and_work()
+        self.clean_all_jobs()
     }
 
     fn runner_pids(&self) -> Result<Vec<u32>, HostError> {

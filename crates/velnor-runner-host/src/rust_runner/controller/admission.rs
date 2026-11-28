@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 
 use super::cleanup::CleanupProof;
 use super::source::LaunchGrant;
-use crate::rust_runner::ReservationId;
+use crate::rust_runner::{JobBreach, ReservationId, TrustedFacts};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Closed {
@@ -27,6 +27,7 @@ pub(super) enum Admission {
 
 pub(super) enum JobExit {
     Exited(ExitStatus),
+    Breached(JobBreach),
     Stopped,
     SpawnFailed,
     AcquireFailed,
@@ -36,6 +37,7 @@ impl JobExit {
     pub(super) fn describe(&self) -> String {
         match self {
             Self::Exited(status) => format!("exited({status})"),
+            Self::Breached(breach) => format!("breached({breach:?})"),
             Self::Stopped => "stopped".to_owned(),
             Self::SpawnFailed => "spawn_failed".to_owned(),
             Self::AcquireFailed => "acquire_failed".to_owned(),
@@ -101,6 +103,13 @@ impl Slots {
             },
         );
         true
+    }
+
+    pub(super) fn launching_facts(&self, reservation: ReservationId) -> Option<TrustedFacts> {
+        match &self.entries.get(&reservation)?.phase {
+            Phase::Launching { grant } => grant.trusted_facts(),
+            Phase::Running { .. } | Phase::Proving { .. } => None,
+        }
     }
 
     pub(super) fn abandon_launch(&mut self, reservation: ReservationId) {

@@ -20,7 +20,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     });
     world.write_host_toml(2)?;
     assert_eq!(
-        world.finish(20)?,
+        world.finish()?,
         "Ok(ConfigChanged)",
         "a held startup must notice a changed host.toml before its 30 s retry"
     );
@@ -49,6 +49,6 @@ pub(super) fn waits_while_the_store_is_held(test: &str) -> TestResult<()> {
             .contains("rust-runner startup held: another controller holds the host store")
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }

@@ -17,14 +17,14 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         |events| events.iter().any(|event| event.label == "session.create"),
     );
     at_limit.stop()?;
-    assert_eq!(at_limit.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(at_limit.finish()?, "Ok(Shutdown)");
 
     let mut over = World::new("T18b", 1, true)?;
     let contents = padded(&host_toml(&over.root, 1)?, HOST_TOML_LIMIT + 1);
     assert_eq!(contents.len(), HOST_TOML_LIMIT + 1);
     over.write_host_toml_text(&contents)?;
     over.spawn_controller(test, &[(PASSED_MAX_JOBS, "1")])?;
-    assert_eq!(over.finish(30)?, "Err(invalid config)");
+    assert_eq!(over.finish()?, "Err(invalid config)");
     assert!(over.gh("session.create").is_empty());
     Ok(())
 }

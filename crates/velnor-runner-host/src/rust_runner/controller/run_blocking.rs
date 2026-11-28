@@ -67,7 +67,7 @@ async fn supervise(
         let cx = Context {
             state: state.to_path_buf(),
             config_sha256,
-            launcher: RustRunnerLauncher::from_environment(),
+            launcher: RustRunnerLauncher::from_environment().with_max_jobs(config.host.max_jobs),
         };
         let mut shutdown = Shutdown(Box::pin(signals.received()));
         let pats = match load_pats(&cx, &config, &mut shutdown).await {

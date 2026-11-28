@@ -9,6 +9,8 @@ use std::time::Duration;
 use crate::error::HostError;
 
 mod controller;
+mod frames;
+mod guest_user;
 mod job;
 mod machine;
 mod orb;
@@ -16,38 +18,36 @@ mod paths;
 mod processes;
 mod store;
 mod sweep;
+mod trusted;
 
-pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
+pub use controller::{
+    CONTROLLER_STOP_BUDGET, ConnectionPats, RustRunnerExit, run_rust_runner_host,
+};
+pub use guest_user::GuestUser;
+pub(crate) use job::JobBreach;
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
 pub use store::HostHold;
+pub use trusted::TrustedFacts;
+
+pub(crate) use trusted::{PullRequestHead, TrustedEvent, Verified};
 
 pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
+const GUEST_JOBS: &str = "/run/velnor/jobs";
 const GUEST_STORE: &str = "/var/lib/velnor";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
+const DEFAULT_JOB_LIMIT_GIB: u64 = 64;
 const DEFAULT_ORB: &str = "orb";
 const ORB_DEADLINE: Duration = Duration::from_secs(60);
 const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
-const PID_NAMESPACE: [&str; 6] = [
-    "unshare",
-    "--user",
-    "--map-current-user",
-    "--pid",
-    "--fork",
-    "--kill-child",
-];
-const HOST_DIRECTORIES: [&str; 8] = [
-    "bin", "crates", "tools", "git", "gen", "cache", "records", "work",
-];
-const JIT_DIRECTORY: &str = "jit";
-const WORK_DIRECTORY: &str = "work";
+const HOST_DIRECTORIES: [&str; 7] = ["bin", "crates", "tools", "git", "gen", "cache", "records"];
 
 static INSTALLED: OnceLock<RustRunnerLauncher> = OnceLock::new();
 
@@ -59,6 +59,8 @@ pub fn install_rust_runner_launcher(launcher: RustRunnerLauncher) -> Result<(), 
 pub struct RustRunnerLauncher {
     orb: PathBuf,
     host_store: PathBuf,
+    job_limit_gib: u64,
+    max_jobs: u32,
     deadline: Duration,
 }
 
@@ -68,8 +70,22 @@ impl RustRunnerLauncher {
         Self {
             orb,
             host_store,
+            job_limit_gib: DEFAULT_JOB_LIMIT_GIB,
+            max_jobs: 1,
             deadline: ORB_DEADLINE,
         }
+    }
+
+    #[must_use]
+    pub const fn with_job_limit_gib(mut self, job_limit_gib: u64) -> Self {
+        self.job_limit_gib = job_limit_gib;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_jobs(mut self, max_jobs: u32) -> Self {
+        self.max_jobs = max_jobs;
+        self
     }
 
     #[must_use]

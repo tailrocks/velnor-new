@@ -26,9 +26,8 @@ function listing(directory: string): string {
 
 function snapshot(seq: number): void {
   mkdirSync(`${seen}/snapshots`, { recursive: true });
-  const table = existsSync(config.ps_table) ? readFileSync(config.ps_table, "utf8") : "";
   const runners = readState().runners.map((runner) => runner.name).join(",");
-  const text = `jit: ${listing(`${config.store}/jit`)}\nwork: ${listing(`${config.store}/work`)}\nrunners: ${runners}\nps:\n${table}`;
+  const text = `jobs: ${listing(`${seen}/guest/jobs`)}\nwork: ${listing(`${seen}/guest/gen/work`)}\nrunners: ${runners}`;
   writeFileSync(`${seen}/snapshots/${seq}.txt`, text);
 }
 

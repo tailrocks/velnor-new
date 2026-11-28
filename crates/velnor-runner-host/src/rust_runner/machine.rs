@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+use super::guest_user::GuestUser;
 use super::store::{HostHold, Store};
 use super::{
     GUEST_RUNNER, GUEST_STORE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb,
@@ -28,13 +29,14 @@ struct ListedMachine {
 }
 
 impl RustRunnerLauncher {
-    pub fn ensure_machine(&self) -> Result<(), HostError> {
+    pub fn ensure_machine(&self) -> Result<GuestUser, HostError> {
         if !self.machine_exists()? {
             self.create_machine()?;
         }
         Store::prepare(&self.host_store)?;
         self.link_store()?;
-        self.require_runner_binary()
+        self.require_runner_binary()?;
+        self.guest_user()
     }
 
     pub fn hold_host(&self) -> Result<HostHold, HostError> {

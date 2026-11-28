@@ -11,6 +11,7 @@ pub mod lifecycle;
 mod native;
 pub mod protocol;
 pub mod runner_json;
+pub mod sandbox;
 pub mod secret;
 mod store;
 mod width;

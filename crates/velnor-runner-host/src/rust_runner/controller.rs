@@ -15,7 +15,7 @@ use crate::daemon_lock::DaemonLock;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
 use crate::listen::PollPathResult;
-use crate::rust_runner::{ReservationId, RustRunnerLauncher};
+use crate::rust_runner::{GuestUser, ReservationId, RustRunnerLauncher};
 
 mod admission;
 mod batch;
@@ -46,6 +46,7 @@ use startup::Started;
 pub use pats::ConnectionPats;
 pub(crate) use readiness::assess as heartbeat_readiness;
 pub(crate) use run_blocking::{Handover, run_blocking};
+pub use stop::CONTROLLER_STOP_BUDGET;
 
 const TICK: Duration = Duration::from_secs(2);
 const POLL_WAKE: Duration = Duration::from_millis(500);
@@ -116,7 +117,7 @@ enum Event {
         reservation: ReservationId,
         result: Result<CleanupProof, ListenFault>,
     },
-    Machine(Result<(), ListenFault>),
+    Machine(Result<GuestUser, ListenFault>),
     RunnerBinary(Result<String, ListenFault>),
 }
 
@@ -143,6 +144,7 @@ struct Run<'a> {
     taken: BTreeSet<(usize, i64)>,
     next_reservation: u64,
     tasks: JoinSet<Event>,
+    guest: GuestUser,
     machine_ok: bool,
     machine_checking: bool,
     machine_probed: Instant,
@@ -195,8 +197,8 @@ async fn run_with_health(
         config_sha256,
         launcher,
     };
-    let (connections, _hold) = match startup::start(&cx, &config, &pats, shutdown).await? {
-        Started::Ready(connections, hold) => (connections, hold),
+    let (connections, _hold, guest) = match startup::start(&cx, &config, &pats, shutdown).await? {
+        Started::Ready(connections, hold, guest) => (connections, hold, guest),
         Started::Shutdown => return Ok(RustRunnerExit::Shutdown),
         Started::ConfigChanged => return Ok(RustRunnerExit::ConfigChanged),
     };
@@ -210,6 +212,7 @@ async fn run_with_health(
         taken: BTreeSet::new(),
         next_reservation: 1,
         tasks: JoinSet::new(),
+        guest,
         machine_ok: true,
         machine_checking: false,
         machine_probed: Instant::now(),
@@ -300,7 +303,10 @@ impl Run<'_> {
                 self.machine_checking = false;
                 self.machine_probed = Instant::now();
                 match result {
-                    Ok(()) => self.machine_ok = true,
+                    Ok(guest) => {
+                        self.guest = guest;
+                        self.machine_ok = true;
+                    }
                     Err(error) => {
                         eprintln!("rust-runner machine check held: {error}");
                         self.machine_ok = false;

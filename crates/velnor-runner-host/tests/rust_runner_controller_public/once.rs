@@ -6,7 +6,8 @@ use std::time::Duration;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{
-    acquire_ids, assert_clean, deleted_messages, jit_name, reservation, runner_name, snapshot,
+    acquire_ids, assert_clean, deleted_messages, jit_name, job_dir_name, reservation, runner_name,
+    snapshot,
 };
 use super::events::{Event, files_containing, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
@@ -47,7 +48,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         })
     });
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_canaries(&world, first, second);
     Ok(())
@@ -87,7 +88,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
     std::thread::sleep(Duration::from_millis(2200));
     assert!(world.heartbeat_ms().ok_or("no heartbeat")? > before);
     assert_eq!(acquire_ids(world), ["1"]);
-    let jit_file = world.store.join("jit").join(&name);
+    let jit_file = world.seen.join(&name);
     assert_eq!(
         std::fs::read_to_string(&jit_file)?,
         std::fs::read_to_string(world.github.join("jits").join(runner_name(first)))?
@@ -98,9 +99,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
         .find(Event::is_runner_start)
         .ok_or("no runner start")?;
     assert!(
-        runner_line.text.contains(&format!(
-            "--jit @/var/lib/velnor/jit/{first}.jit --work-dir /var/lib/velnor/work/{first}"
-        )),
+        runner_line.text.contains("--disk-limit-gib 64 --max-jobs 1 --stdin-frames -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /work"),
         "{}",
         runner_line.text
     );
@@ -156,8 +155,19 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
             && event.field("returned") == "11"),
         "M1 was not redelivered after the proof"
     );
+    assert!(
+        world
+            .events()
+            .iter()
+            .any(|event| event.is_orb(&format!("sandbox-cleanup --reservation {first}"))),
+        "the proof did not clean the job in the machine"
+    );
     let state = snapshot(world, acquires[1]);
-    assert!(!state.jit.contains(&jit_name(first)), "{:?}", state.jit);
+    assert!(
+        !state.jobs.contains(&job_dir_name(first)),
+        "{:?}",
+        state.jobs
+    );
     assert!(!state.work.contains(&first.to_string()), "{:?}", state.work);
     Ok(())
 }

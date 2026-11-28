@@ -18,7 +18,10 @@ async fn supervise(
     let binary = job.binary().to_owned();
     let exit = tokio::select! {
         status = job.wait() => if let Ok(status) = status {
-            JobExit::Exited(status)
+            match job.breach(status).await {
+                Some(breach) => JobExit::Breached(breach),
+                None => JobExit::Exited(status),
+            }
         } else {
             let _ = job.stop().await;
             JobExit::Stopped
@@ -51,7 +54,17 @@ impl Run<'_> {
     }
 
     pub(super) fn launch(&mut self, reservation: ReservationId, jit: &EncodedJit) {
-        match self.cx.launcher.start_job(reservation, jit) {
+        let Some(facts) = self.slots.launching_facts(reservation) else {
+            eprintln!("rust-runner has no trusted facts for reservation {reservation}");
+            self.machine_ok = false;
+            self.begin_proof(reservation, JobExit::SpawnFailed);
+            return;
+        };
+        match self
+            .cx
+            .launcher
+            .start_job(reservation, jit, &facts, &self.guest)
+        {
             Ok(job) => {
                 let (stop, stopped) = oneshot::channel();
                 if self.slots.start_running(reservation, stop) {

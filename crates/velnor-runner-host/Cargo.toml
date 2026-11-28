@@ -11,6 +11,7 @@ autotests = false
 
 [features]
 local-mode = ["tokio/signal"]
+test-support = []
 
 [[test]]
 name = "resource_probe_release_public"
@@ -138,6 +139,7 @@ security-framework = { version = "=3.7.0" }
 [dev-dependencies]
 bollard = { workspace = true, features = ["http"] }
 tokio = { workspace = true, features = ["test-util"] }
+velnor-runner-host = { path = ".", features = ["test-support"] }
 
 [[test]]
 name = "mac_qualification_facade_public"

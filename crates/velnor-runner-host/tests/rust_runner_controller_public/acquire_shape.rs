@@ -56,7 +56,7 @@ fn held(name: &str, shape: &str) -> TestResult<()> {
     );
     assert_eq!(acquire_ids(&world), ["1"]);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

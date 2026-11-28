@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{jit_name, reservation};
+use super::checks::{guest_work_entries, jit_name, reservation};
 use super::events::{process_exists, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -53,7 +53,7 @@ pub(super) fn degraded_session(test: &str) -> TestResult<()> {
     });
     assert_eq!(controller_readiness(&world.state), Readiness::Ready);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -64,7 +64,7 @@ pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
         "poll.expired": {"statuses": [401], "repeat_last": false},
         "session.refreshed": {"replies": [{"patch": {"messageQueueUrl": "http://queue.invalid/messages"}}]}
     }))?;
-    let exit = world.finish(60)?;
+    let exit = world.finish()?;
     assert!(exit.starts_with("Err("), "{exit}");
     wait_for("the runner process to end", 10, || {
         !process_exists(&pid) && !process_exists(&child)
@@ -74,7 +74,7 @@ pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
         !world.gh("session.delete").is_empty(),
         "the session was never closed"
     );
-    assert_eq!(std::fs::read_dir(world.store.join("work"))?.count(), 0);
+    assert_eq!(guest_work_entries(&world), 0);
     Ok(())
 }
 
@@ -82,7 +82,7 @@ pub(super) fn leaves_everything_after_a_lost_lock(test: &str) -> TestResult<()> 
     let mut world = World::new("T16", 1, true)?;
     held_job(&mut world, test)?;
     std::fs::remove_file(world.state.join("daemon.lock"))?;
-    let exit = world.finish(30)?;
+    let exit = world.finish()?;
     assert_eq!(exit, "Err(daemon lock held)", "{exit}");
     assert!(
         world.gh("session.delete").is_empty() && world.gh("runner.delete").is_empty(),

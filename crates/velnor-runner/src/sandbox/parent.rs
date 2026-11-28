@@ -1,0 +1,214 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::os::unix::process::ExitStatusExt;
+use std::path::Path;
+use std::process::{ExitCode, ExitStatus, Stdio};
+
+use anyhow::{Context, Result};
+use tokio::signal::unix::{Signal, SignalKind, signal};
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
+
+use super::args::SandboxArgs;
+use super::cgroup::Cgroup;
+use super::frames::Delivery;
+use super::jit::Jit;
+use super::trusted::Header;
+use super::watch::{Breach, Limits, WATCH_EVERY, Watch};
+use super::{Layout, cleanup, dirs, net, run_dir};
+
+const SETPRIV: &str = "/usr/bin/setpriv";
+const NSENTER: &str = "/usr/bin/nsenter";
+const UNSHARE: &str = "/usr/bin/unshare";
+const KILLED_BASE: u8 = 128;
+const BREACH_EXIT: u8 = 125;
+const SIGKILL_EXIT: i32 = 137;
+const SIGKILL: i32 = 9;
+
+pub(super) fn chain(layout: &Layout, runner: &Path, command: &[String]) -> Result<Vec<String>> {
+    let mut argv: Vec<String> = ["--pdeathsig", "KILL", "--", NSENTER]
+        .iter()
+        .map(|part| (*part).to_owned())
+        .collect();
+    argv.push(format!("--net={}", layout.netns.display()));
+    argv.extend(
+        [
+            "--",
+            UNSHARE,
+            "--mount",
+            "--pid",
+            "--ipc",
+            "--uts",
+            "--fork",
+            "--kill-child",
+            "--propagation",
+            "private",
+            "--",
+        ]
+        .iter()
+        .map(|part| (*part).to_owned()),
+    );
+    argv.push(runner.display().to_string());
+    argv.extend(["sandbox-apply".to_owned(), "--layout".to_owned()]);
+    argv.push(serde_json::to_string(layout).context("serialize the sandbox layout")?);
+    argv.push("--".to_owned());
+    argv.extend(command.iter().cloned());
+    Ok(argv)
+}
+
+fn killed(status: ExitStatus) -> bool {
+    status.code() == Some(SIGKILL_EXIT) || status.signal() == Some(SIGKILL)
+}
+
+fn exit_code(status: ExitStatus) -> ExitCode {
+    let code = status.code().map_or_else(
+        || {
+            u8::try_from(status.signal().unwrap_or(0))
+                .map_or(u8::MAX, |signal| KILLED_BASE.saturating_add(signal))
+        },
+        |code| u8::try_from(code).unwrap_or(u8::MAX),
+    );
+    ExitCode::from(code)
+}
+
+struct Interrupts {
+    terminate: Signal,
+    interrupt: Signal,
+    hangup: Signal,
+}
+
+impl Interrupts {
+    fn listen() -> Result<Self> {
+        Ok(Self {
+            terminate: signal(SignalKind::terminate()).context("listen for SIGTERM")?,
+            interrupt: signal(SignalKind::interrupt()).context("listen for SIGINT")?,
+            hangup: signal(SignalKind::hangup()).context("listen for SIGHUP")?,
+        })
+    }
+
+    async fn next(&mut self) {
+        tokio::select! {
+            _ = self.terminate.recv() => {}
+            _ = self.interrupt.recv() => {}
+            _ = self.hangup.recv() => {}
+        }
+    }
+}
+
+struct Finished {
+    status: ExitStatus,
+    breach: Option<Breach>,
+}
+
+async fn launch(
+    args: &SandboxArgs,
+    layout: &Layout,
+    cgroup: &Cgroup,
+    jit: Option<Jit>,
+) -> Result<Finished> {
+    dirs::prepare(layout)?;
+    net::up(args.reservation)?;
+    let stdin = match jit {
+        Some(jit) => Stdio::from(jit.pipe()?),
+        None => Stdio::null(),
+    };
+    let runner = std::env::current_exe().context("find the runner binary")?;
+    let mut interrupts = Interrupts::listen()?;
+    let mut child = tokio::process::Command::new(SETPRIV)
+        .args(chain(layout, &runner, &args.command)?)
+        .env_clear()
+        .stdin(stdin)
+        .kill_on_drop(true)
+        .spawn()
+        .context("start the sandbox")?;
+    let limits = Limits {
+        disk_gib: args.disk_limit_gib,
+        floor_gib: args.machine_floor_gib,
+    };
+    let mut ticker = interval_at(Instant::now() + WATCH_EVERY, WATCH_EVERY);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut watch = Watch::new();
+    let mut asked = false;
+    let mut breach = None;
+    loop {
+        tokio::select! {
+            status = child.wait() => {
+                let status = status.context("wait for the sandbox")?;
+                if breach.is_none() {
+                    breach = if cgroup.killed_for_memory() {
+                        Some(Breach::Memory)
+                    } else if !asked && killed(status) {
+                        Some(Breach::Killed)
+                    } else {
+                        tokio::task::block_in_place(|| watch.settle(layout, cgroup, &limits))
+                    };
+                }
+                return Ok(Finished { status, breach });
+            }
+            () = interrupts.next() => {
+                if asked {
+                    cgroup.kill();
+                } else {
+                    asked = true;
+                    cgroup.terminate();
+                }
+            }
+            _ = ticker.tick() => {
+                if breach.is_none() {
+                    breach = watch.poll(layout, cgroup, &limits);
+                }
+                if breach.is_some() {
+                    cgroup.kill();
+                }
+            }
+        }
+    }
+}
+
+fn deliver(args: &SandboxArgs, delivery: Option<Delivery>) -> Result<Option<Jit>> {
+    let Some(delivery) = delivery else {
+        return Ok(None);
+    };
+    eprintln!(
+        "velnor sandbox: reservation {} {}",
+        args.reservation,
+        Header::parse(&delivery.trusted)?.describe()
+    );
+    run_dir::create(args.reservation)?;
+    run_dir::write(args.reservation, run_dir::TRUSTED_FILE, &delivery.trusted)?;
+    Ok(Some(Jit(delivery.jit)))
+}
+
+async fn supervise(args: &SandboxArgs, delivery: Option<Delivery>) -> Result<Finished> {
+    let layout = dirs::layout(args)?;
+    let jit = deliver(args, delivery)?;
+    let cgroup = Cgroup::create(layout.cgroup.clone(), args.max_jobs)?;
+    launch(args, &layout, &cgroup, jit).await
+}
+
+fn record(reservation: u64, breach: Breach) {
+    let body = serde_json::json!({ "breach": breach.kind() }).to_string();
+    if let Err(error) = run_dir::create(reservation)
+        .and_then(|()| run_dir::write(reservation, run_dir::BREACH_FILE, body.as_bytes()))
+    {
+        eprintln!("velnor sandbox: could not record the breach: {error:#}");
+    }
+}
+
+pub async fn run(args: &SandboxArgs) -> Result<ExitCode> {
+    args.validate()?;
+    let delivery = args
+        .stdin_frames
+        .then(|| Delivery::read(std::io::stdin().lock()))
+        .transpose()?;
+    let outcome = supervise(args, delivery).await;
+    let cleaned = cleanup::reservation(args.reservation);
+    let finished = outcome?;
+    if let Some(breach) = finished.breach {
+        eprintln!("{}", breach.message(args.disk_limit_gib));
+        record(args.reservation, breach);
+        return Ok(ExitCode::from(BREACH_EXIT));
+    }
+    cleaned?;
+    Ok(exit_code(finished.status))
+}

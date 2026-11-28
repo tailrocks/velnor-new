@@ -66,7 +66,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
             .any(|event| event.label == "runner.delete" && event.field("name") == runner_name(1))
     });
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

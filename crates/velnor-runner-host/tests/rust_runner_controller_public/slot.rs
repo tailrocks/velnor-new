@@ -5,14 +5,14 @@ use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{
-    acquire_ids, assert_clean, call_number, deleted_messages, heartbeat_advances, runner_name,
-    snapshot,
+    acquire_ids, assert_clean, deleted_messages, guest_work_entries, heartbeat_advances,
+    runner_name, snapshot,
 };
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
-const HOLD_A: &str = "FAKE_RUNNER_PS_PID=7001\nFAKE_ORB_PS_IMMORTAL=7001\nFAKE_ORB_PS_FAIL=2\n";
+const HOLD_A: &str = "FAKE_CLEANUP_FAIL=1\n";
 
 fn acquire_with_ids(events: &[Event], id: &str) -> Option<Event> {
     events
@@ -35,7 +35,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     }))?;
     queue_next(&world, 31)?;
     world.spawn_controller(test, &[])?;
-    held_by_processes(&world)?;
+    held_by_a_failing_cleanup(&world)?;
     world.configure_orb("")?;
     std::fs::write(world.seen.join("release"), "")?;
     held_by_the_runner(&world)?;
@@ -59,15 +59,18 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert!(
         !state.runners.contains(&runner_name(3))
             && !state.work.contains(&"3".to_owned())
-            && !state.jit.contains(&"3.jit".to_owned()),
+            && !state.jobs.contains(&"3".to_owned()),
         "{state:?}"
     );
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_eq!(acquire_ids(&world), ["1", "2", "3", "4"]);
-    assert_eq!(std::fs::read_dir(world.store.join("jit"))?.count(), 0);
-    assert_eq!(std::fs::read_dir(world.store.join("work"))?.count(), 0);
+    assert_eq!(
+        std::fs::read_dir(world.seen.join("guest/jobs")).map_or(0, Iterator::count),
+        0
+    );
+    assert_eq!(guest_work_entries(&world), 0);
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
     assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));
@@ -117,7 +120,7 @@ fn queue_next(world: &World, message: u64) -> TestResult<()> {
     )
 }
 
-fn held_by_processes(world: &World) -> TestResult<()> {
+fn held_by_a_failing_cleanup(world: &World) -> TestResult<()> {
     world.wait_for_event("job A", 40, |events| {
         events.iter().any(Event::is_runner_start)
     });
@@ -129,15 +132,16 @@ fn held_by_processes(world: &World) -> TestResult<()> {
         .ok_or("no job A")?;
     heartbeat_advances(world, 4);
     world.wait_for_event(
-        "four ps calls and a kill of 7001 after job A",
+        "four refused cleanups of job A in the machine",
         40,
         |events| {
-            let after: Vec<_> = events
+            events
                 .iter()
-                .filter(|event| event.seq > started.seq)
-                .collect();
-            after.iter().filter(|event| event.is_orb("ps -eo")).count() >= 4
-                && after.iter().any(|event| event.is_orb("kill -9 7001"))
+                .filter(|event| {
+                    event.seq > started.seq && event.is_orb("sandbox-cleanup --reservation 1")
+                })
+                .count()
+                >= 4
         },
     );
     assert_held(world, "job A", &["31"], &["1"]);
@@ -153,29 +157,11 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
     let acquire = acquire_with_ids(&events, "2").ok_or("no acquire for B")?;
     let state = snapshot(world, &acquire);
     assert!(
-        state
-            .ps
-            .lines()
-            .all(|line| !line.trim_start().starts_with("7001 ")),
-        "{}",
-        state.ps
-    );
-    assert!(
         !state.runners.contains(&runner_name(1)),
         "{:?}",
         state.runners
     );
-    assert!(!state.jit.contains(&"1.jit".to_owned()) && !state.work.contains(&"1".to_owned()));
-    let last_ps = events
-        .iter()
-        .rfind(|event| event.seq < acquire.seq && event.is_orb("ps -eo"))
-        .ok_or("no ps before B")?;
-    let call = call_number(last_ps);
-    let status = std::fs::read_to_string(world.seen.join(format!("calls/{call}.status")))?;
-    assert_eq!(status.trim(), "0");
-    let output =
-        std::fs::read_to_string(world.seen.join(format!("calls/{call}.out"))).unwrap_or_default();
-    assert!(!output.contains("7001"), "{output}");
+    assert!(!state.jobs.contains(&"1".to_owned()) && !state.work.contains(&"1".to_owned()));
     world.wait_for_event("the runner of job B", 20, |events| {
         events
             .iter()

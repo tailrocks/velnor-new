@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use super::checks::{assert_clean, deleted_messages, jit_name, reservation, runner_name};
+use super::checks::{
+    assert_clean, deleted_messages, jit_name, job_dir_exists, reservation, runner_name,
+};
 use super::events::{process_exists, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -38,13 +40,19 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let before = world.events().last().map_or(0, |event| event.seq);
     let stopped = Instant::now();
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert!(stopped.elapsed().as_secs() <= 20);
     wait_for("the stand-in and its child to end", 10, || {
         !process_exists(&pid) && !process_exists(&child)
     });
-    assert!(!world.store.join("jit").join(&name).exists());
-    assert!(!world.store.join("work").join(job.to_string()).exists());
+    assert!(!job_dir_exists(&world, job));
+    assert!(
+        !world
+            .seen
+            .join("guest/gen/work")
+            .join(job.to_string())
+            .exists()
+    );
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
     assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));
@@ -53,10 +61,12 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         .iter()
         .rfind(|event| event.label == "session.delete")
         .ok_or("no session delete")?;
-    let ps = events
+    let cleaned = events
         .iter()
-        .find(|event| event.seq > before && event.is_orb("ps -eo"))
-        .ok_or("no ps after the stop")?;
+        .find(|event| {
+            event.seq > before && event.is_orb(&format!("sandbox-cleanup --reservation {job}"))
+        })
+        .ok_or("no cleanup of the job in the machine after the stop")?;
     let removals: Vec<&str> = events
         .iter()
         .filter(|event| event.label == "runner.delete" && event.field("name") == runner_name(job))
@@ -71,7 +81,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         .iter()
         .rfind(|event| event.label == "runner.delete" && event.field("name") == runner_name(job))
         .ok_or("no runner removal")?;
-    assert!(ps.seq < session.seq && removal.seq < session.seq);
+    assert!(cleaned.seq < session.seq && removal.seq < session.seq);
     assert_eq!(events.last().map(|event| event.seq), Some(session.seq));
     assert!(!deleted_messages(&world).contains(&"52".to_owned()));
     assert!(
@@ -107,7 +117,7 @@ fn launching(test: &str) -> TestResult<()> {
         },
     );
     std::fs::write(world.seen.join("release-acquire"), "")?;
-    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     let events = world.events();
     let created = events
         .iter()
@@ -141,7 +151,7 @@ pub(super) fn closes_sessions_under_one_deadline(test: &str) -> TestResult<()> {
         },
     );
     std::fs::write(world.seen.join("release-session"), "")?;
-    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -159,7 +169,7 @@ pub(super) fn proves_a_job_that_will_not_stop(test: &str) -> TestResult<()> {
         world.pid_of(&name).is_some() && world.seen.join(format!("{name}.child")).exists()
     });
     world.stop()?;
-    assert_eq!(world.finish(60)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     let removed = world.events().iter().any(|event| {
         event.label == "runner.delete"
             && event.field("name") == runner_name(job)
@@ -169,7 +179,13 @@ pub(super) fn proves_a_job_that_will_not_stop(test: &str) -> TestResult<()> {
         removed,
         "the runner of a job that would not stop was never removed"
     );
-    assert!(!world.store.join("work").join(job.to_string()).exists());
+    assert!(
+        !world
+            .seen
+            .join("guest/gen/work")
+            .join(job.to_string())
+            .exists()
+    );
     world.release(&name)?;
     Ok(())
 }

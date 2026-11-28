@@ -29,7 +29,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         || docker.accept().map(|(stream, _)| held.push(stream)).is_ok(),
     );
     world.terminate()?;
-    let exit = world.finish(8).map_err(|error| {
+    let exit = world.finish().map_err(|error| {
         format!("a termination signal did not end the official controller: {error}")
     })?;
     assert_eq!(

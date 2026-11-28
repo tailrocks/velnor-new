@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::EncodedJit;
-use velnor_runner_host::{ReservationId, RustRunnerLauncher};
+use velnor_runner_host::{ReservationId, RustRunnerLauncher, TrustedFacts};
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 pub(super) const SECRET_JIT: &str = "eyJ2ZWxub3IiOiJzZWNyZXQtaml0LWNvbmZpZyJ9";
@@ -72,13 +72,17 @@ impl Fixture {
         self.root.join("seen").join(name)
     }
 
-    pub(super) fn jit_file(&self, reservation: u64) -> PathBuf {
-        self.store.join("jit").join(format!("{reservation}.jit"))
+    pub(super) fn guest_job(&self, reservation: u64) -> PathBuf {
+        self.seen(&format!("guest/jobs/{reservation}"))
     }
 }
 
 pub(super) fn reservation(value: u64) -> Result<ReservationId, Box<dyn Error>> {
     ReservationId::new(value).ok_or_else(|| "zero reservation".into())
+}
+
+pub(super) fn facts() -> TrustedFacts {
+    TrustedFacts::for_test()
 }
 
 pub(super) fn jit(text: &str) -> EncodedJit {

@@ -2,28 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{DirBuilder, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, fsync, mkdirat, openat,
-    renameat, statat, unlinkat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, mkdirat, openat, statat,
 };
 use rustix::io::Errno;
-use rustix::path::Arg;
 use rustix::process::geteuid;
 use sha2::{Digest, Sha256};
 
-use self::remove::BOUNDS;
+use super::HOST_DIRECTORIES;
 use super::machine::failure;
-use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
-
-mod remove;
 
 const RUNNER_BINARY: &str = "velnor-runner";
 const BIN_DIRECTORY: &str = "bin";
@@ -76,18 +71,8 @@ impl Store {
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         let store = Self::open(path)?;
         for name in HOST_DIRECTORIES {
-            let forbidden = if name == WORK_DIRECTORY {
-                others_can_reach()
-            } else {
-                others_can_write()
-            };
-            store.ensure_directory(name, forbidden, RustRunnerFailure::StoreUnsafe)?;
+            store.ensure_directory(name, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
         }
-        store.ensure_directory(
-            JIT_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )?;
         Ok(store)
     }
 
@@ -163,72 +148,6 @@ impl Store {
         }
     }
 
-    pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
-        self.ensure_directory(
-            JIT_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )?;
-        let jit = self.jit_directory()?;
-        let staging = format!(".{name}.tmp");
-        let write = || -> Result<(), Errno> {
-            remove_entry(&jit, &staging)?;
-            let descriptor = openat(
-                &jit,
-                staging.as_str(),
-                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
-            )?;
-            let mut file = File::from(descriptor);
-            file.write_all(bytes).map_err(|_| Errno::IO)?;
-            fsync(&file)?;
-            renameat(&jit, staging.as_str(), &jit, name)
-        };
-        write().map_err(|_| {
-            let _ = remove_entry(&jit, &staging);
-            failure(RustRunnerFailure::JitFile)
-        })
-    }
-
-    pub(super) fn remove_jit(&self, name: &str) -> Result<(), HostError> {
-        let jit = self.jit_directory()?;
-        remove_entry(&jit, name).map_err(|_| failure(RustRunnerFailure::HostStore))
-    }
-
-    pub(super) fn remove_work(&self, name: &str) -> Result<(), HostError> {
-        let work = self.work_directory()?;
-        remove::tree(&work, name, BOUNDS).map_err(|error| failure(error.failure()))
-    }
-
-    pub(super) fn leftovers(&self, jit_name: &str, work_name: &str) -> Result<bool, HostError> {
-        let jit = self.jit_directory()?;
-        let work = self.work_directory()?;
-        Ok(exists(&jit, jit_name)? || exists(&work, work_name)?)
-    }
-
-    pub(super) fn empty_jit_and_work(&self) -> Result<(), HostError> {
-        for directory in [self.jit_directory()?, self.work_directory()?] {
-            remove::contents(&directory, BOUNDS).map_err(|error| failure(error.failure()))?;
-        }
-        Ok(())
-    }
-
-    fn jit_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            JIT_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )
-    }
-
-    fn work_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            WORK_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::StoreUnsafe,
-        )
-    }
-
     fn directory(
         &self,
         name: &str,
@@ -296,20 +215,5 @@ fn require_no_acl(path: &Path) -> Result<(), HostError> {
         Ok(())
     } else {
         Err(failure(RustRunnerFailure::StoreUnsafe))
-    }
-}
-
-fn exists(directory: &OwnedFd, name: &str) -> Result<bool, HostError> {
-    match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(_) => Ok(true),
-        Err(Errno::NOENT) => Ok(false),
-        Err(_) => Err(failure(RustRunnerFailure::HostStore)),
-    }
-}
-
-fn remove_entry(directory: &impl AsFd, name: impl Arg) -> Result<(), Errno> {
-    match unlinkat(directory, name, AtFlags::empty()) {
-        Ok(()) | Err(Errno::NOENT) => Ok(()),
-        Err(error) => Err(error),
     }
 }

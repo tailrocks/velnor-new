@@ -83,7 +83,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
             .any(|event| event.label == "runner.delete" && event.field("status") == "204")
     });
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_outcome(&world);
     assert_clean(&world, "1");
     Ok(())
@@ -156,7 +156,7 @@ fn assert_outcome(world: &World) {
     assert!(
         runners[0]
             .text
-            .contains(&format!("/var/lib/velnor/jit/{sentinel}.jit")),
+            .contains(&format!("--reservation {sentinel} ")),
         "{}",
         runners[0].text
     );
@@ -197,7 +197,7 @@ pub(super) fn merge_groups(test: &str) -> TestResult<()> {
         "a merge group offer was refused"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
@@ -243,7 +243,7 @@ fn rust_runner_controller_admits_same_repository_pull_requests_and_refuses_forks
         ["source_admission=blocked reason=fork_pull_request_denied"]
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

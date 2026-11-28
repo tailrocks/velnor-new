@@ -8,7 +8,7 @@ use std::process::Command;
 
 use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
-use super::support::{Fixture, SECRET_JIT, jit, reservation};
+use super::support::{Fixture, SECRET_JIT, facts, jit, reservation};
 
 const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
 
@@ -177,35 +177,6 @@ fn root_owned_binary() -> Check {
     )
 }
 
-fn symlinked_directories() -> Check {
-    let fixture = fixture()?;
-    let victim = fixture.root.join("victim");
-    std::fs::create_dir(&victim)?;
-    chmod(&victim, 0o700)?;
-    symlink(&victim, fixture.store.join("work"))?;
-    assert!(
-        fixture.launcher().ensure_machine().is_err(),
-        "a symlinked work directory"
-    );
-    assert_eq!(
-        std::fs::read_dir(&victim)?.count(),
-        0,
-        "the target of a symlinked work directory must stay untouched"
-    );
-    for name in ["work", "jit"] {
-        let fixture = fixture_with_directories()?;
-        let victim = fixture.root.join("victim");
-        std::fs::create_dir(&victim)?;
-        std::fs::write(victim.join("keep"), "")?;
-        let directory = fixture.store.join(name);
-        std::fs::remove_dir(&directory)?;
-        symlink(&victim, &directory)?;
-        assert!(fixture.launcher().sweep().is_err(), "{name}");
-        assert!(victim.join("keep").exists(), "{name}");
-    }
-    Ok(())
-}
-
 fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
     let fixture = fixture()?;
     fixture.launcher().ensure_machine()?;
@@ -215,11 +186,14 @@ fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
 async fn acl_after_a_started_job() -> Check {
     let fixture = fixture_with_directories()?;
     let launcher = fixture.launcher();
-    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT))?;
+    let user = launcher.ensure_machine()?;
+    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT), &facts(), &user)?;
     assert!(job.wait().await?.success());
     add_acl(&fixture.store.join("bin/velnor-runner"))?;
     assert_eq!(
-        launcher.start_job(reservation(52)?, &jit(SECRET_JIT)).err(),
+        launcher
+            .start_job(reservation(52)?, &jit(SECRET_JIT), &facts(), &user)
+            .err(),
         Some(refused(RustRunnerFailure::StoreUnsafe))
     );
     Ok(())
@@ -227,9 +201,9 @@ async fn acl_after_a_started_job() -> Check {
 
 fn sweep_without_init() -> Check {
     let fixture = fixture_with_directories()?;
-    let planted = fixture.store.join("jit/99.jit");
+    let planted = fixture.seen("guest/jobs/99/trusted.json");
+    std::fs::create_dir_all(fixture.seen("guest/jobs/99"))?;
     std::fs::write(&planted, "stale")?;
-    chmod(&planted, 0o600)?;
     std::fs::write(fixture.root.join("ps.table"), "")?;
     fixture.configure("FAKE_ORB_PS_NO_INIT=1\n")?;
     assert_eq!(
@@ -253,7 +227,6 @@ fn sweep_without_init() -> Check {
 async fn rust_runner_refuses_an_unsafe_host_store() -> Check {
     unsafe_roots()?;
     unsafe_binaries()?;
-    symlinked_directories()?;
     acl_after_a_started_job().await?;
     sweep_without_init()
 }

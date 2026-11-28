@@ -8,10 +8,9 @@ use super::harness::World;
 
 #[derive(Debug)]
 pub(super) struct Snapshot {
-    pub(super) jit: Vec<String>,
+    pub(super) jobs: Vec<String>,
     pub(super) work: Vec<String>,
     pub(super) runners: Vec<String>,
-    pub(super) ps: String,
 }
 
 pub(super) fn assert_clean(world: &World, capacity: &str) {
@@ -49,6 +48,22 @@ pub(super) fn jit_name(reservation: u64) -> String {
     format!("{reservation}.jit")
 }
 
+pub(super) fn job_dir_name(reservation: u64) -> String {
+    reservation.to_string()
+}
+
+pub(super) fn job_dir_exists(world: &World, reservation: u64) -> bool {
+    world
+        .seen
+        .join("guest/jobs")
+        .join(job_dir_name(reservation))
+        .exists()
+}
+
+pub(super) fn guest_work_entries(world: &World) -> usize {
+    std::fs::read_dir(world.seen.join("guest/gen/work")).map_or(0, Iterator::count)
+}
+
 pub(super) fn runner_name(reservation: u64) -> String {
     format!("velnor-mac-{reservation}")
 }
@@ -72,12 +87,9 @@ pub(super) fn snapshot(world: &World, acquire: &Event) -> Snapshot {
         })
     };
     Snapshot {
-        jit: list("jit"),
+        jobs: list("jobs"),
         work: list("work"),
         runners: list("runners"),
-        ps: text
-            .split_once("ps:\n")
-            .map_or(String::new(), |(_, ps)| ps.to_owned()),
     }
 }
 
@@ -108,13 +120,4 @@ pub(super) fn heartbeat_advances(world: &World, count: usize) {
         }
         seen >= count
     });
-}
-
-pub(super) fn call_number(event: &Event) -> String {
-    event
-        .text
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_owned()
 }

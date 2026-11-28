@@ -13,6 +13,7 @@ use super::harness::World;
 
 const FAILING: &str = "FAKE_RUNNER_EXIT=1\n";
 const HELD: &str = "FAKE_RUNNER_HOLD=1\n";
+const BREACHING: &str = "FAKE_RUNNER_EXIT=125\nFAKE_RUNNER_BREACH=disk\n";
 
 fn proven(world: &World, job: u64) {
     world.wait_for_event("the proof of a job", 60, |events| {
@@ -84,7 +85,7 @@ pub(super) fn reopens_for_a_binary_replaced_while_the_failing_job_ran(
     world.release(&jit_name(fourth))?;
     proven(&world, fourth);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -116,13 +117,19 @@ pub(super) fn keeps_the_health_across_a_config_reload(test: &str) -> TestResult<
         "a config reload reset the runner health"
     );
     world.terminate()?;
-    assert_eq!(world.finish(30)?, "Ok(())");
+    assert_eq!(world.finish()?, "Ok(())");
     Ok(())
 }
 
-pub(super) fn run(test: &str) -> TestResult<()> {
+pub(super) fn counts_failures_not_breaches(test: &str) -> TestResult<()> {
+    run(test, FAILING)?;
+    run(test, "FAKE_RUNNER_EXIT=125\n")?;
+    breaches_leave_admission_open(test)
+}
+
+fn run(test: &str, failing: &str) -> TestResult<()> {
     let mut world = World::new("T10", 1, true)?;
-    world.configure_orb(FAILING)?;
+    world.configure_orb(failing)?;
     queue(&world, 1)?;
     world.spawn_controller(test, &[])?;
     proven(&world, failed(&world, 1));
@@ -142,7 +149,41 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         "the log must say how to reopen admission"
     );
     closed_until_the_binary_changes(&world)?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
+    assert_clean(&world, "1");
+    Ok(())
+}
+
+fn breaches_leave_admission_open(test: &str) -> TestResult<()> {
+    let mut world = World::new("T10d", 1, true)?;
+    world.configure_orb(BREACHING)?;
+    queue(&world, 1)?;
+    world.spawn_controller(test, &[])?;
+    for number in 1..=3 {
+        if number > 1 {
+            queue(&world, number)?;
+        }
+        proven(&world, failed(&world, usize::try_from(number)?));
+    }
+    world.configure_orb(HELD)?;
+    queue(&world, 4)?;
+    wait_for("offer 4 to be acquired after three breaches", 60, || {
+        acquire_ids(&world) == ["1", "2", "3", "4"]
+    });
+    let fourth = held(&world, 4);
+    assert_ne!(world.heartbeat_phase().as_deref(), Some("runner_failing"));
+    assert_eq!(controller_readiness(&world.state), Readiness::Ready);
+    assert!(
+        world
+            .child_stderr()
+            .contains("rust_runner_job=ended reservation=1 exit=breached(Disk)"),
+        "the breach was not read from the record: {}",
+        world.child_stderr()
+    );
+    world.release(&jit_name(fourth))?;
+    proven(&world, fourth);
+    world.stop()?;
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

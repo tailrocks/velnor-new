@@ -1,0 +1,16 @@
+{
+  "repository_id": 42,
+  "repository": "tailrocks/velnor-lab",
+  "server_url": "https://github.com",
+  "default_branch": "main",
+  "sha": "0123456789abcdef0123456789abcdef01234567",
+  "run_id": 1001,
+  "run_attempt": 1,
+  "event_name": "pull_request",
+  "event": {
+    "kind": "pull_request",
+    "number": 7,
+    "base_branch": "main",
+    "head": "same_repository"
+  }
+}
