@@ -13,6 +13,7 @@ use velnor_runner_host::{
 
 use super::connect_authority as authority;
 use super::connect_config::sample_config;
+pub(super) use super::connect_error::ConnectError;
 use super::connection_state::{
     admission_lock, config_lock, connect_write_error, connection_absence_record,
     connection_binding_snapshot, connection_drain_marker, connection_drain_proof,
@@ -55,32 +56,6 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) operational_memory_reserve_bytes: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ConnectError {
-    Config,
-    Lock,
-    Rejected,
-    Secret(HostError),
-    Lifecycle(HostError),
-    Write,
-    WriteUncertain,
-}
-
-impl std::fmt::Display for ConnectError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Config => formatter.write_str("invalid config"),
-            Self::Lock => formatter.write_str("config is locked"),
-            Self::Rejected => formatter.write_str("rejected connection"),
-            Self::Secret(error) | Self::Lifecycle(error) => {
-                std::fmt::Display::fmt(error, formatter)
-            }
-            Self::Write => formatter.write_str("write failed"),
-            Self::WriteUncertain => formatter.write_str("write state uncertain"),
-        }
-    }
-}
-
 pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
     let mut stdin = std::io::stdin();
     match connect_with(&mut stdin, KEYCHAIN_SERVICE, request) {
@@ -92,7 +67,7 @@ pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
             eprintln!("Connection rejected.");
             ExitCode::from(1)
         }
-        Err(ConnectError::Secret(error)) => {
+        Err(ConnectError::Secret(error) | ConnectError::Policy(error)) => {
             eprintln!("{error}");
             ExitCode::from(1)
         }
@@ -231,7 +206,7 @@ fn candidate_config(
     connection: &RepositoryConnection,
 ) -> Result<String, ConnectError> {
     let requested = HostConfig::parse_draft(&sample_config(request, connection))
-        .map_err(|_| ConnectError::Config)?;
+        .map_err(ConnectError::from_config)?;
     let candidate = match existing {
         None => requested,
         Some(current) => {

@@ -149,7 +149,7 @@ pub struct ConnectArgs {
     /// Exact registered label. Repeat for every label.
     #[arg(long = "scale-set-label", required = true)]
     pub scale_set_labels: Vec<String>,
-    /// Source authorization policy: `repository` or `branch-restricted`.
+    /// Source authorization policy: `repository` or `branch-restricted`. With `repository`, `--event pull_request` admits only same-repository pull requests.
     #[arg(
         long = "source-policy-mode",
         required = true,

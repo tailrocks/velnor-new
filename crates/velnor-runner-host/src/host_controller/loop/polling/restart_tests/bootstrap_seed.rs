@@ -300,7 +300,7 @@ pub(super) async fn authority(journal: &Journal) -> TestResult<String> {
         2,
     )
     .await?;
-    let mut value = serde_json::json!({"schema_version":1,"connection_id":"conn-test-1","binding_sha256":binding,"generation":1,"policy_sha256":"0".repeat(64),"generator":{"source_sha":"1".repeat(40),"artifact_sha256":"2".repeat(64)},"workflows":[{"repository_id":42,"path":".github/workflows/ci.yml","content_sha256":"3".repeat(64),"calls":[],"jobs":[]}]});
+    let mut value = serde_json::json!({"schema_version":2,"connection_id":"conn-test-1","binding_sha256":binding,"generation":1,"policy_sha256":"0".repeat(64),"generator":{"source_sha":"1".repeat(40),"artifact_sha256":"2".repeat(64)},"workflows":[{"repository_id":42,"path":".github/workflows/ci.yml","content_sha256":"3".repeat(64),"calls":[],"jobs":[]}]});
     let policy: crate::config::ApprovedJobAuthorityPolicy = serde_json::from_value(value.clone())?;
     let digest = crate::digest_hex::lowercase_hex(&Sha256::digest(policy.canonical_json()?));
     value["policy_sha256"] = serde_json::json!(digest);

@@ -90,6 +90,8 @@ pub(crate) enum SourceBlock {
 
     PullRequestDenied,
 
+    ForkPullRequestDenied,
+
     ClosedWorldUnproven,
 }
 
@@ -102,6 +104,7 @@ impl SourceBlock {
             Self::EventDenied => "event_denied",
             Self::RefDenied => "ref_denied",
             Self::PullRequestDenied => "pull_request_denied",
+            Self::ForkPullRequestDenied => "fork_pull_request_denied",
             Self::ClosedWorldUnproven => "closed_world_unproven",
         }
     }
@@ -160,9 +163,7 @@ pub(crate) fn authorize_source<T: Transport + ?Sized>(
     )
     .map_err(|_| SourceBlock::SourceMismatch)?;
     authorize_policy(&connection.source_policy, &verified)?;
-    if verified.event_name == "pull_request"
-        && connection.source_policy.mode == SourcePolicyMode::BranchRestricted
-    {
+    if verified.event_name == "pull_request" {
         verify_pull(connection, transport, token, &run, &verified)?;
     }
     Ok(verified)
@@ -222,13 +223,23 @@ fn verify_pull(
         get_pull_request(transport, owner, repository, number, token).map_err(lookup_block)?;
     let verified_pull = verify_pull_request(run, &pull, connection.repository_id)
         .map_err(|_| SourceBlock::PullRequestDenied)?;
-    if !connection
-        .source_policy
-        .pull_request_rules
-        .iter()
-        .any(|rule| pull_rule_matches(rule, &verified_pull))
-    {
-        return Err(SourceBlock::PullRequestDenied);
+    match connection.source_policy.mode {
+        SourcePolicyMode::Repository
+            if verified_pull.head_repository_id != verified_pull.base_repository_id =>
+        {
+            return Err(SourceBlock::ForkPullRequestDenied);
+        }
+        SourcePolicyMode::Repository => {}
+        SourcePolicyMode::BranchRestricted => {
+            if !connection
+                .source_policy
+                .pull_request_rules
+                .iter()
+                .any(|rule| pull_rule_matches(rule, &verified_pull))
+            {
+                return Err(SourceBlock::PullRequestDenied);
+            }
+        }
     }
     Ok(verified_pull)
 }
