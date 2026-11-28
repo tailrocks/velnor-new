@@ -1352,7 +1352,12 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-runner/tests/it/main.rs",
-              "requires_features": true
+              "requires_features": true,
+              "required_features": [
+                {
+                  "name": "test-support"
+                }
+              ]
             }
           ]
         },
@@ -1962,7 +1967,12 @@
               "tests": false,
               "doctest": false,
               "source": "crates/velnor-resource-probe/src/bin/velnor_job_start_hook.rs",
-              "requires_features": true
+              "requires_features": true,
+              "required_features": [
+                {
+                  "name": "local-mode"
+                }
+              ]
             },
             {
               "name": "velnor-resource-probe-release",
@@ -2162,7 +2172,12 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-runner-host/tests/local_pair_public.rs",
-              "requires_features": true
+              "requires_features": true,
+              "required_features": [
+                {
+                  "name": "local-mode"
+                }
+              ]
             },
             {
               "name": "local_host_public",
@@ -2172,7 +2187,12 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-runner-host/tests/local_host_public.rs",
-              "requires_features": true
+              "requires_features": true,
+              "required_features": [
+                {
+                  "name": "local-mode"
+                }
+              ]
             },
             {
               "name": "mac_qualification_facade_public",
