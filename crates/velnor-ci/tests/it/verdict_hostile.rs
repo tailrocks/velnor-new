@@ -185,6 +185,35 @@ fn a_pull_request_head_that_moved_to_another_tree_since_it_was_queued_is_refused
 }
 
 #[test]
+fn a_pull_request_head_that_moved_to_a_commit_of_the_same_tree_since_it_was_queued_may_reuse() {
+    let mut world = World::new();
+    let moved_tree = crate::verdict_world::tree(&world.checkout);
+    world.routes.insert(
+        path("/pulls/7"),
+        json_body(&json!({"head": {"sha": MOVED, "repo": {"full_name": REPOSITORY}}})),
+    );
+    world.routes.insert(
+        path(&format!("/compare/{BASE}...{MOVED}?per_page=1")),
+        json_body(&json!({"behind_by": 0})),
+    );
+    world.routes.insert(
+        path(&format!("/git/commits/{MOVED}")),
+        json_body(&json!({"tree": {"sha": moved_tree}})),
+    );
+    let runs = world.routes.remove(&runs_key()).unwrap_or_default();
+    world.routes.insert(
+        path(&format!(
+            "/actions/workflows/ci.yml/runs?head_sha={MOVED}&event=pull_request&per_page=100"
+        )),
+        String::from_utf8_lossy(&runs)
+            .replace(HEAD, MOVED)
+            .into_bytes(),
+    );
+    let result = world.run();
+    assert_eq!(result.outputs["reuse"], "true", "{}", result.stdout());
+}
+
+#[test]
 fn two_jobs_with_the_name_of_a_reusable_job_are_refused() {
     for name in ["rust", "Alint"] {
         let mut world = World::new();

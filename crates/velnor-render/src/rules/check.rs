@@ -34,7 +34,10 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
                 step: 0,
                 rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
             });
-            step_violations.chain(runner).chain(shared_names(job))
+            step_violations
+                .chain(runner)
+                .chain(shared_names(job))
+                .chain(unparsable_twins(job))
         }))
         .collect();
     if violations.is_empty() {
@@ -85,6 +88,20 @@ fn shared_names(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
                 job: job.id.clone(),
                 step: index,
                 rule: Rule::ReusableStepNameShared(step.name.clone()),
+            })
+        })
+}
+
+fn unparsable_twins(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, step)| {
+            let twin = step.reuse.as_ref().is_some_and(|reuse| reuse.build_only);
+            (twin && step.run.is_none()).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: index,
+                rule: Rule::BuildOnlyTwinUnparsable(step.name.clone()),
             })
         })
 }

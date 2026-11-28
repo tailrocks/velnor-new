@@ -222,7 +222,7 @@ pub(crate) fn with_twin(step: &Step, mut body: RenderedStep) -> Vec<RenderedStep
         build_only: true,
         root,
     });
-    twin.run = body.run.as_deref().map(build_only);
+    twin.run = body.run.as_deref().and_then(build_only);
     vec![twin, body]
 }
 
@@ -264,7 +264,7 @@ pub(crate) fn qualify_shared(steps: &mut [RenderedStep]) {
     }
 }
 
-fn shell_words(line: &str) -> Vec<&str> {
+fn shell_words(line: &str) -> Option<Vec<&str>> {
     let mut words = Vec::new();
     let mut start = 0;
     let mut quote = None;
@@ -274,9 +274,14 @@ fn shell_words(line: &str) -> Vec<&str> {
             escaped = false;
             continue;
         }
+        let next = line[at + c.len_utf8()..].chars().next();
         match (quote, c) {
+            (Some('\''), '\'') => quote = None,
+            (Some('\''), _) => {}
+            (_, '`') => return None,
+            (_, '$') if matches!(next, Some('(' | '\'')) => return None,
             (None | Some('"'), '\\') => escaped = true,
-            (Some(open), _) if c == open => quote = None,
+            (Some(_), '"') => quote = None,
             (None, '\'' | '"') => quote = Some(c),
             (None, ' ') => {
                 if start < at {
@@ -287,25 +292,30 @@ fn shell_words(line: &str) -> Vec<&str> {
             _ => {}
         }
     }
+    if quote.is_some() || escaped {
+        return None;
+    }
     if start < line.len() {
         words.push(&line[start..]);
     }
-    words
+    Some(words)
 }
 
-fn build_only(run: &str) -> String {
-    let words = shell_words(run);
+fn build_only(run: &str) -> Option<String> {
+    let words = shell_words(run)?;
     let at = words
         .iter()
         .position(|word| word.starts_with("cargo"))
         .unwrap_or(0);
     let (wrapper, command) = words.split_at(at);
-    wrapper
-        .iter()
-        .map(|word| (*word).to_owned())
-        .chain(velnor_model::no_run(command))
-        .collect::<Vec<_>>()
-        .join(" ")
+    Some(
+        wrapper
+            .iter()
+            .map(|word| (*word).to_owned())
+            .chain(velnor_model::no_run(command))
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
 }
 
 pub(crate) fn for_body(extra: Vec<String>, body: &RenderedStep, replanned: bool) -> Vec<String> {
@@ -324,3 +334,6 @@ pub(crate) fn for_body(extra: Vec<String>, body: &RenderedStep, replanned: bool)
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;
