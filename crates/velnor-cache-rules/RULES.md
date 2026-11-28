@@ -19,3 +19,22 @@ Source column: Documentation means the heading of [Dependency caching reference]
 | 6b | A `merge_group` run reads and writes its queue branch (`refs/heads/gh-readonly-queue/...`) and reads the default branch. The page does not mention merge queues. "Cache access for low-trust workflow triggers" lists the only triggers that may write the default branch's scope (`push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule`); it does not apply, because `merge_group` resolves to its queue branch | Modelled from 1 and 2 |
 | 6c | A fork pull request has the access of any pull request (Restrictions names forks only for reading the base branch). Velnor's read-only policy for forks is not a GitHub rule and is not here | Documentation for reading, Modelled for writing |
 | 7 | A reservation (`CreateCacheEntry` without `FinalizeCacheEntryUpload`) holds its key for one hour (`RESERVATION_SECONDS` in `velnor-local`'s `store.rs`). After that `reserve` no longer sees it and a new save of the key takes it over. The cache server applies this rule, not this crate | Modelled (GitHub documents no lifetime for an unfinished reservation) |
+
+# Host target generations
+
+The generation module of this crate holds the pure rules of the host target generations of #2906 and #2907 (`/srv/velnor/gen`). It does no I/O: the caller lists the complete generations and passes plain values. The cache rules above are unchanged. Tests are in `tests/it/gen_*.rs`. Every row is a decision of the goal manager on #2906 and #2907, not a GitHub rule.
+
+| Rule | Behaviour | Source |
+|---|---|---|
+| G1 | A generation is keyed by `GenKey`: job, Cargo root and the first 16 hex digits of `compat`, directory `<job>.<root>-<compat16>`. Toolchain, profile, features and target triple are inside `compat`, and the lock hash is not in the key. Job and root are `[A-Za-z0-9_-]+`, so a key never leaves its directory | #2906 decisions 2, 3 |
+| G2 | A commit is 40 lowercase hex digits (`Sha`) | #2906 layout |
+| G3 | A generation lives at `main/<sha>`, `pr<N>/<run_id>-<attempt>` or `mg/<sha>` (`GenScope`) inside its key directory. Each save publishes a new name and nothing is replaced | #2906, #2907 layout |
+| G4 | Read scopes come from `access_for`, not a second vocabulary: the default branch scope is `main`, the pull request's own merge scope `pr<N>`, in `access_for`'s read order. The queue branch scope and every other branch map to no generation | #2907 decision 11, goal manager comment |
+| G5 | The one rule added to `access_for`: a push to the default branch reads `mg/<its sha>` first. `mg/` is read by nothing else | #2907 decision 7 |
+| G6 | A fork pull request reads and publishes nothing (no generation mount) | goal manager comment on #2906 |
+| G7 | `pick` reads lanes in order and returns the first hit. `pr<N>`: the same lock hash, else any, highest `(run_id, attempt)` whatever the publish order. `mg/<sha>`: that exact commit. `main`: the base commit with the same lock, else the newest with the same lock, else the base commit, else the newest. Newest is by publish time, then by scope. Only generations of the wanted key count | #2906, #2907 decision 2 |
+| G8 | `Run::publishes`: a push to the default branch on a protected ref publishes `main/<sha>`; `merge_group` publishes `mg/<sha>`; a same-repository pull request publishes `pr<N>/<run_id>-<attempt>`; every other event publishes nothing | #2907 Decisions |
+| G9 | `prune_plan` never removes the newest `main` generation of a key, and never removes anything published less than 6 hours before `now` (exactly 6 hours is removable). Nothing else is exempt | #2906 decision 9 |
+| G10 | Age: a `main` generation born more than 7 days ago goes (exactly 7 days stays); a `pr<N>` generation published more than 7 days ago goes; an `mg` generation published more than 1 day ago goes | #2906 decision 5, #2907 pruning |
+| G11 | Count, over what age left: the newest 8 `main` generations per key stay; the newest 2 per `(key, PR)` stay, ranked by `(run_id, attempt)`. `mg` generations count towards neither | #2906, #2907 pruning |
+| G12 | Space: when the bytes of what is left exceed the high mark (250 GiB by default), evict the oldest by publish time, skipping what G9 protects, until the total is strictly below the low mark (200 GiB). The high and low marks are inputs (`Budget`) | #2906 decision 10 |
