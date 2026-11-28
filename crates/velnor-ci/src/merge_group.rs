@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::escape::inert;
 use crate::github::{
     ApiJobs, ApiMergeGroupRun, ApiPage, GitHub, Repo, merge_group_runs_path, parse, run_jobs_path,
 };
+use crate::merge_group_lock::{LockChange, lock_change};
 
 const JOB_PAGES: u32 = 5;
 
@@ -14,7 +16,7 @@ pub struct Context {
     pub sha: String,
     pub workflow_ref: String,
     pub required: Option<String>,
-    pub lock_changed: Option<String>,
+    pub before: String,
 }
 
 #[derive(Debug)]
@@ -41,21 +43,7 @@ fn workflow_file(context: &Context) -> Option<&str> {
     (!file.is_empty() && !file.contains('/')).then_some(file)
 }
 
-const LOCK_FILE: &str = "Cargo.lock";
-const DIFF_FAILED: &str = "<unknown: git diff failed>";
-
-#[must_use]
-pub fn changed_lock(diff: Option<&[u8]>) -> Option<String> {
-    let Some(diff) = diff else {
-        return Some(DIFF_FAILED.to_owned());
-    };
-    diff.split(|byte| *byte == 0)
-        .map(String::from_utf8_lossy)
-        .find(|path| path.rsplit('/').next() == Some(LOCK_FILE))
-        .map(std::borrow::Cow::into_owned)
-}
-
-fn commit(sha: &str) -> bool {
+pub(crate) fn commit(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
@@ -67,11 +55,6 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
     }
     if !commit(&context.sha) {
         return run_everything("GITHUB_SHA is not a commit id");
-    }
-    if let Some(path) = &context.lock_changed {
-        return run_everything(format!(
-            "{path} changed, so this push builds and saves the base for the new lock"
-        ));
     }
     let Ok(repo) = Repo::parse(&context.repository) else {
         return run_everything("GITHUB_REPOSITORY is not owner/name");
@@ -96,19 +79,28 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
         Some(name) => required_job_passed(github, &repo, run.id, name),
         None => run.status == "completed" && run.conclusion.as_deref() == Some("success"),
     });
-    if passed {
-        SkipPush {
+    if !passed {
+        return run_everything(format!(
+            "no passed merge_group run of {file} on {}",
+            context.sha
+        ));
+    }
+    match lock_change(github, &repo, &context.before, &context.sha) {
+        LockChange::Unchanged => SkipPush {
             skip: true,
             note: format!(
                 "a merge_group run of {file} already passed on {}; skipping the checks",
                 context.sha
             ),
-        }
-    } else {
-        run_everything(format!(
-            "no passed merge_group run of {file} on {}",
-            context.sha
-        ))
+        },
+        LockChange::Changed(path) => run_everything(format!(
+            "{} changed in this push, so it builds and saves the base for the new lock",
+            inert(&path)
+        )),
+        LockChange::Unknown(why) => run_everything(format!(
+            "cannot tell whether a Cargo.lock changed in this push: {}",
+            inert(&why)
+        )),
     }
 }
 

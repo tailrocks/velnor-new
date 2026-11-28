@@ -105,6 +105,19 @@ pub struct ApiCompare {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ApiCompareFiles {
+    pub status: String,
+    #[serde(default)]
+    pub files: Vec<ApiCompareFile>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCompareFile {
+    pub filename: String,
+    pub previous_filename: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiRule {
     #[serde(rename = "type")]
     pub kind: String,
@@ -236,6 +249,14 @@ pub fn repo_path(repo: &Repo) -> String {
 #[must_use]
 pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
     format!("/repos/{repo}/compare/{}...{head}?per_page=1", encode(base))
+}
+
+#[must_use]
+pub fn compare_files_path(repo: &Repo, before: &str, head: &str, page: u32) -> String {
+    format!(
+        "/repos/{repo}/compare/{}...{head}?per_page=100&page={page}",
+        encode(before)
+    )
 }
 
 #[must_use]

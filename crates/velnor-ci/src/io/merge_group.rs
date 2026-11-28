@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 use super::{EVENT_VARIABLE, api_url, append_outputs, http};
-use crate::merge_group::{Context, changed_lock, skip_push};
+use crate::merge_group::{Context, skip_push};
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -14,13 +12,12 @@ fn variable(name: &str) -> String {
     std::env::var(name).unwrap_or_default()
 }
 
-fn diff_names(workspace: &str) -> Option<Vec<u8>> {
-    let output = Command::new("git")
-        .args(["diff", "--name-only", "-z", "HEAD~1", "HEAD"])
-        .current_dir(Path::new(workspace))
-        .output()
-        .ok()?;
-    output.status.success().then_some(output.stdout)
+fn before() -> String {
+    std::env::var_os("GITHUB_EVENT_PATH")
+        .and_then(|path| std::fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|payload| payload["before"].as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 pub(super) fn run() -> String {
@@ -30,7 +27,7 @@ pub(super) fn run() -> String {
         sha: variable("GITHUB_SHA"),
         workflow_ref: variable("GITHUB_WORKFLOW_REF"),
         required: Some(variable("VELNOR_REQUIRED_CHECK")).filter(|name| !name.is_empty()),
-        lock_changed: changed_lock(diff_names(&variable("GITHUB_WORKSPACE")).as_deref()),
+        before: before(),
     };
     let github = http::HttpGitHub::new(api_url(), variable("GITHUB_TOKEN"), LOOKUP_TIMEOUT);
     let result = skip_push(&github, &context);

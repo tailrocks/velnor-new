@@ -40,6 +40,7 @@ pub mod mbx_declared;
 pub mod mbx_report;
 pub mod mbx_store;
 pub mod merge_group;
+pub mod merge_group_lock;
 pub mod merge_queue;
 pub mod metrics;
 pub mod mise_pin;

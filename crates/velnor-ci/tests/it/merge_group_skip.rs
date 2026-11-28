@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::json;
-use velnor_ci::github::{merge_group_runs_path, run_jobs_path};
-use velnor_ci::merge_group::{Context, changed_lock, skip_push};
+use velnor_ci::github::{compare_files_path, merge_group_runs_path, run_jobs_path};
+use velnor_ci::merge_group::{Context, skip_push};
 
 use crate::support::{FakeGitHub, repo};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+const BEFORE: &str = "89abcdef0123456789abcdef0123456789abcdef";
 const WORKFLOW_REF: &str = "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main";
 
 fn context() -> Context {
@@ -17,7 +18,7 @@ fn context() -> Context {
         sha: SHA.to_owned(),
         workflow_ref: WORKFLOW_REF.to_owned(),
         required: None,
-        lock_changed: None,
+        before: BEFORE.to_owned(),
     }
 }
 
@@ -55,9 +56,17 @@ fn runs(entries: &[(&str, &str, &str, &str)]) -> String {
     json!({"total_count": runs.len(), "workflow_runs": runs}).to_string()
 }
 
+fn unchanged_lock(fake: &mut FakeGitHub) {
+    fake.respond(
+        compare_files_path(&repo(), BEFORE, SHA, 1),
+        r#"{"status": "ahead", "files": [{"filename": "README.md"}]}"#,
+    );
+}
+
 fn fake(body: &str) -> FakeGitHub {
     let mut fake = FakeGitHub::default();
     fake.respond(merge_group_runs_path(&repo(), "ci.yml", SHA), body);
+    unchanged_lock(&mut fake);
     fake
 }
 
@@ -155,6 +164,7 @@ fn a_workflow_file_name_may_contain_an_at_sign() {
         merge_group_runs_path(&repo(), "ci@v2.yml", SHA),
         &runs(&[("merge_group", SHA, "completed", "success")]),
     );
+    unchanged_lock(&mut ci);
     let mut context = context();
     context.workflow_ref =
         "tailrocks/velnor-new/.github/workflows/ci@v2.yml@refs/heads/main".to_owned();
@@ -204,48 +214,4 @@ fn a_completed_run_with_a_failed_advisory_job_and_a_succeeded_required_job_skips
 fn a_completed_failed_run_whose_required_job_failed_does_not_skip() {
     let github = completed_failed_run(&jobs(&[("Required", "failure"), ("Cache", "success")]));
     assert!(!skip_push(&github, &with_required()).skip);
-}
-
-fn passed_queue_run() -> FakeGitHub {
-    fake(&runs(&[("merge_group", SHA, "completed", "success")]))
-}
-
-#[test]
-fn a_push_that_changes_a_cargo_lock_runs_everything_despite_a_passed_queue_run() {
-    for path in ["Cargo.lock", "tools/Cargo.lock"] {
-        let diff = format!("README.md\0{path}\0");
-        let context = Context {
-            lock_changed: changed_lock(Some(diff.as_bytes())),
-            ..context()
-        };
-        let result = skip_push(&passed_queue_run(), &context);
-        assert!(!result.skip, "{}", result.note);
-        assert!(
-            result.note.contains(&format!("{path} changed")),
-            "{}",
-            result.note
-        );
-    }
-}
-
-#[test]
-fn a_push_that_leaves_every_cargo_lock_unchanged_still_skips() {
-    for diff in ["README.md\0src/Cargo.lock.bak\0not-Cargo.lock\0", ""] {
-        let context = Context {
-            lock_changed: changed_lock(Some(diff.as_bytes())),
-            ..context()
-        };
-        let result = skip_push(&passed_queue_run(), &context);
-        assert!(result.skip, "{}", result.note);
-    }
-}
-
-#[test]
-fn a_failed_git_diff_runs_everything() {
-    let context = Context {
-        lock_changed: changed_lock(None),
-        ..context()
-    };
-    let result = skip_push(&passed_queue_run(), &context);
-    assert!(!result.skip, "{}", result.note);
 }
