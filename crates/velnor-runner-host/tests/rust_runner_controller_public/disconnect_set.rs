@@ -153,8 +153,19 @@ pub(super) fn run(test: &str) -> TestResult<()> {
             .and_then(|census| census["updated_unix_ms"].as_u64())
             .is_some_and(|stamp| stamp + 10_000 > now_unix_ms())
     });
-    assert_eq!(world.detach(test, "lab", &both)?, "Ok(Deleted)");
+    assert_eq!(
+        world.detach_within(test, "lab", &both, 1_500)?,
+        "Ok(TimedOut)"
+    );
     assert_ne!(world.heartbeat_phase().as_deref(), Some("ready"));
+
+    world.configure_orb("")?;
+    wait_for("a reconciled census after the startup", 120, || {
+        world
+            .census()
+            .is_some_and(|census| census["reconciled"] == true)
+    });
+    assert_eq!(world.detach(test, "lab", &both)?, "Ok(Deleted)");
 
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Stopped)");
