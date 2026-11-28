@@ -48,7 +48,7 @@ fn last_seq(world: &World) -> u64 {
 
 fn chmod_runner(world: &World, mode: u32) -> TestResult<()> {
     std::fs::set_permissions(
-        world.store.join("bin/velnor-runner"),
+        world.root.join("host-runner"),
         std::fs::Permissions::from_mode(mode),
     )?;
     Ok(())
@@ -105,7 +105,7 @@ fn failed_jit(world: &World) -> TestResult<()> {
         events
             .iter()
             .filter(|event| event.is_runner_start())
-            .all(|event| !event.text.contains("/jit/1.jit")),
+            .all(|event| !event.text.ends_with("--work-dir /srv/velnor/gen/work/1")),
         "a runner was started for offer A"
     );
     wait_for(

@@ -87,9 +87,8 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
     std::thread::sleep(Duration::from_millis(2200));
     assert!(world.heartbeat_ms().ok_or("no heartbeat")? > before);
     assert_eq!(acquire_ids(world), ["1"]);
-    let jit_file = world.store.join("jit").join(&name);
     assert_eq!(
-        std::fs::read_to_string(&jit_file)?,
+        std::fs::read_to_string(world.seen.join(&name))?,
         std::fs::read_to_string(world.github.join("jits").join(runner_name(first)))?
     );
     let runner_line = world
@@ -99,7 +98,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
         .ok_or("no runner start")?;
     assert!(
         runner_line.text.contains(&format!(
-            "--jit @/var/lib/velnor/jit/{first}.jit --work-dir /var/lib/velnor/work/{first}"
+            "--jit @/dev/stdin --work-dir /srv/velnor/gen/work/{first}"
         )),
         "{}",
         runner_line.text
@@ -157,7 +156,6 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
         "M1 was not redelivered after the proof"
     );
     let state = snapshot(world, acquires[1]);
-    assert!(!state.jit.contains(&jit_name(first)), "{:?}", state.jit);
     assert!(!state.work.contains(&first.to_string()), "{:?}", state.work);
     Ok(())
 }

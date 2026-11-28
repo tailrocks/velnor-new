@@ -4,7 +4,7 @@
 use std::fmt;
 use std::num::NonZeroU64;
 
-use super::{GUEST_STORE, JIT_DIRECTORY};
+pub(crate) const GUEST_GEN: &str = "/srv/velnor/gen";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ReservationId(NonZeroU64);
@@ -29,35 +29,23 @@ impl fmt::Display for ReservationId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct JobPaths {
-    jit_name: String,
-    work_name: String,
-    guest_jit_file: String,
     guest_work_dir: String,
+    guest_stage_dir: String,
 }
 
 impl JobPaths {
     pub(crate) fn of(reservation: ReservationId) -> Self {
         Self {
-            jit_name: format!("{reservation}.jit"),
-            work_name: reservation.to_string(),
-            guest_jit_file: format!("{GUEST_STORE}/{JIT_DIRECTORY}/{reservation}.jit"),
-            guest_work_dir: format!("{GUEST_STORE}/work/{reservation}"),
+            guest_work_dir: format!("{GUEST_GEN}/work/{reservation}"),
+            guest_stage_dir: format!("{GUEST_GEN}/stage/{reservation}"),
         }
-    }
-
-    pub(crate) fn jit_name(&self) -> &str {
-        &self.jit_name
-    }
-
-    pub(crate) fn work_name(&self) -> &str {
-        &self.work_name
-    }
-
-    pub(crate) fn guest_jit_file(&self) -> &str {
-        &self.guest_jit_file
     }
 
     pub(crate) fn guest_work_dir(&self) -> &str {
         &self.guest_work_dir
+    }
+
+    pub(crate) fn guest_stage_dir(&self) -> &str {
+        &self.guest_stage_dir
     }
 }

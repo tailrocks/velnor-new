@@ -11,6 +11,10 @@ use serde_json::{Value, json};
 use super::events::{Event, parse_events, wait_for, wait_unless};
 use super::fixtures::{TestResult, bun, curl_wrapper, host_toml, organization_host_toml};
 
+#[path = "../fixtures/guest.rs"]
+mod guest;
+
+pub(super) const CAP_GIB: u64 = 300;
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 const FAKE_GITHUB: [&str; 6] = [
     "fake_curl.ts",
@@ -52,7 +56,7 @@ impl World {
             _directory: directory,
         };
         for path in [
-            world.store.join("bin"),
+            world.store.clone(),
             world.state.clone(),
             world.seen.clone(),
             world.github.join("messages"),
@@ -63,13 +67,12 @@ impl World {
         }
         std::fs::set_permissions(&world.store, std::fs::Permissions::from_mode(0o700))?;
         std::fs::copy(FAKE_ORB, world.root.join("orb"))?;
+        guest::install_guest_module(&world.root)?;
         std::fs::write(
             world.root.join("list.json"),
-            r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#,
+            guest::machines(CAP_GIB, |_| {}),
         )?;
-        let runner = world.store.join("bin/velnor-runner");
-        std::fs::write(&runner, "")?;
-        std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755))?;
+        guest::prepare_guest(&world.root)?;
         for name in FAKE_GITHUB {
             std::fs::copy(
                 Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -91,6 +94,14 @@ impl World {
         Ok(world)
     }
 
+    pub(super) fn work(&self) -> PathBuf {
+        self.root.join("guest/srv/velnor/gen/work")
+    }
+
+    pub(super) fn stage(&self) -> PathBuf {
+        self.root.join("guest/srv/velnor/gen/stage")
+    }
+
     pub(super) fn write_config(&self, default_branch: &str) -> TestResult<()> {
         let config = json!({
             "owner": "tailrocks",
@@ -101,7 +112,7 @@ impl World {
             "canary_tag": self.tag,
             "queue_url": "https://queue.example.com/messages",
             "admin_url": "https://pipelines.example.com/",
-            "store": self.store,
+            "work_dir": self.work(),
             "ps_table": self.root.join("ps.table"),
             "default_branch": default_branch,
         });
@@ -152,7 +163,7 @@ impl World {
 
     pub(super) fn configure_orb(&self, extra: &str) -> TestResult<()> {
         let env = format!(
-            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_REQUESTS={requests}\nFAKE_TEST_PID={pid}\n{extra}",
+            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_REQUESTS={requests}\nFAKE_TEST_PID={pid}\n{guest}{extra}",
             log = self.root.join("orb.log").display(),
             list = self.root.join("list.json").display(),
             store = self.store.display(),
@@ -160,6 +171,7 @@ impl World {
             ps = self.root.join("ps.table").display(),
             requests = self.seen.join("requests").display(),
             pid = std::process::id(),
+            guest = guest::environment(CAP_GIB),
         );
         let staging = self.root.join("fake_orb.env.staging");
         std::fs::write(&staging, env)?;

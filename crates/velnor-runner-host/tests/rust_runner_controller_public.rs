@@ -53,6 +53,8 @@ mod startup;
 mod sweep;
 #[path = "rust_runner_controller_public/unavailable.rs"]
 mod unavailable;
+#[path = "rust_runner_controller_public/wedged.rs"]
+mod wedged;
 
 use fixtures::TestResult;
 

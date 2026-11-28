@@ -13,6 +13,7 @@ mod developer_images;
 mod job_authority;
 mod keychain_reference;
 mod launch_mode;
+mod machine_disk;
 mod platform;
 mod registration;
 mod release_read;
@@ -32,6 +33,8 @@ pub use job_authority::{
 pub use keychain_reference::KeychainReference;
 pub(crate) use keychain_reference::off_runtime;
 pub use launch_mode::LaunchMode;
+pub use machine_disk::MachineDisk;
+pub(crate) use machine_disk::{DEFAULT_JOB_LIMIT_GIB, DEFAULT_ONE_JOB_CAP_GIB};
 pub use platform::RunnerPlatform;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
@@ -66,6 +69,9 @@ pub struct HostLimits {
     #[serde(default)]
     pub launch_mode: LaunchMode,
 
+    #[serde(default)]
+    pub machine_disk: MachineDisk,
+
     pub(crate) resources: ResourceBudgetConfig,
 }
 
@@ -81,6 +87,13 @@ pub struct DockerConfig {
 
 const fn default_max_jobs() -> u32 {
     1
+}
+
+impl HostLimits {
+    #[must_use]
+    pub fn machine_disk_cap_gib(&self) -> Option<u64> {
+        self.machine_disk.cap_gib(u64::from(self.max_jobs))
+    }
 }
 
 impl HostConfig {
@@ -122,7 +135,9 @@ impl HostConfig {
     }
 
     pub(crate) fn validate(&self) -> Result<(), HostError> {
-        if self.schema != 2 || self.host.max_jobs == 0 {
+        let disk_unsound = self.host.launch_mode == LaunchMode::RustRunner
+            && self.host.machine_disk_cap_gib().is_none();
+        if self.schema != 2 || self.host.max_jobs == 0 || disk_unsound {
             return Err(HostError::Config);
         }
         self.resource_budget()?
@@ -242,6 +257,7 @@ impl HostConfig {
             host: HostTomlLimits {
                 max_jobs: self.host.max_jobs,
                 launch_mode: self.host.launch_mode,
+                machine_disk: self.host.machine_disk,
                 resources: HostTomlResources {
                     runner_cpu_millicores: self.host.resources.runner_cpu_millicores,
                     runner_memory_bytes: self.host.resources.runner_memory_bytes,
@@ -276,6 +292,8 @@ struct HostToml<'a> {
 struct HostTomlLimits {
     max_jobs: u32,
     launch_mode: LaunchMode,
+    #[serde(skip_serializing_if = "MachineDisk::is_default")]
+    machine_disk: MachineDisk,
     resources: HostTomlResources,
 }
 
