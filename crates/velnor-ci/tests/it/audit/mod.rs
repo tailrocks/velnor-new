@@ -87,7 +87,29 @@ pub(super) fn unit(repo: &Repo, path: &str, text: &str) {
     let path = repo.root().join(path);
     fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
         .unwrap_or_else(|e| unreachable!("{e}"));
+    if is_fingerprint_hash(&path) {
+        let json = path.with_file_name(format!(
+            "{}.json",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        ));
+        if !json.exists() {
+            fs::write(json, "{}").unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
     fs::write(path, text).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn is_fingerprint_hash(path: &std::path::Path) -> bool {
+    let in_fingerprints = path.parent().is_some_and(|parent| {
+        parent.to_string_lossy().contains(".fingerprint")
+            || parent.file_name().is_some_and(|name| name == "fingerprint")
+    });
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    in_fingerprints
+        && path.extension().is_none()
+        && ["lib-", "bin-", "example-", "test-", "run-", "build-script-"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
 }
 
 pub(super) fn placed(repo: &Repo, target: &str) {

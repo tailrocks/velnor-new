@@ -38,6 +38,22 @@ fn without_hash(layout: Layout) {
     refused(&repo, "carries no unit hash");
 }
 
+fn without_fingerprint_json(layout: Layout) {
+    let repo = built(layout);
+    assert!(remove_named(&repo.root().join("a/target"), "lib-x.json") > 0);
+    refused(&repo, "has no lib-x.json");
+}
+
+#[test]
+fn a_unit_whose_fingerprint_json_is_missing_refuses_the_audit_in_the_legacy_layout() {
+    without_fingerprint_json(Layout::Legacy);
+}
+
+#[test]
+fn a_unit_whose_fingerprint_json_is_missing_refuses_the_audit_in_the_new_layout() {
+    without_fingerprint_json(Layout::New);
+}
+
 #[test]
 fn a_dep_info_file_with_a_hash_but_no_fingerprint_refuses_the_audit_in_the_legacy_layout() {
     without_fingerprint(Layout::Legacy);

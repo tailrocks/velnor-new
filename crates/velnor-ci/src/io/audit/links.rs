@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::Value;
@@ -21,6 +21,7 @@ pub(super) enum Kind {
     Run,
     RunUnit,
     Compiled,
+    Hashed,
 }
 
 #[derive(Default)]
@@ -29,6 +30,8 @@ pub(super) struct Links {
     provided: BTreeMap<Key, Vec<String>>,
     run_wanted: BTreeMap<Key, Vec<String>>,
     compiled: BTreeMap<(usize, String), Vec<String>>,
+    stems: BTreeSet<(Key, String)>,
+    described: BTreeSet<(Key, String)>,
 }
 
 #[derive(Default)]
@@ -40,10 +43,12 @@ pub(super) struct Resolved {
 pub(super) fn kind(name: &str) -> Option<Kind> {
     match name.strip_suffix(".json") {
         Some(bare) if bare.starts_with(RUN_PREFIX) => Some(Kind::RunUnit),
+        Some(bare) if bare.starts_with(SCRIPT_PREFIX) => Some(Kind::Hashed),
         Some(bare) => Fingerprint::parse(bare).map(|_| Kind::Unit),
         None if name.contains('.') => None,
         None if name.starts_with(RUN_PREFIX) => Some(Kind::Run),
         None if name.starts_with(SCRIPT_PREFIX) => Some(Kind::Compiled),
+        None if Fingerprint::parse(name).is_some() => Some(Kind::Hashed),
         None => None,
     }
 }
@@ -59,12 +64,20 @@ impl Links {
         hash: &str,
     ) -> Result<(), CiError> {
         let unit = (target, configuration.to_owned(), hash.to_owned());
+        let name = file
+            .file_name()
+            .map_or_default(|name| name.to_string_lossy().into_owned());
+        match name.strip_suffix(".json") {
+            Some(stem) => self.described.insert((unit.clone(), stem.to_owned())),
+            None => self.stems.insert((unit.clone(), name)),
+        };
         match kind {
             Kind::Run => self
                 .provided
                 .entry((target, configuration.to_owned(), text.trim().to_owned()))
                 .or_default()
                 .push(hash.to_owned()),
+            Kind::Hashed => {}
             Kind::Compiled => self
                 .compiled
                 .entry((target, text.trim().to_owned()))
@@ -86,7 +99,16 @@ impl Links {
             provided,
             run_wanted,
             compiled,
+            stems,
+            described,
         } = self;
+        if let Some(((_, configuration, hash), stem)) =
+            stems.iter().find(|entry| !described.contains(entry))
+        {
+            return Err(CiError::new(format!(
+                "fingerprint {stem} of unit {hash} of {configuration} has no {stem}.json, so the build-script runs it depends on cannot be matched; rebuild every observed target in this checkout through {REBUILD}"
+            )));
+        }
         let mut resolved = Resolved::default();
         for (unit, found) in wanted {
             let (target, configuration, _) = &unit;
