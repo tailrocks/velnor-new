@@ -36,3 +36,24 @@ fn plist_refuses_relative_environment_paths() {
         ));
     }
 }
+
+#[test]
+fn plist_refuses_characters_that_xml_cannot_hold() {
+    let binary = Path::new("/opt/velnor/velnor-host");
+    let absolute = Path::new("/opt/bin/x");
+    for bad in [
+        "/opt/a\u{b}b",
+        "/opt/a\u{1}b",
+        "/opt/a\u{fffe}b",
+        "/opt/a\tb",
+    ] {
+        assert!(matches!(
+            launch_agent_plist(binary, Path::new(bad), absolute),
+            Err(HostError::Path)
+        ));
+        assert!(matches!(
+            launch_agent_plist(binary, absolute, Path::new(bad)),
+            Err(HostError::Path)
+        ));
+    }
+}

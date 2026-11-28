@@ -35,13 +35,19 @@ pub fn launch_agent_plist(
 
 fn absolute_text(path: &Path) -> Result<String, HostError> {
     path.to_str()
-        .filter(|text| text.starts_with('/') && !text.chars().any(xml_forbidden))
+        .filter(|text| text.starts_with('/') && is_plist_text(text))
         .map(xml_text)
         .ok_or(HostError::Path)
 }
 
-fn xml_forbidden(ch: char) -> bool {
-    matches!(ch, '\0' | '\n' | '\r')
+#[must_use]
+pub fn is_plist_text(text: &str) -> bool {
+    text.chars().all(|ch| {
+        matches!(
+            u32::from(ch),
+            0x20..=0xD7FF | 0xE000..=0xFFFD | 0x0001_0000..=0x0010_FFFF
+        )
+    })
 }
 
 fn xml_text(text: &str) -> String {

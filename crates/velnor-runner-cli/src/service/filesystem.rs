@@ -34,7 +34,7 @@ pub(super) fn write_plist(
     {
         return false;
     }
-    atomic_write(path, body.as_bytes()).is_ok()
+    super::environment::record(state, environment) && atomic_write(path, body.as_bytes()).is_ok()
 }
 
 pub(super) fn regular_file_or_absent(path: &Path) -> bool {

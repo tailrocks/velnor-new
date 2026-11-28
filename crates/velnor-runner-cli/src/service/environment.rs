@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ffi::OsString;
-use std::os::unix::fs::PermissionsExt;
+use std::ffi::OsStr;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+
+use super::filesystem::atomic_write;
+use super::quarantine::{open_file, safe_plist_metadata};
 
 const ORB: &str = "orb";
 const RUNNER: &str = "velnor-runner";
-const ORB_KEY: &str = "VELNOR_ORB";
-const RUNNER_KEY: &str = "VELNOR_RUNNER_BINARY";
+const FILE: &str = "service-environment.json";
+const ORB_FIELD: &str = "orb";
+const RUNNER_FIELD: &str = "runner_binary";
+const LIMIT: u64 = 16 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Environment {
@@ -16,75 +21,177 @@ pub(super) struct Environment {
     pub(super) runner_binary: PathBuf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Missing {
+    Orb,
+    Runner,
+}
+
 pub(super) fn resolve(
     orb: Option<&Path>,
     runner_binary: Option<&Path>,
     host: &Path,
-    search: Option<OsString>,
-) -> Option<Environment> {
+    search: Option<&OsStr>,
+) -> Result<Environment, Missing> {
     let orb = match orb {
-        Some(path) => executable(path).then(|| path.to_path_buf())?,
-        None => std::env::split_paths(&search?)
+        Some(path) if executable(path) => path.to_path_buf(),
+        Some(_) => return Err(Missing::Orb),
+        None => search
+            .into_iter()
+            .flat_map(std::env::split_paths)
             .map(|dir| dir.join(ORB))
-            .find(|candidate| executable(candidate))?,
+            .find(|candidate| executable(candidate))
+            .ok_or(Missing::Orb)?,
     };
     let runner_binary = match runner_binary {
         Some(path) if path.is_absolute() => path.to_path_buf(),
-        Some(_) => return None,
-        None => host.parent()?.join(RUNNER),
+        Some(_) => return Err(Missing::Runner),
+        None => host
+            .parent()
+            .map(|dir| dir.join(RUNNER))
+            .filter(|path| executable(path))
+            .ok_or(Missing::Runner)?,
     };
-    Some(Environment { orb, runner_binary })
+    Ok(Environment { orb, runner_binary })
 }
 
-pub(super) fn installed(plist: &Path) -> Option<Environment> {
-    let text = std::fs::read_to_string(plist).ok()?;
+pub(super) fn installed(state: &Path) -> Option<Environment> {
+    let bytes = read_private(&state.join(FILE))?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     Some(Environment {
-        orb: PathBuf::from(value(&text, ORB_KEY)?),
-        runner_binary: PathBuf::from(value(&text, RUNNER_KEY)?),
+        orb: path_field(&value, ORB_FIELD)?,
+        runner_binary: path_field(&value, RUNNER_FIELD)?,
     })
+}
+
+pub(super) fn record(state: &Path, environment: &Environment) -> bool {
+    let (Some(orb), Some(runner)) = (environment.orb.to_str(), environment.runner_binary.to_str())
+    else {
+        return false;
+    };
+    let body = serde_json::json!({ ORB_FIELD: orb, RUNNER_FIELD: runner }).to_string();
+    atomic_write(&state.join(FILE), body.as_bytes()).is_ok()
+}
+
+fn read_private(path: &Path) -> Option<Vec<u8>> {
+    let file = open_file(path).ok()?;
+    if !safe_plist_metadata(&file.metadata().ok()?) {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1).read_to_end(&mut bytes).ok()?;
+    (u64::try_from(bytes.len()).ok()? <= LIMIT).then_some(bytes)
+}
+
+fn path_field(value: &serde_json::Value, name: &str) -> Option<PathBuf> {
+    Some(PathBuf::from(value.get(name)?.as_str()?))
 }
 
 fn executable(path: &Path) -> bool {
     path.is_absolute()
-        && std::fs::metadata(path)
-            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-}
-
-fn value(text: &str, key: &str) -> Option<String> {
-    let open = format!("<key>{key}</key><string>");
-    let (_, rest) = text.split_once(&open)?;
-    let (raw, _) = rest.split_once("</string>")?;
-    Some(
-        raw.replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&"),
-    )
+        && std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
+        && rustix::fs::access(path, rustix::fs::Access::EXEC_OK).is_ok()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
-    use super::{Environment, installed};
-    use crate::service::plist::render_plist;
+    use super::{Environment, FILE, Missing, installed, record, resolve};
+
+    fn executable_file(path: &Path, mode: u32) -> std::io::Result<()> {
+        std::fs::create_dir_all(path.parent().ok_or(std::io::ErrorKind::InvalidInput)?)?;
+        std::fs::write(path, "#!/bin/sh\n")?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+    }
 
     #[test]
-    fn installed_environment_survives_a_rerender_for_start() -> std::io::Result<()> {
+    fn recorded_environment_survives_a_read_back_for_start() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let state = temp.path().canonicalize()?;
+        let environment = Environment {
+            orb: state.join("a&b<c>").join("orb"),
+            runner_binary: state.join("velnor-runner"),
+        };
+        assert!(record(&state, &environment));
+        assert!(record(&state, &environment));
+        assert_eq!(installed(&state), Some(environment));
+        let mode = std::fs::metadata(state.join(FILE))?.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        Ok(())
+    }
+
+    #[test]
+    fn installed_refuses_a_fifo_without_blocking() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let state = temp.path().canonicalize()?;
+        let made = std::process::Command::new("mkfifo")
+            .arg(state.join(FILE))
+            .status()?;
+        assert!(made.success());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sender.send(installed(&state)));
+        let outcome = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::TimedOut))?;
+        assert_eq!(outcome, None);
+        Ok(())
+    }
+
+    #[test]
+    fn installed_refuses_a_record_open_to_others() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let state = temp.path().canonicalize()?;
+        let environment = Environment {
+            orb: state.join("orb"),
+            runner_binary: state.join("velnor-runner"),
+        };
+        assert!(record(&state, &environment));
+        std::fs::set_permissions(state.join(FILE), std::fs::Permissions::from_mode(0o644))?;
+        assert_eq!(installed(&state), None);
+        Ok(())
+    }
+
+    #[test]
+    fn the_first_orb_on_path_that_this_user_cannot_run_is_skipped() -> std::io::Result<()> {
         let temp = tempfile::tempdir()?;
         let root = temp.path().canonicalize()?;
-        let environment = Environment {
-            orb: root.join("a&b<c>").join("orb"),
-            runner_binary: root.join("velnor-runner"),
-        };
-        let host = Path::new("/opt/velnor-host");
-        let logs = root.join("logs");
-        let body = render_plist(host, &environment, &root, &logs)
-            .ok_or(std::io::ErrorKind::InvalidInput)?;
-        let path = root.join("host.plist");
-        std::fs::write(&path, &body)?;
-        let read = installed(&path).ok_or(std::io::ErrorKind::InvalidData)?;
-        assert_eq!(read, environment);
-        assert_eq!(render_plist(host, &read, &root, &logs), Some(body));
+        executable_file(&root.join("first/orb"), 0o601)?;
+        executable_file(&root.join("second/orb"), 0o755)?;
+        executable_file(&root.join("host/velnor-runner"), 0o755)?;
+        let search = std::env::join_paths([root.join("first"), root.join("second")])
+            .map_err(|_| std::io::ErrorKind::InvalidInput)?;
+        let resolved = resolve(
+            None,
+            None,
+            &root.join("host/velnor-host"),
+            Some(search.as_os_str()),
+        );
+        assert_eq!(
+            resolved.map(|environment| environment.orb),
+            Ok(root.join("second/orb"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_default_runner_must_exist_and_be_executable() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let orb = root.join("orb");
+        executable_file(&orb, 0o755)?;
+        let host: PathBuf = root.join("host/velnor-host");
+        let run = |orb: &Path| resolve(Some(orb), None, &host, None);
+        assert_eq!(run(&orb), Err(Missing::Runner));
+        executable_file(&root.join("host/velnor-runner"), 0o644)?;
+        assert_eq!(run(&orb), Err(Missing::Runner));
+        executable_file(&root.join("host/velnor-runner"), 0o755)?;
+        assert_eq!(
+            run(&orb).map(|environment| environment.runner_binary),
+            Ok(root.join("host/velnor-runner"))
+        );
         Ok(())
     }
 }

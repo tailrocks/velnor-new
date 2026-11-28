@@ -14,7 +14,7 @@ use std::process::{Command, ExitCode};
 use crate::args::ServiceAction;
 use crate::dispatch::home_unresolved;
 use crate::state_directory::create_private_dir_all;
-use environment::Environment;
+use environment::{Environment, Missing};
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
 use quarantine::{open_expected_file, uninstall_after_stop};
@@ -51,8 +51,7 @@ fn start(state: &Path, logs: &Path) -> ExitCode {
         return ExitCode::from(1);
     }
     let Some(installed) = installed_plist(state) else {
-        eprintln!("Service configuration is different.");
-        return ExitCode::from(1);
+        return different();
     };
     let result = spawn(&bootstrap_argv(installed.uid, &installed.path));
     drop(installed);
@@ -61,8 +60,7 @@ fn start(state: &Path, logs: &Path) -> ExitCode {
 
 fn stop(state: &Path) -> ExitCode {
     let Some(installed) = installed_plist(state) else {
-        eprintln!("Service configuration is different.");
-        return ExitCode::from(1);
+        return different();
     };
     let result = spawn(&bootout_argv(installed.uid));
     drop(installed);
@@ -71,8 +69,7 @@ fn stop(state: &Path) -> ExitCode {
 
 fn uninstall(state: &Path) -> ExitCode {
     let Some(installed) = installed_plist(state) else {
-        eprintln!("Service configuration is different.");
-        return ExitCode::from(1);
+        return different();
     };
     let stopped = spawn_status_code(&bootout_argv(installed.uid));
     uninstall_after_stop(
@@ -83,16 +80,34 @@ fn uninstall(state: &Path) -> ExitCode {
     )
 }
 
+fn different() -> ExitCode {
+    eprintln!("Service configuration is different. Run `velnor-host service install` again.");
+    ExitCode::from(1)
+}
+
 fn installed_plist(state: &Path) -> Option<InstalledPlist> {
-    let uid = read_uid()?;
-    let binary = std::env::current_exe().ok()?;
-    let path = plist_path()?;
-    let environment = environment::installed(&path)?;
-    let expected = render_plist(&binary, &environment, state, &log_dir()?)?;
-    let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
+    installed_plist_at(
+        read_uid()?,
+        &std::env::current_exe().ok()?,
+        &plist_path()?,
+        state,
+        &log_dir()?,
+    )
+}
+
+fn installed_plist_at(
+    uid: u32,
+    binary: &Path,
+    path: &Path,
+    state: &Path,
+    logs: &Path,
+) -> Option<InstalledPlist> {
+    let environment = environment::installed(state)?;
+    let expected = render_plist(binary, &environment, state, logs)?;
+    let identity = open_expected_file(path, expected.as_bytes()).ok()??;
     Some(InstalledPlist {
         uid,
-        path,
+        path: path.to_path_buf(),
         expected,
         identity,
     })
@@ -105,11 +120,23 @@ fn install(state: &Path, orb: Option<&Path>, runner_binary: Option<&Path>) -> Ex
     let Ok(host) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    let Some(environment) =
-        environment::resolve(orb, runner_binary, &host, std::env::var_os("PATH"))
-    else {
-        eprintln!("orb was not found: pass --orb with an absolute path or put orb on PATH.");
-        return ExitCode::from(1);
+    let environment = match environment::resolve(
+        orb,
+        runner_binary,
+        &host,
+        std::env::var_os("PATH").as_deref(),
+    ) {
+        Ok(environment) => environment,
+        Err(Missing::Orb) => {
+            eprintln!("orb was not found: pass --orb with an absolute path or put orb on PATH.");
+            return ExitCode::from(1);
+        }
+        Err(Missing::Runner) => {
+            eprintln!(
+                "velnor-runner was not found next to this executable: pass --runner-binary with an absolute path."
+            );
+            return ExitCode::from(1);
+        }
     };
     install_to(
         rustix::process::geteuid().as_raw(),
@@ -184,7 +211,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::{Environment, install_to, start};
+    use super::{Environment, install_to, installed_plist_at, start, write_plist};
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -227,6 +254,61 @@ mod tests {
         );
         assert!(!plist.exists());
         assert!(!root.join("LaunchAgents").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn an_in_place_edit_of_the_installed_plist_is_not_trusted() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let (binary, state, logs) = (
+            root.join("velnor-host"),
+            root.join("state"),
+            root.join("logs"),
+        );
+        let plist = root.join("LaunchAgents").join("host.plist");
+        let environment = Environment {
+            orb: root.join("orb"),
+            runner_binary: root.join("velnor-runner"),
+        };
+        assert!(write_plist(&binary, &environment, &state, &plist, &logs));
+        let installed = || installed_plist_at(1, &binary, &plist, &state, &logs).is_some();
+        assert!(installed());
+        let original = std::fs::read_to_string(&plist)?;
+        for (from, to) in [
+            (root.join("orb"), root.join("evil-orb")),
+            (root.join("velnor-runner"), root.join("evil-runner")),
+        ] {
+            let edited = original.replace(
+                from.to_str().unwrap_or_default(),
+                to.to_str().unwrap_or_default(),
+            );
+            assert_ne!(edited, original);
+            std::fs::write(&plist, edited)?;
+            assert!(!installed(), "{} was trusted", to.display());
+            std::fs::write(&plist, &original)?;
+        }
+        assert!(installed());
+        Ok(())
+    }
+
+    #[test]
+    fn a_plist_without_a_recorded_environment_is_refused() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let (binary, state, logs) = (
+            root.join("velnor-host"),
+            root.join("state"),
+            root.join("logs"),
+        );
+        let plist = root.join("LaunchAgents").join("host.plist");
+        let environment = Environment {
+            orb: root.join("orb"),
+            runner_binary: root.join("velnor-runner"),
+        };
+        assert!(write_plist(&binary, &environment, &state, &plist, &logs));
+        std::fs::remove_file(state.join("service-environment.json"))?;
+        assert!(installed_plist_at(1, &binary, &plist, &state, &logs).is_none());
         Ok(())
     }
 }
