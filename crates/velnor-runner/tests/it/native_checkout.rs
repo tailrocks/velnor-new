@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Instant;
@@ -360,7 +359,8 @@ fn checkout_never_writes_token_to_git_config() -> Result<()> {
     let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     let refused = Scratch::new()?;
-    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let closed_port = crate::support::ClosedPort::start()?;
+    let closed = closed_port.port();
     let url = format!("https://127.0.0.1:{closed}");
     let job = rig.job("checkout_depth1", &"a".repeat(40), &url)?;
     let failed = finish(rig.start(&job, &refused)?)?;
