@@ -8,6 +8,11 @@ use super::exec_support::Scratch;
 use super::fake_results::FakeResults;
 
 const BEFORE: &str = "echo ran > before.txt";
+const HOST_OS: &str = if cfg!(target_os = "macos") {
+    "macOS"
+} else {
+    "Linux"
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_pattern_expression_over_job_start_contexts_is_refused_before_the_first_step()
@@ -30,9 +35,9 @@ async fn a_pattern_expression_over_job_start_contexts_is_refused_before_the_firs
         )?;
         assert_eq!(ran.code, Some(1), "{pattern}: {}", ran.stdout);
         assert!(
-            ran.stdout.contains(
-                "unsupported: actions/download-artifact pattern '@(Linux|b)' uses minimatch syntax"
-            ),
+            ran.stdout.contains(&format!(
+                "unsupported: actions/download-artifact pattern '@({HOST_OS}|b)' uses minimatch syntax"
+            )),
             "{pattern}: {}",
             ran.stdout
         );
