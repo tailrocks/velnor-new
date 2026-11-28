@@ -24,7 +24,7 @@ cargo-binstall = "1.28.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
 # and hk's check-only jactionlint step runs the same binaries locally.
-jactionlint = "2.6.0"
+jactionlint = "v2.7.0"
 shellcheck = "0.11.0"
 minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 # Repository policy (.alint.yml): the generated Alint job installs this pin.
