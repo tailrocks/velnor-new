@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::connection::Service;
+use super::sessions::Close;
 use super::{Event, Run, blocking, github};
 use crate::config::{ConnectionId, HostConfig};
 use crate::launch_blocking::ListenFault;
@@ -58,8 +59,11 @@ impl Run<'_> {
             live.closing = true;
             let admin = live.admin.clone();
             let (id, session_id) = (live.scale_set_id, live.session.session_id.clone());
+            let history = live.close_history;
             self.tasks.spawn(async move {
-                let result = blocking(move || github::close_session(&admin, id, &session_id)).await;
+                let result =
+                    blocking(move || Ok(github::close_session(&admin, id, &session_id, history)))
+                        .await;
                 Event::Closed {
                     connection: index,
                     result,
@@ -68,13 +72,17 @@ impl Run<'_> {
         }
     }
 
-    pub(super) fn on_closed(&mut self, connection: usize, result: Result<(), ListenFault>) {
+    pub(super) fn on_closed(&mut self, connection: usize, result: Result<Close, ListenFault>) {
         let Some(live) = self.connections.get_mut(connection) else {
             return;
         };
         live.closing = false;
         match result {
-            Ok(()) => live.service = Service::Closed,
+            Ok(Close::Closed) => live.service = Service::Closed,
+            Ok(Close::Held { history, fault }) => {
+                live.close_history = history;
+                eprintln!("rust-runner session close held: {fault}");
+            }
             Err(error) => eprintln!("rust-runner session close held: {error}"),
         }
     }

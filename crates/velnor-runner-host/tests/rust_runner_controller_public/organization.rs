@@ -240,7 +240,7 @@ pub(super) fn holds_a_repository_set_listed_under_another_id_than_its_record(
     assert!(
         world
             .child_stderr()
-            .contains("run `velnor-host disconnect`, then connect again")
+            .contains("holds scale set 9, but GitHub lists this name under scale set 7; delete scale set 7 by its id in the runner settings of the repository or organization, then connect again")
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");

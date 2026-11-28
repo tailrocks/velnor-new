@@ -129,7 +129,7 @@ enum Event {
     },
     Closed {
         connection: usize,
-        result: Result<(), ListenFault>,
+        result: Result<sessions::Close, ListenFault>,
     },
     Machine(Result<(), ListenFault>),
     RunnerBinary(Result<String, ListenFault>),

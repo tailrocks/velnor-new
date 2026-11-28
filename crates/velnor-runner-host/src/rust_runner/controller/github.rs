@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::{
     AckScope, AcquireOutcome, EncodedJit, JitResult, ParsedBatch, QueueSession, RefreshGate,
     RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionClose,
-    WireError, ack, acquire, create_runner_scale_set, create_session, delete_session,
+    SessionError, WireError, ack, acquire, create_runner_scale_set, create_session, delete_session,
     get_runner_scale_set, get_runner_scale_set_by_id, jit, jit_request, list_runner_groups,
     list_scale_set_runners, refresh_session, remove_runner, sole_grant,
 };
@@ -15,6 +15,7 @@ use velnor_runner_github::{
 use zeroize::Zeroizing;
 
 use super::owned;
+use super::sessions::{Close, CloseHistory};
 use crate::config::RepositoryConnection;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::https::HttpsTransport;
@@ -25,6 +26,7 @@ use crate::listen::{
 use crate::scale_set::{EnsureError, create_labels, map_session, open_binding_admin};
 
 pub(super) const ACQUIRE_BUDGET: Duration = Duration::from_secs(30);
+const CLOSE_WAIT: Duration = Duration::from_secs(10);
 const JIT_ATTEMPTS: u32 = 3;
 const JIT_GAP: Duration = Duration::from_secs(1);
 
@@ -148,6 +150,13 @@ fn recorded_set_held(recorded: i64) -> ListenFault {
     EnsureError::Uncertain.into()
 }
 
+fn other_set_listed(recorded: i64, listed: i64) -> ListenFault {
+    eprintln!(
+        "rust-runner startup held: the ownership record holds scale set {recorded}, but GitHub lists this name under scale set {listed}; delete scale set {listed} by its id in the runner settings of the repository or organization, then connect again"
+    );
+    EnsureError::Uncertain.into()
+}
+
 fn refused(error: &EnsureError) -> bool {
     matches!(error, EnsureError::Unexpected { status, .. } if (400..500).contains(status))
 }
@@ -164,7 +173,7 @@ fn adopt(
         return Ok(());
     }
     if let Some(recorded) = recorded {
-        return Err(recorded_set_held(recorded));
+        return Err(other_set_listed(recorded, scale_set_id));
     }
     if owned::adoptable(state, connection, intent)? {
         return Ok(owned::bind(state, connection, intent, scale_set_id)?);
@@ -213,14 +222,26 @@ pub(super) fn close_session(
     admin: &Admin,
     scale_set_id: i64,
     session_id: &str,
-) -> Result<(), ListenFault> {
-    let mut transport = HttpsTransport::new(&admin.base)?;
+    history: CloseHistory,
+) -> Close {
+    let held = |history, fault| Close::Held { history, fault };
+    let mut transport =
+        match HttpsTransport::with_deadline(&admin.base, Instant::now() + CLOSE_WAIT) {
+            Ok(transport) => transport,
+            Err(error) => return held(history, error.into()),
+        };
     match delete_session(&mut transport, scale_set_id, session_id, &admin.token) {
-        Ok(SessionClose::Closed) => Ok(()),
-        Ok(SessionClose::Gone) => {
-            Err(HostError::RustRunner(RustRunnerFailure::SessionNotClosed).into())
-        }
-        Err(error) => Err(map_listen(error).into()),
+        Ok(SessionClose::Closed) => Close::Closed,
+        Ok(SessionClose::Gone) if history == CloseHistory::MaybeApplied => Close::Closed,
+        Ok(SessionClose::Gone) => held(
+            history,
+            HostError::RustRunner(RustRunnerFailure::SessionNotClosed).into(),
+        ),
+        Err(SessionError::Uncertain) => held(
+            CloseHistory::MaybeApplied,
+            map_listen(SessionError::Uncertain).into(),
+        ),
+        Err(error) => held(history, map_listen(error).into()),
     }
 }
 

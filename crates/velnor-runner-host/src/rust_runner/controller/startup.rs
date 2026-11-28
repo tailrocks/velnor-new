@@ -12,7 +12,7 @@ use super::connection::{ADMIN_RENEWAL, Live, Pending};
 use super::github::{self, Admin};
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
-use super::sessions::{OpenSession, close_all};
+use super::sessions::{CloseHistory, OpenSession, close_all};
 use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
@@ -285,7 +285,12 @@ fn open_sessions(pending: &[Pending]) -> Vec<OpenSession> {
         .iter()
         .filter_map(|connection| {
             let ((admin, id), session) = (connection.set.as_ref()?, connection.session.as_ref()?);
-            Some((admin.clone(), *id, session.session_id.clone()))
+            Some((
+                admin.clone(),
+                *id,
+                session.session_id.clone(),
+                CloseHistory::Untried,
+            ))
         })
         .collect()
 }

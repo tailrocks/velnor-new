@@ -28,15 +28,20 @@ fn held_record(
     world: &World,
     test: &str,
     both: &str,
-    field: &str,
-    value: serde_json::Value,
+    fields: &[(&str, serde_json::Value)],
 ) -> TestResult<()> {
     let path = world.state.join(RECORD);
     let original = std::fs::read(&path)?;
     let mut record: serde_json::Value = serde_json::from_slice(&original)?;
-    record[field] = value;
+    for (field, value) in fields {
+        record[*field] = value.clone();
+    }
     std::fs::write(&path, record.to_string())?;
-    assert_eq!(world.detach(test, "lab", both)?, "Ok(Uncertain)", "{field}");
+    assert_eq!(
+        world.detach(test, "lab", both)?,
+        "Ok(Uncertain)",
+        "{fields:?}"
+    );
     assert!(world.gh("scaleset.delete").is_empty());
     assert!(world.gh("runner.delete").is_empty());
     assert!(set_listed(world)?);
@@ -132,10 +137,18 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         &world,
         test,
         &both,
-        "server",
-        json!("https://other.example.com/"),
+        &[("server", json!("https://other.example.com/"))],
     )?;
-    held_record(&world, test, &both, "scale_set_id", json!(999_999))?;
+    held_record(&world, test, &both, &[("scale_set_id", json!(999_999))])?;
+    held_record(
+        &world,
+        test,
+        &both,
+        &[
+            ("scale_set_id", json!(null)),
+            ("name", json!("velnor-renamed")),
+        ],
+    )?;
     refusals(&world, test, &both)?;
 
     world.configure_orb("FAKE_ORB_FAIL=1\n")?;

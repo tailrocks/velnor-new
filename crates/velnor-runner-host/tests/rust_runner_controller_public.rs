@@ -353,3 +353,8 @@ controller_test!(
     rust_runner_disconnect_removes_a_set_whose_create_response_was_lost,
     lost_create::run
 );
+
+controller_test!(
+    rust_runner_startup_counts_a_404_after_a_timed_out_close_as_closed,
+    startup::counts_a_404_after_a_timed_out_close_as_closed
+);

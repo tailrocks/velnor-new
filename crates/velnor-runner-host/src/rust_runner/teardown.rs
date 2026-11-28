@@ -124,9 +124,20 @@ fn remove_scale_set(
         );
         return Ok(CreatedSetDeletion::Uncertain);
     }
-    let Some(target) = target_of(&mut transport, &token, binding, &record)? else {
-        owned::forget(state, &binding.connection_id)?;
-        return Ok(CreatedSetDeletion::Deleted);
+    let target = match target_of(&mut transport, &token, binding, &record)? {
+        Located::Target(target) => target,
+        Located::Absent => {
+            owned::forget(state, &binding.connection_id)?;
+            return Ok(CreatedSetDeletion::Deleted);
+        }
+        Located::Renamed => {
+            eprintln!(
+                "rust-runner disconnect held: the ownership record names scale set {:?} without an id, and the connection now names {:?}",
+                record.name,
+                binding.scale_set.name()
+            );
+            return Ok(CreatedSetDeletion::Uncertain);
+        }
     };
     let deletion = match observe(&mut transport, &token, &target) {
         Observation::Absent(_) => CreatedSetDeletion::Deleted,
@@ -139,18 +150,27 @@ fn remove_scale_set(
     Ok(deletion)
 }
 
+enum Located {
+    Target(ScaleSetDeleteTarget),
+    Absent,
+    Renamed,
+}
+
 fn target_of(
     transport: &mut Recording,
     token: &str,
     binding: &RepositoryConnection,
     record: &Owned,
-) -> Result<Option<ScaleSetDeleteTarget>, ListenFault> {
+) -> Result<Located, ListenFault> {
     let scale_set_id = if let Some(id) = record.scale_set_id {
         id
     } else {
+        if record.name != binding.scale_set.name() {
+            return Ok(Located::Renamed);
+        }
         let by_name = ScaleSetByName {
             runner_group_id: record.runner_group_id,
-            name: binding.scale_set.name(),
+            name: &record.name,
             expected_labels: binding.scale_set.labels(),
             admin_token: token,
         };
@@ -158,12 +178,12 @@ fn target_of(
             .map_err(|error| map_session(error, transport))?
         {
             ScaleSetFound::Found(view) => view.id,
-            ScaleSetFound::NotFound => return Ok(None),
+            ScaleSetFound::NotFound => return Ok(Located::Absent),
         }
     };
-    Ok(Some(ScaleSetDeleteTarget {
+    Ok(Located::Target(ScaleSetDeleteTarget {
         scale_set_id,
-        name: binding.scale_set.name().to_owned(),
+        name: record.name.clone(),
         labels: binding.scale_set.labels().to_vec(),
         runner_group_id: record.runner_group_id,
         state: None,

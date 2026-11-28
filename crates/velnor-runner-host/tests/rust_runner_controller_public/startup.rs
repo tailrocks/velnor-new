@@ -82,3 +82,29 @@ pub(super) fn holds_a_changed_config_until_the_session_is_closed(test: &str) -> 
     );
     Ok(())
 }
+
+pub(super) fn counts_a_404_after_a_timed_out_close_as_closed(test: &str) -> TestResult<()> {
+    let mut world = World::new("T13d", 1, true)?;
+    world.script_refusals(&json!({
+        "runner.list": {"statuses": [500], "repeat_last": true},
+        "session.stall": {"statuses": [12000], "repeat_last": false},
+        "session.delete": {"statuses": [404, 404], "repeat_last": false}
+    }))?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("the session of a held startup", 60, |events| {
+        events.iter().any(|event| event.label == "session.create")
+    });
+    world.write_host_toml(2)?;
+    assert_eq!(world.finish(90)?, "Ok(ConfigChanged)");
+    let closes: Vec<String> = world
+        .gh("session.delete")
+        .iter()
+        .map(|event| event.field("status").to_owned())
+        .collect();
+    assert_eq!(
+        closes,
+        ["404", "404"],
+        "a 404 after a close that timed out must count as closed"
+    );
+    Ok(())
+}

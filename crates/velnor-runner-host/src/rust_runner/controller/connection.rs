@@ -9,6 +9,7 @@ use zeroize::Zeroizing;
 use super::batch::Batch;
 use super::cursor::Cursor;
 use super::github::{Admin, QueueAccess};
+use super::sessions::CloseHistory;
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::launch_blocking::ListenFault;
 
@@ -64,6 +65,7 @@ pub(super) struct Live {
     pub(super) refreshing: bool,
     refresh_failures: u32,
     pub(super) closing: bool,
+    pub(super) close_history: CloseHistory,
     pub(super) admin_due: Instant,
 }
 
@@ -93,6 +95,7 @@ impl Pending {
             refreshing: false,
             refresh_failures: 0,
             closing: false,
+            close_history: CloseHistory::Untried,
             admin_due: self.admin_at + ADMIN_RENEWAL,
         })
     }
