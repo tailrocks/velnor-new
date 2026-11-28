@@ -343,6 +343,11 @@ pub(super) fn with_run_repository(mut offer: Value, repository_id: u64) -> Value
     offer
 }
 
+pub(super) fn assigned(mut offer: Value) -> Value {
+    offer["kind"] = json!("JobAssigned");
+    offer
+}
+
 pub(super) fn with_jit_failures(mut offer: Value, count: u64) -> Value {
     offer["jit_failures"] = json!(count);
     offer

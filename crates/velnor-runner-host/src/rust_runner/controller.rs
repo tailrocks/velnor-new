@@ -95,6 +95,7 @@ enum Event {
     Checked {
         connection: usize,
         request_id: i64,
+        assigned: bool,
         result: Result<LaunchGrant, Refusal>,
     },
     Acquired {
@@ -270,8 +271,9 @@ impl Run<'_> {
             Event::Checked {
                 connection,
                 request_id,
+                assigned,
                 result,
-            } => self.on_checked(connection, request_id, result),
+            } => self.on_checked(connection, request_id, assigned, result),
             Event::Acquired {
                 connection,
                 reservation,

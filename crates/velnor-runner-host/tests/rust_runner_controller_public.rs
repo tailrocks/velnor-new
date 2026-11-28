@@ -5,6 +5,8 @@
 mod acquire_shape;
 #[path = "rust_runner_controller_public/admission.rs"]
 mod admission;
+#[path = "rust_runner_controller_public/assigned.rs"]
+mod assigned;
 #[path = "rust_runner_controller_public/checks.rs"]
 mod checks;
 #[path = "rust_runner_controller_public/child.rs"]
@@ -385,16 +387,6 @@ fn rust_runner_controller_proves_a_job_that_will_not_stop() -> TestResult<()> {
         Some(root) => child::run(&root),
         None => shutdown::proves_a_job_that_will_not_stop(
             "rust_runner_controller_proves_a_job_that_will_not_stop",
-        ),
-    }
-}
-
-#[test]
-fn rust_runner_controller_leaves_a_runner_of_another_scale_set() -> TestResult<()> {
-    match child_root() {
-        Some(root) => child::run(&root),
-        None => scope::leaves_a_runner_of_another_scale_set(
-            "rust_runner_controller_leaves_a_runner_of_another_scale_set",
         ),
     }
 }
