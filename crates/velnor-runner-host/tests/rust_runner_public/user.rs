@@ -76,7 +76,7 @@ fn refused_guest_user(fixture: &Fixture) -> bool {
 
 type Account = (&'static str, &'static str, &'static str);
 
-fn unsound_accounts() -> [Account; 14] {
+fn unsound_ids() -> [Account; 7] {
     [
         (
             "uid 0",
@@ -125,6 +125,11 @@ fn unsound_accounts() -> [Account; 14] {
             ),
             "velnor-job:x:27:\n",
         ),
+    ]
+}
+
+fn unsound_groups() -> [Account; 7] {
+    [
         (
             "the gid of the default user's group, listed before it",
             concat!(
@@ -162,6 +167,10 @@ fn unsound_accounts() -> [Account; 14] {
         ),
         ("no group of its own", GOOD, ""),
     ]
+}
+
+fn unsound_accounts() -> Vec<Account> {
+    unsound_ids().into_iter().chain(unsound_groups()).collect()
 }
 
 #[test]
