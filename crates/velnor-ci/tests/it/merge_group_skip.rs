@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::json;
-use velnor_ci::github::{merge_group_runs_path, run_jobs_path};
+use velnor_ci::github::{compare_path, merge_group_runs_path, run_jobs_path};
 use velnor_ci::merge_group::{Context, skip_push};
 
 use crate::support::{FakeGitHub, repo};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+const BEFORE: &str = "89abcdef0123456789abcdef0123456789abcdef";
 const WORKFLOW_REF: &str = "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main";
 
 fn context() -> Context {
@@ -17,6 +18,7 @@ fn context() -> Context {
         sha: SHA.to_owned(),
         workflow_ref: WORKFLOW_REF.to_owned(),
         required: None,
+        before: BEFORE.to_owned(),
     }
 }
 
@@ -54,9 +56,17 @@ fn runs(entries: &[(&str, &str, &str, &str)]) -> String {
     json!({"total_count": runs.len(), "workflow_runs": runs}).to_string()
 }
 
+fn unchanged_lock(fake: &mut FakeGitHub) {
+    fake.respond(
+        compare_path(&repo(), BEFORE, SHA),
+        r#"{"status": "ahead", "files": [{"filename": "README.md"}]}"#,
+    );
+}
+
 fn fake(body: &str) -> FakeGitHub {
     let mut fake = FakeGitHub::default();
     fake.respond(merge_group_runs_path(&repo(), "ci.yml", SHA), body);
+    unchanged_lock(&mut fake);
     fake
 }
 
@@ -154,6 +164,7 @@ fn a_workflow_file_name_may_contain_an_at_sign() {
         merge_group_runs_path(&repo(), "ci@v2.yml", SHA),
         &runs(&[("merge_group", SHA, "completed", "success")]),
     );
+    unchanged_lock(&mut ci);
     let mut context = context();
     context.workflow_ref =
         "tailrocks/velnor-new/.github/workflows/ci@v2.yml@refs/heads/main".to_owned();

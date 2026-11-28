@@ -1,6 +1,7 @@
 .mise-version	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 .velnor/runner.lock	velnor-local	crates/velnor-local/Cargo.toml
 .velnor/runner.lock	velnor-runner-host	crates/velnor-runner-host/Cargo.toml
+.velnor/rust-ci.lock	velnor-ci	crates/velnor-ci/Cargo.toml
 .velnor/rust-toolchain.toml	velnor-ci	crates/velnor-ci/Cargo.toml
 .velnor/version-policy.toml	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 Cargo.lock	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
@@ -13,6 +14,7 @@ Cargo.toml	velnor-model	crates/velnor-model/Cargo.toml
 Cargo.toml	velnor-release	crates/velnor-release/Cargo.toml
 Cargo.toml	velnor-render	crates/velnor-render/Cargo.toml
 Cargo.toml	velnor-resource-probe	crates/velnor-resource-probe/Cargo.toml
+Cargo.toml	velnor-runner	crates/velnor-runner/Cargo.toml
 Cargo.toml	velnor-runner-attestation	crates/velnor-runner-attestation/Cargo.toml
 Cargo.toml	velnor-runner-cli	crates/velnor-runner-cli/Cargo.toml
 Cargo.toml	velnor-runner-core	crates/velnor-runner-core/Cargo.toml
@@ -25,6 +27,7 @@ Cargo.toml	velnor-test-support	crates/velnor-test-support/Cargo.toml
 Cargo.toml	velnor-workflows	crates/velnor-workflows/Cargo.toml
 clippy.toml	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 clippy.toml	velnor-resource-probe	crates/velnor-resource-probe/Cargo.toml
+clippy.toml	velnor-runner	crates/velnor-runner/Cargo.toml
 clippy.toml	velnor-runner-attestation	crates/velnor-runner-attestation/Cargo.toml
 clippy.toml	velnor-runner-cli	crates/velnor-runner-cli/Cargo.toml
 clippy.toml	velnor-runner-core	crates/velnor-runner-core/Cargo.toml

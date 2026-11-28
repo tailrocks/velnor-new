@@ -4,6 +4,7 @@
 use std::fs;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::own_units::link_script;
 use super::{
     audit, own_units, own_units_in, path_dependency_units, root_package_with_path_dependencies,
     unit, workspace_below_the_root,
@@ -22,6 +23,11 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
     );
     unit(
         &repo,
+        &format!("{target}/.fingerprint/app-0000000000000001/lib-app"),
+        "",
+    );
+    unit(
+        &repo,
         &format!("{target}/build/lib-0000000000000006/build_script_build-0000000000000006.d"),
         "out.d: lib/build.rs\n",
     );
@@ -29,6 +35,11 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         &repo,
         &format!("{target}/build/lib-0000000000000005/output"),
         "cargo:rerun-if-changed=../..\n",
+    );
+    link_script(
+        &repo,
+        &format!("{target}/build/lib-0000000000000006/build_script_build-0000000000000006.d"),
+        &format!("{target}/build/lib-0000000000000005/output"),
     );
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
@@ -82,6 +93,12 @@ fn a_path_dependency_unit_does_not_stand_in_for_the_member_that_depends_on_it() 
         &format!("{target}/deps/mid-0000000000000003.d"),
         "out.d: vendor/mid/src/lib.rs\n",
     );
+    for (folder, kind) in [
+        ("top-0000000000000001", "lib-top"),
+        ("mid-0000000000000003", "lib-mid"),
+    ] {
+        unit(&repo, &format!("{target}/.fingerprint/{folder}/{kind}"), "");
+    }
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
     assert!(
@@ -183,6 +200,11 @@ fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_unc
         &repo,
         &format!("{target}/build/lib-000000000000000f/output"),
         "cargo:rerun-if-changed=../../shared/build.txt\n",
+    );
+    link_script(
+        &repo,
+        &format!("{target}/build/lib-000000000000000e/build_script_build-000000000000000e.d"),
+        &format!("{target}/build/lib-000000000000000f/output"),
     );
     super::inventory::build(
         &repo,

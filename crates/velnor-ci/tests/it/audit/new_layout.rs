@@ -8,6 +8,7 @@
 use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
 
+use super::own_units::link_script;
 use super::{OWN_UNITS, audit, placed, unit, workspace_below_the_root};
 use crate::io::Repo;
 
@@ -20,6 +21,8 @@ fn split(folder: &str) -> (&str, &str) {
 
 pub(super) fn own_units_1100(repo: &Repo, target: &str, left_out: &[&str]) {
     placed(repo, target);
+    let mut compiled: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
     for (key, _, file, text, fingerprint) in OWN_UNITS {
         if left_out.contains(key) {
             continue;
@@ -38,8 +41,20 @@ pub(super) fn own_units_1100(repo: &Repo, target: &str, left_out: &[&str]) {
         let dep_info = format!("out.d: {text}\n");
         if name == "output" {
             unit(repo, &format!("{base}/run/stdout"), "");
+            if let Some(script) = compiled.get(*key) {
+                link_script(repo, script, &format!("{base}/run/stdout"));
+            }
+            unit(
+                repo,
+                &format!("{base}/run/root-output"),
+                &format!("{}/{base}/out\n", repo.root().display()),
+            );
         } else if name.starts_with("build_script_build") {
             unit(repo, &format!("{base}/out/build_script_build.d"), &dep_info);
+            compiled.insert(
+                (*key).to_owned(),
+                format!("{base}/out/build_script_build.d"),
+            );
         } else {
             unit(repo, &format!("{base}/out/{name}"), &dep_info);
         }

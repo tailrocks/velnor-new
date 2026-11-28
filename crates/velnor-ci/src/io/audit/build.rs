@@ -31,6 +31,7 @@ use invocation::{Invocation, invoked_root, root_directory};
 use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
+const OUT_DIRECTORY_VARIABLE: &str = "MBX_SHARE_OUT_DIR";
 
 struct Builder<'a> {
     directory: &'a Path,
@@ -310,11 +311,13 @@ impl Builder<'_> {
         let mut build = Command::new(&command[0]);
         build.args(&command[1..]).current_dir(self.directory);
         super::super::mbx_reports::assign(&mut build, command);
-        if Invocation::new(command).cargo
-            && std::env::var_os(TARGET_VARIABLE).is_none()
-            && let Some(target) = self.target_directory()
-        {
-            build.env(TARGET_VARIABLE, target);
+        if Invocation::new(command).cargo {
+            build.env(OUT_DIRECTORY_VARIABLE, "0");
+            if std::env::var_os(TARGET_VARIABLE).is_none()
+                && let Some(target) = self.target_directory()
+            {
+                build.env(TARGET_VARIABLE, target);
+            }
         }
         let status = build
             .status()

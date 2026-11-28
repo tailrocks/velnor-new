@@ -34,7 +34,7 @@ impl Scope {
                         })
                     })
                 })
-                .map(|(path, _)| path.as_ref().map_or_else(String::new, ToString::to_string)),
+                .map(|(path, _)| path.path().map_or_else(String::new, ToString::to_string)),
         );
         scope
     }

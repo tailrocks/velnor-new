@@ -4,11 +4,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    CheckConfigurations, MemberDependency, PackageName, RepoFacts, RepoPath, RustCiConfig,
-    RustRoot, Target, TargetKind, UnownedPackage,
+    CheckConfigurations, InputKey, MemberDependency, PackageName, RepoFacts, RepoPath,
+    RustCiConfig, RustRoot, Target, TargetKind, UnownedPackage,
 };
 
-use crate::audit_job::audits_pull_requests;
+use crate::audit_job::audited_on_pull_requests;
 use crate::detect_checks::{generator_root, is_generator};
 use crate::select_paths::contains;
 
@@ -109,7 +109,7 @@ pub(crate) fn closure_manifests(
 pub(crate) struct Generator {
     sealed: bool,
     directories: Vec<Option<RepoPath>>,
-    locked: Vec<Option<RepoPath>>,
+    locked: Vec<RepoPath>,
     named: Vec<String>,
 }
 
@@ -120,8 +120,9 @@ impl Generator {
         let sealed = closure.is_empty()
             || facts.generator_unmodelled
             || !facts.inputs_lock_identified
-            || !audits_pull_requests(facts)
-            || closure.iter().any(|node| node.is_opaque());
+            || !audited_on_pull_requests(facts.helper.as_ref(), &facts.config)
+            || closure.iter().any(|node| node.is_opaque())
+            || has_pathless_line(facts, &closure);
         Self {
             sealed,
             directories: closure.iter().map(|node| node.directory.clone()).collect(),
@@ -136,14 +137,18 @@ impl Generator {
                 .directories
                 .iter()
                 .any(|directory| contains(directory.as_ref(), path))
-            || self.locked.iter().any(|entry| {
-                entry.as_ref().is_none_or(|entry| entry == path) || contains(entry.as_ref(), path)
-            })
+            || self
+                .locked
+                .iter()
+                .any(|entry| entry == path || contains(Some(entry), path))
             || self.named.iter().any(|name| overlaps(name, path.as_str()))
     }
 }
 
-fn locked(facts: &RepoFacts, closure: &[&Node<'_>]) -> Vec<Option<RepoPath>> {
+fn closure_lines<'a>(
+    facts: &'a RepoFacts,
+    closure: &'a [&Node<'_>],
+) -> impl Iterator<Item = &'a InputKey> {
     facts
         .compile_inputs
         .iter()
@@ -154,8 +159,17 @@ fn locked(facts: &RepoFacts, closure: &[&Node<'_>]) -> Vec<Option<RepoPath>> {
                     .any(|node| owner.is(node.name, node.manifest))
             })
         })
-        .map(|(path, _)| path.clone())
+        .map(|(key, _)| key)
+}
+
+fn locked(facts: &RepoFacts, closure: &[&Node<'_>]) -> Vec<RepoPath> {
+    closure_lines(facts, closure)
+        .filter_map(|key| key.path().cloned())
         .collect()
+}
+
+fn has_pathless_line(facts: &RepoFacts, closure: &[&Node<'_>]) -> bool {
+    closure_lines(facts, closure).any(|key| key.path().is_none())
 }
 
 fn named(facts: &RepoFacts) -> Vec<String> {

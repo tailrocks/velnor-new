@@ -5,12 +5,14 @@ mod build;
 mod freshness;
 mod groups;
 mod inventory;
+mod links;
 mod options;
 mod outside;
 mod record;
 mod selection;
 mod setup;
 mod timing;
+mod unhashed;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
@@ -41,6 +43,8 @@ const REBUILD: &str = "velnor-ci inputs build -- cargo clippy --workspace --all-
 
 mod dep_info;
 
+pub(super) use dep_info::UnitIdentity;
+
 pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
@@ -48,12 +52,14 @@ pub(super) struct Audit<'a> {
     freshness: freshness::Freshness,
     diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
-    pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) foreign: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) unhashed: Vec<unhashed::Pending>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
     pub(super) placed: BTreeSet<(usize, String)>,
     pub(super) rooted: BTreeSet<(usize, String)>,
     pub(super) present: BTreeSet<(usize, String, String)>,
-    pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
+    pub(super) scripts: BTreeMap<(usize, String), BTreeMap<RepoPath, SystemTime>>,
+    outputs: dep_info::BuildOutputs,
     targets: Vec<RepoPath>,
     roots: Vec<PathBuf>,
     members: BTreeMap<String, Vec<usize>>,
@@ -91,9 +97,12 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &groups,
         options.max_directory_entries,
     )?;
-    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
+    let gathered = setup::gathered_files(&workspaces, &shared, &groups, &chosen)?;
+    audit.note_build_outputs(&gathered)?;
+    for (unit, file, indices) in gathered {
         audit.record(&indices, &file, unit)?;
     }
+    audit.record_unhashed()?;
     audit.orphans();
     let gated = gated(&facts);
     let platforms = workspaces

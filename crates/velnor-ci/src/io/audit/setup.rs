@@ -8,6 +8,7 @@ use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
 use velnor_rust::{Located, Owners, locate, resolve};
 
+use super::dep_info::BuildOutputs;
 use super::inventory::unresolved;
 use super::{Audit, REBUILD};
 use crate::coverage::{Built, gaps};
@@ -40,7 +41,8 @@ pub(super) fn begin<'a>(
         freshness,
         diagnostic,
         fingerprints: BTreeMap::new(),
-        names: BTreeMap::new(),
+        foreign: BTreeMap::new(),
+        unhashed: Vec::new(),
         runs: BTreeMap::new(),
         placed: BTreeSet::new(),
         rooted: BTreeSet::new(),
@@ -67,6 +69,7 @@ pub(super) fn begin<'a>(
             .map(|workspace| workspace.root.clone())
             .collect(),
         members,
+        outputs: BuildOutputs::default(),
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
         stale: Vec::new(),

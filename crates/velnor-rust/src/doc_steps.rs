@@ -52,7 +52,7 @@ fn sources_of(
         .iter()
         .map(|member| member.directory.clone())
         .collect();
-    let read: Vec<&Option<RepoPath>> = facts
+    let read: Vec<Option<&RepoPath>> = facts
         .compile_inputs
         .iter()
         .filter(|(_, owners)| {
@@ -62,9 +62,9 @@ fn sources_of(
                     .any(|member| owner.is(&member.name, &member.manifest))
             })
         })
-        .map(|(path, _)| path)
+        .map(|(key, _)| key.path())
         .collect();
-    if read.iter().any(|input| input.is_none()) {
+    if read.iter().any(Option::is_none) {
         return None;
     }
     let manifests: BTreeSet<&RepoPath> = root
@@ -103,7 +103,7 @@ fn sources_of(
                 || targets.contains(path)
                 || read
                     .iter()
-                    .any(|input| under(input) || input.as_ref() == Some(*path))
+                    .any(|input| relative(*input, path).is_some() || *input == Some(path))
                 || (rust
                     && ((whole_folder && under(&own) && !nested.iter().any(under))
                         || members.iter().any(under)))
