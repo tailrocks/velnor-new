@@ -103,7 +103,7 @@ pub(super) fn counts_a_404_after_a_timed_out_close_as_closed(test: &str) -> Test
         .collect();
     assert_eq!(
         closes,
-        ["404", "404"],
+        ["404"],
         "a 404 after a close that timed out must count as closed"
     );
     Ok(())

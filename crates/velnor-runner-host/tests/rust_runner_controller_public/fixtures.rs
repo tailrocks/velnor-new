@@ -372,10 +372,9 @@ pub(super) fn curl_wrapper(bun: &Path) -> String {
         "#!/bin/sh\n\
          input=\"$VELNOR_FAKE_DIR/seen/.curl.$$\"\n\
          cat > \"$input\"\n\
-         {bun} \"$VELNOR_FAKE_DIR/fake_curl.ts\" < \"$input\"\n\
-         status=$?\n\
+         exec 3< \"$input\"\n\
          rm -f \"$input\"\n\
-         exit \"$status\"\n",
+         exec {bun} \"$VELNOR_FAKE_DIR/fake_curl.ts\" <&3\n",
         bun = bun.display()
     )
 }
