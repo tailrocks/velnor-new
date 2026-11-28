@@ -617,6 +617,7 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
   packages = ["app"]
   ```
 
+- A package that embeds a file with `include_str!`, `include_bytes!` or `include!` needs no `inputs` entry when the path is a string literal. With a helper that audits every pull request (0.1.117 or later), `concat!(env!("CARGO_MANIFEST_DIR"), "/..", ..)` of literals and `concat!(env!("OUT_DIR"), ..)` need none either; with an older helper they select the package for every changed path (reason `unresolved-include`), as does any form the plan cannot resolve. See [what a run selects](../docs/rust-ci.md#what-a-run-selects).
 - `non_inputs` is a list of globs whose files select nothing. A glob may not overlap an `inputs` glob; the generator refuses that.
 - `exclude` is a list of globs (only `*` and `**` are supported; a `?`, `[` or `]` is refused). A `Cargo.toml` that a glob matches is not a Cargo root. Each glob must match a tracked `Cargo.toml`, or the config is refused. A trailing `/` is removed.
   An excluded nested workspace keeps its `Cargo.lock` out of the sources cache key and the prefetch, so no job can fetch its packages. Generation then checks every job for cargo runs against it:

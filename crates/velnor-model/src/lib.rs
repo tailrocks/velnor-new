@@ -89,9 +89,9 @@ pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
-    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
-    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
-    PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputKey, InputOwner,
+    InputRule, LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency,
+    OnMain, PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
     PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, ReusePrVerdict,
     RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
     TargetKind, TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest,

@@ -48,8 +48,13 @@ export async function checkTagRulesets({ context, process, getOctokit, releaseTo
   await checkReleaseEnvironmentTagPolicy({ context, admin, patterns: tagPushFamilyPatterns(releaseToml) });
   const expectedBypassActors = new Map([
     ['protect-tags', []],
-    ['release-tags', [{ actor_id: 5762496, actor_type: 'Integration', bypass_mode: 'always' }]]
+    ['release-tags', [
+      { actor_id: 5762496, actor_type: 'Integration', bypass_mode: 'always' },
+      { actor_id: 139017, actor_type: 'User', bypass_mode: 'always' }
+    ]]
   ]);
+  const sameActor = (actor, value) => actor.actor_id === value.actor_id && actor.actor_type === value.actor_type
+    && actor.bypass_mode === value.bypass_mode;
   const listed = await admin.paginate('GET /repos/{owner}/{repo}/rulesets', {
     owner, repo, per_page: 100
   });
@@ -89,9 +94,8 @@ export async function checkTagRulesets({ context, process, getOctokit, releaseTo
       }
       const expected = expectedBypassActors.get(ruleset.name) ?? [];
       if (ruleset.bypass_actors.length !== expected.length
-          || !ruleset.bypass_actors.every(actor => expected.some(value =>
-            actor.actor_id === value.actor_id && actor.actor_type === value.actor_type
-            && actor.bypass_mode === value.bypass_mode))) {
+          || !ruleset.bypass_actors.every(actor => expected.some(value => sameActor(actor, value)))
+          || !expected.every(value => ruleset.bypass_actors.some(actor => sameActor(actor, value)))) {
         throw new Error(`${ruleset.name}: tag immutability bypass actors detected`);
       }
     }

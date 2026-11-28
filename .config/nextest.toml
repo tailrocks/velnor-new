@@ -261,6 +261,10 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=drift::the_workflows_c
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(/^audit::real_includes::/) | test(=docs_only_plan::a_docs_only_change_plans_by_the_helper_the_pin_names))'
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
@@ -354,6 +358,10 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-runner-host)'
 slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(/^audit::real_includes::/) | test(=docs_only_plan::a_docs_only_change_plans_by_the_helper_the_pin_names))'
+slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'

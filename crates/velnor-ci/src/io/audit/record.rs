@@ -9,9 +9,10 @@ use std::time::SystemTime;
 use velnor_model::RepoPath;
 use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
-use super::super::units::{UnitFile, profile};
+use super::super::units::UnitFile;
 use super::freshness::Cause;
-use super::{Audit, REBUILD};
+use super::unhashed::Pending;
+use super::{Audit, REBUILD, UnitIdentity};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
@@ -39,7 +40,16 @@ impl Audit<'_> {
                 hash,
                 name,
             } => {
-                for index in self.member_owners(&package, indices) {
+                let owners = self.member_owners(&package, indices);
+                for index in indices.iter().filter(|index| !owners.contains(index)) {
+                    if let Some(fingerprint) = Fingerprint::parse(&name) {
+                        self.foreign.insert(
+                            (*index, configuration.clone(), hash.clone()),
+                            (package.clone(), fingerprint),
+                        );
+                    }
+                }
+                for index in owners {
                     self.fingerprint(
                         index,
                         configuration.clone(),
@@ -51,14 +61,28 @@ impl Audit<'_> {
             }
             UnitFile::DepInfo {
                 configuration,
-                hash,
+                hash: Some(hash),
+                ..
+            } => self.record_dep_info(indices, file, &configuration, &hash)?,
+            UnitFile::DepInfo {
+                configuration,
+                hash: None,
                 stem,
-            } => self.record_dep_info(indices, file, &configuration, hash.as_deref(), &stem)?,
-            UnitFile::Script { profile, package } => {
+            } => self.unhashed.push(Pending {
+                indices: indices.to_vec(),
+                file: file.to_path_buf(),
+                configuration,
+                stem,
+            }),
+            UnitFile::Script {
+                profile,
+                package,
+                hash,
+            } => {
                 let owners = self.member_owners(&package, indices);
                 if let Some(first) = owners.first() {
                     let base = self.roots[*first].clone();
-                    self.script(&base, &owners, file, &profile, &package)?;
+                    self.script(&base, &owners, file, &profile, &package, &hash)?;
                 }
             }
             UnitFile::BuildOutput {
@@ -68,7 +92,8 @@ impl Audit<'_> {
             } => {
                 let owners = self.member_owners(&package, indices);
                 if !owners.is_empty() {
-                    self.build_output(&owners, file, &configuration, &package, &hash)?;
+                    let target = indices[0];
+                    self.build_output(&owners, target, file, &configuration, &package, &hash)?;
                 }
             }
             UnitFile::Directory { name, root } => {
@@ -80,37 +105,49 @@ impl Audit<'_> {
         Ok(())
     }
 
-    fn record_dep_info(
+    pub(super) fn record_dep_info(
         &mut self,
         indices: &[usize],
         file: &Path,
         configuration: &str,
-        hash: Option<&str>,
-        stem: &str,
+        hash: &str,
     ) -> Result<(), CiError> {
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
         for index in indices {
-            let key = (
-                *index,
-                configuration.to_owned(),
-                hash.unwrap_or(stem).to_owned(),
-            );
+            let key = (*index, configuration.to_owned(), hash.to_owned());
             self.present.insert(key.clone());
-            let identity = match hash {
-                Some(_) => self.fingerprints.get(&key),
-                None => self.names.get(&key),
-            };
-            if let Some(identity) = identity {
+            if let Some(identity) = self.fingerprints.get(&key) {
                 hits.push((*index, identity.clone()));
             }
         }
-        if hash.is_none() && hits.is_empty() {
-            return Ok(());
-        }
+        let found = match hits.first() {
+            Some((_, (package, _))) => Some(package.clone()),
+            None => indices.iter().find_map(|index| {
+                self.foreign
+                    .get(&(*index, configuration.to_owned(), hash.to_owned()))
+                    .map(|(package, _)| package.clone())
+            }),
+        };
+        let Some(package) = found else {
+            return Err(CiError::new(format!(
+                "{} belongs to a unit with no fingerprint, so no build-script run can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
+                file.display()
+            )));
+        };
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
-        let package = hits.first().map(|(_, (package, _))| package.as_str());
-        let Some((source, _)) = self.dep_info(&base, budget, file, package)? else {
+        let Some((source, _)) = self.dep_info(
+            &base,
+            budget,
+            file,
+            &package,
+            UnitIdentity::Fingerprint {
+                target: indices[0],
+                configuration,
+                hash,
+            },
+        )?
+        else {
             return Ok(());
         };
         for (index, (package, fingerprint)) in hits {
@@ -125,7 +162,7 @@ impl Audit<'_> {
         Ok(())
     }
 
-    fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
+    pub(super) fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
         match self.members.get(package) {
             Some(owners) => indices
                 .iter()
@@ -139,19 +176,21 @@ impl Audit<'_> {
     fn build_output(
         &mut self,
         indices: &[usize],
+        target: usize,
         file: &Path,
         configuration: &str,
         package: &str,
         hash: &str,
     ) -> Result<(), CiError> {
+        let script = self.outputs.script_of(target, configuration, hash);
         let text = self.build_output_text(indices[0], file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut seen = BTreeSet::new();
         for &index in indices {
-            let known: Vec<(RepoPath, SystemTime)> = self
-                .scripts
-                .get(&(index, profile(configuration).to_owned(), package.to_owned()))
+            let known: Vec<(RepoPath, SystemTime)> = script
+                .as_ref()
+                .and_then(|script| self.scripts.get(&(index, script.clone())))
                 .into_iter()
                 .flatten()
                 .map(|(source, compiled)| (source.clone(), *compiled))
@@ -245,6 +284,17 @@ impl Audit<'_> {
             Cause::Changed => RunGap::Stale { input: first, more },
             Cause::Unproven => RunGap::Unproven { input: first, more },
         }
+    }
+
+    pub(super) fn credit_everything(&mut self, owner: &Owner<'_>) {
+        add_reads(
+            &mut self.found,
+            self.tracked,
+            owner,
+            &[None],
+            false,
+            &self.targets,
+        );
     }
 
     pub(super) fn credit(

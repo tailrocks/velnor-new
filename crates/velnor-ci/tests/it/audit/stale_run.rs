@@ -7,6 +7,7 @@ use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::migration::outputs::run_outputs;
+use super::own_units::link_own_run;
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo_str};
@@ -124,6 +125,7 @@ fn a_run_whose_output_is_older_than_its_build_script_says_so() {
         &format!("{DEBUG}/build/lib-f0000000000000e3/output"),
         "",
     );
+    link_own_run(&repo, DEBUG, "lib", "lib-f0000000000000e3");
     repo.set_mtime(
         &format!("{DEBUG}/build/lib-f0000000000000e3/output"),
         UNIX_EPOCH + Duration::from_secs(1),

@@ -220,7 +220,29 @@ impl fmt::Display for Unread {
     }
 }
 
-pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<InputOwner>>;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InputKey {
+    Everything,
+    Unresolved,
+    Path(RepoPath),
+}
+
+impl InputKey {
+    #[must_use]
+    pub fn at(path: &str) -> Option<Self> {
+        RepoPath::new(path).ok().map(Self::Path)
+    }
+
+    #[must_use]
+    pub fn path(&self) -> Option<&RepoPath> {
+        match self {
+            Self::Path(path) => Some(path),
+            Self::Everything | Self::Unresolved => None,
+        }
+    }
+}
+
+pub type CompileInputs = BTreeMap<InputKey, BTreeSet<InputOwner>>;
 
 /// The package a compile input belongs to. `manifest` is the repository-relative path of the
 /// package's `Cargo.toml`, which tells apart packages that share a name across Cargo roots; a
