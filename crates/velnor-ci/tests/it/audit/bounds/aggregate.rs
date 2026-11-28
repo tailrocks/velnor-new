@@ -86,10 +86,12 @@ pub(super) fn write_dep_info_files(
     for _ in 0..count {
         let mut text = format!("out.d: {source}\n");
         text.push_str(&" ".repeat(FILE_LIMIT - text.len()));
+        let hash = format!("{:016x}", *index + 1);
+        unit(repo, &format!("{target}/deps/extra-{hash}.d"), &text);
         unit(
             repo,
-            &format!("{target}/deps/extra-{:016x}.d", *index + 1),
-            &text,
+            &format!("{target}/.fingerprint/extra-{hash}/lib-extra"),
+            "",
         );
         *index += 1;
     }

@@ -3,67 +3,30 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CompileInputs, InputOwner, RepoPath, RepoView, RustMember, RustRoot};
+use velnor_model::{
+    CompileInputs, HelperRelease, InputKey, InputOwner, RepoPath, RepoView, RustCiConfig,
+    RustMember, RustRoot,
+};
 
+use crate::audit_job::audited_on_pull_requests;
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
+use crate::lock::{LOCK_PATH, parse_lock};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
-
-mod shadow;
-
-enum Argument<'a> {
-    Relative(&'a str),
-    ManifestDir(&'a str),
-    BuildOutput,
-    Unknown,
-}
-
-impl<'a> Argument<'a> {
-    fn parse(first: &Token<'a>, rest: &[Token<'a>], shadowed: bool) -> Self {
-        match (first, rest) {
-            (Token::Str(literal), _) => Self::Relative(literal),
-            (
-                Token::Ident("concat"),
-                [
-                    Token::Punct('!'),
-                    Token::Punct('('),
-                    Token::Ident("env"),
-                    Token::Punct('!'),
-                    Token::Punct('('),
-                    Token::Str(variable),
-                    Token::Punct(')'),
-                    Token::Punct(','),
-                    Token::Str(tail),
-                    ending @ ..,
-                ],
-            ) if !shadowed && tail.starts_with('/') && !tail.contains('\\') && closes(ending) => {
-                match *variable {
-                    "CARGO_MANIFEST_DIR" => Self::ManifestDir(tail),
-                    "OUT_DIR" if !tail.split('/').any(|part| part == "..") => Self::BuildOutput,
-                    _ => Self::Unknown,
-                }
-            }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-fn closes(ending: &[Token<'_>]) -> bool {
-    matches!(
-        ending,
-        [Token::Punct(')'), ..] | [Token::Punct(','), Token::Punct(')'), ..]
-    )
-}
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
 
 #[must_use]
-pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
+pub(crate) fn embedded_inputs(
+    view: &RepoView,
+    roots: &[RustRoot],
+    evidence: IncludeEvidence,
+) -> CompileInputs {
     let members: Vec<&RustMember> = roots.iter().flat_map(|root| &root.members).collect();
     let mut inputs = CompileInputs::new();
     for member in &members {
-        for key in Scan::new(view, member, &members).run() {
+        for key in Scan::new(view, member, &members, evidence).run() {
             inputs
                 .entry(key)
                 .or_default()
@@ -73,17 +36,45 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
     inputs
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IncludeEvidence {
+    Audited,
+    SourceOnly,
+}
+
+impl IncludeEvidence {
+    pub(crate) fn of(helper: Option<&HelperRelease>, config: &RustCiConfig) -> Self {
+        if audited_on_pull_requests(helper, config) {
+            Self::Audited
+        } else {
+            Self::SourceOnly
+        }
+    }
+}
+
+enum Embedded<'t> {
+    Literal(&'t str),
+    ManifestDir(String),
+    Output,
+    Unresolved,
+}
+
 struct Scan<'a> {
     view: &'a RepoView,
-    directory: Option<RepoPath>,
-    reads: BTreeSet<Option<RepoPath>>,
+    directory: Option<&'a RepoPath>,
+    evidence: IncludeEvidence,
+    reads: BTreeSet<InputKey>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
-    shadowed: bool,
 }
 
 impl<'a> Scan<'a> {
-    fn new(view: &'a RepoView, member: &RustMember, members: &[&RustMember]) -> Self {
+    fn new(
+        view: &'a RepoView,
+        member: &'a RustMember,
+        members: &[&RustMember],
+        evidence: IncludeEvidence,
+    ) -> Self {
         let nested: Vec<&RepoPath> = members
             .iter()
             .filter(|other| other.manifest != member.manifest)
@@ -115,21 +106,15 @@ impl<'a> Scan<'a> {
             .collect();
         Self {
             view,
-            directory: member.directory.clone(),
+            directory: member.directory.as_ref(),
+            evidence,
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
-            shadowed: false,
         }
     }
 
-    fn run(mut self) -> BTreeSet<Option<RepoPath>> {
-        self.shadowed = self.pending.iter().any(|file| {
-            self.view
-                .files
-                .get(*file)
-                .is_some_and(|bytes| shadow::shadows(&tokens(&String::from_utf8_lossy(bytes))))
-        });
+    fn run(mut self) -> BTreeSet<InputKey> {
         while let Some(file) = self.pending.pop() {
             if !self.seen.insert(file) {
                 continue;
@@ -137,7 +122,7 @@ impl<'a> Scan<'a> {
             match self.view.files.get(file) {
                 Some(bytes) => self.scan(file, &String::from_utf8_lossy(bytes)),
                 None if self.view.symlinks.contains(file) => {
-                    self.reads.insert(None);
+                    self.reads.insert(InputKey::Unresolved);
                 }
                 None => {}
             }
@@ -147,10 +132,6 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
-        if !self.shadowed && shadow::shadows(&tokens) {
-            self.shadowed = true;
-            self.reads.insert(None);
-        }
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -159,37 +140,36 @@ impl<'a> Scan<'a> {
             let [
                 Token::Punct('!'),
                 Token::Punct('(' | '[' | '{'),
-                argument,
-                ..,
+                argument @ ..,
             ] = &tokens[at + 1..]
             else {
                 continue;
             };
-            let parsed = Argument::parse(argument, &tokens[at + 4..], self.shadowed);
-            let resolved = match parsed {
-                Argument::Relative(literal) => {
-                    literal_path(literal).and_then(|path| resolve(&self.view.symlinks, file, path))
-                }
-                Argument::ManifestDir(rest) => self.under_manifest_dir(rest),
-                Argument::BuildOutput => continue,
-                Argument::Unknown => None,
+            let audited = self.evidence == IncludeEvidence::Audited;
+            let resolved = match embedded(argument) {
+                Embedded::Literal(literal) => literal_path(literal)
+                    .and_then(|path| resolve(self.view, &directory_of(file), path)),
+                Embedded::ManifestDir(joined) if audited => joined
+                    .strip_prefix('/')
+                    .and_then(|path| resolve(self.view, &self.directory_parts(), path)),
+                Embedded::Output if audited => continue,
+                Embedded::ManifestDir(_) | Embedded::Output | Embedded::Unresolved => None,
             };
             let Some(resolved) = resolved else {
-                self.reads.insert(None);
+                self.reads.insert(InputKey::Unresolved);
                 continue;
             };
             if *name == "include" {
                 self.follow(&resolved);
             }
-            self.reads.insert(Some(resolved));
+            self.reads.insert(InputKey::Path(resolved));
         }
     }
 
-    fn under_manifest_dir(&self, rest: &str) -> Option<RepoPath> {
-        let parts = self.directory.as_ref().map_or_else(Vec::new, |directory| {
+    fn directory_parts(&self) -> Vec<&'a str> {
+        self.directory.map_or_else(Vec::new, |directory| {
             directory.as_str().split('/').collect()
-        });
-        join(&self.view.symlinks, parts, rest.trim_start_matches('/'))
+        })
     }
 
     fn follow(&mut self, included: &RepoPath) {
@@ -206,41 +186,84 @@ impl<'a> Scan<'a> {
         match held.or(plain) {
             Some(path) => self.pending.push(path),
             None => {
-                self.reads.insert(None);
+                self.reads.insert(InputKey::Unresolved);
             }
         }
     }
 }
 
-fn resolve(symlinks: &BTreeSet<RepoPath>, file: &RepoPath, literal: &str) -> Option<RepoPath> {
-    if literal.starts_with('/') || literal.contains('\\') {
-        return None;
+fn embedded<'t>(argument: &[Token<'t>]) -> Embedded<'t> {
+    match argument {
+        [Token::Str(literal), ..] => Embedded::Literal(literal),
+        [
+            Token::Ident("concat"),
+            Token::Punct('!'),
+            Token::Punct('('),
+            Token::Ident("env"),
+            Token::Punct('!'),
+            Token::Punct('('),
+            Token::Str(variable),
+            Token::Punct(')'),
+            rest @ ..,
+        ] => match (*variable, literals(rest)) {
+            ("CARGO_MANIFEST_DIR", Some(joined)) => Embedded::ManifestDir(joined),
+            ("OUT_DIR", Some(joined)) if !joined.split('/').any(|part| part == "..") => {
+                Embedded::Output
+            }
+            _ => Embedded::Unresolved,
+        },
+        _ => Embedded::Unresolved,
     }
-    let mut parts: Vec<&str> = file.as_str().split('/').collect();
-    parts.pop();
-    join(symlinks, parts, literal)
 }
 
-fn join<'a>(
-    symlinks: &BTreeSet<RepoPath>,
-    mut parts: Vec<&'a str>,
-    literal: &'a str,
-) -> Option<RepoPath> {
-    for part in literal.split('/') {
+fn literals(rest: &[Token<'_>]) -> Option<String> {
+    let mut joined = String::new();
+    let mut rest = rest;
+    loop {
+        match rest {
+            [Token::Punct(','), Token::Str(literal), tail @ ..] => {
+                joined.push_str(literal_path(literal)?);
+                rest = tail;
+            }
+            [Token::Punct(')'), ..] | [Token::Punct(','), Token::Punct(')'), ..] => {
+                return Some(joined);
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn directory_of(file: &RepoPath) -> Vec<&str> {
+    let mut parts: Vec<&str> = file.as_str().split('/').collect();
+    parts.pop();
+    parts
+}
+
+pub(crate) fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
+    if literal.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = Vec::new();
+    for part in base.iter().copied().chain(literal.split('/')) {
         match part {
             "" | "." => {}
             ".." => {
                 parts.pop()?;
             }
-            other => {
-                parts.push(other);
-                if symlinks.contains(&RepoPath::new(parts.join("/")).ok()?) {
-                    return None;
-                }
-            }
+            other => parts.push(other),
+        }
+        if !parts.is_empty() && is_linked(view, &parts) {
+            return None;
         }
     }
-    RepoPath::new(parts.join("/")).ok()
+    RepoPath::new(parts.join("/"))
+        .ok()
+        .filter(|path| view.tracked_paths.contains(path))
+}
+
+fn is_linked(view: &RepoView, parts: &[&str]) -> bool {
+    RepoPath::new(parts.join("/"))
+        .is_ok_and(|prefix| view.symlinks.contains(&prefix) || view.gitlinks.contains(&prefix))
 }
 
 fn literal_path(literal: &str) -> Option<&str> {
@@ -257,12 +280,20 @@ pub fn is_rust_source(path: &RepoPath) -> bool {
 pub(crate) fn locked_and_embedded(
     view: &RepoView,
     roots: &[RustRoot],
+    config: &RustCiConfig,
 ) -> Result<CompileInputs, DetectError> {
+    let evidence = IncludeEvidence::of(
+        view.files
+            .get(&LOCK_PATH)
+            .and_then(|bytes| parse_lock(bytes).ok())
+            .as_ref(),
+        config,
+    );
     let mut inputs = view.files.get(&INPUTS_LOCK).map_or_else(
         || Ok(CompileInputs::new()),
         |bytes| parse_inputs_lock(bytes),
     )?;
-    for (file, owners) in embedded_inputs(view, roots) {
+    for (file, owners) in embedded_inputs(view, roots, evidence) {
         inputs.entry(file).or_default().extend(owners);
     }
     Ok(inputs)

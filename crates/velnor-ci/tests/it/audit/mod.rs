@@ -24,6 +24,7 @@ mod migration;
 mod nested_roots;
 mod new_layout;
 mod optional;
+mod outside_reads;
 mod own_units;
 mod partial;
 mod path_dependency_fixture;
@@ -31,6 +32,7 @@ mod per_root;
 mod plain_build;
 mod reads;
 mod real_cargo;
+mod real_includes;
 mod relative_build_dir;
 mod script_dep_info;
 mod selection;
@@ -63,6 +65,7 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
 
 pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    velnor_test_support::keep_mise_cargo_home(&mut command);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("CARGO_BUILD_TARGET_DIR")
@@ -84,7 +87,29 @@ pub(super) fn unit(repo: &Repo, path: &str, text: &str) {
     let path = repo.root().join(path);
     fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
         .unwrap_or_else(|e| unreachable!("{e}"));
+    if is_fingerprint_hash(&path) {
+        let json = path.with_file_name(format!(
+            "{}.json",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        ));
+        if !json.exists() {
+            fs::write(json, "{}").unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
     fs::write(path, text).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn is_fingerprint_hash(path: &std::path::Path) -> bool {
+    let in_fingerprints = path.parent().is_some_and(|parent| {
+        parent.to_string_lossy().contains(".fingerprint")
+            || parent.file_name().is_some_and(|name| name == "fingerprint")
+    });
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    in_fingerprints
+        && path.extension().is_none()
+        && ["lib-", "bin-", "example-", "test-", "run-", "build-script-"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
 }
 
 pub(super) fn placed(repo: &Repo, target: &str) {

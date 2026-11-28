@@ -56,9 +56,53 @@ fn build_output_counts_toward_the_root_target_data_budget() {
         error.contains("target data of one Cargo root exceeds 67108864 bytes"),
         "{error}"
     );
-    assert!(error.contains(output_path), "{error}");
     assert_eq!(
         fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
         before
+    );
+}
+
+#[test]
+fn two_build_outputs_of_one_root_share_the_target_data_budget() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    for folder in ["app-f000000000000004", "lib-f000000000000008"] {
+        let mut output = "cargo:warning=".to_owned();
+        output.push_str(&"x".repeat(40 << 20));
+        unit(
+            &repo,
+            &format!("rust/target/debug/build/{folder}/output"),
+            &output,
+        );
+    }
+
+    let result = audit(&repo, &["--write"]);
+
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        error.contains("target data of one Cargo root exceeds 67108864 bytes"),
+        "{error}"
+    );
+}
+
+#[test]
+fn one_build_output_of_forty_mebibytes_is_read_once_and_passes() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    let output_path = "rust/target/debug/build/app-f000000000000004/output";
+    let mut output = "cargo:warning=".to_owned();
+    output.push_str(&"x".repeat(40 << 20));
+    output.push_str("\ncargo:rerun-if-changed=../../shared/greeting.txt\n");
+    unit(&repo, output_path, &output);
+    super::super::inventory::build(&repo, output_path, None);
+
+    let result = audit(&repo, &["--write"]);
+
+    assert!(result.status.success(), "{result:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        "shared/greeting.txt\tapp\n"
     );
 }

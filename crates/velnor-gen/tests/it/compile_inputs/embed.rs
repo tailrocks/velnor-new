@@ -3,41 +3,111 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{InputOwner, RustSelection};
+use velnor_model::{InputKey, InputOwner, RepoView, RustSelection};
 use velnor_rust::detect;
 
 use crate::facts::{TestResult, lib, repo};
+use crate::pipeline::HELPER_LOCK;
 use crate::select::{name, path};
 
-fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
-    let view = repo(
-        vec![(
-            "Cargo.toml",
-            vec![
-                lib("app", "crates/app/Cargo.toml")?,
-                lib("tool", "crates/tool/Cargo.toml")?,
-                lib("reader", "crates/reader/Cargo.toml")?,
-                lib("left", "crates/left/Cargo.toml")?,
-            ],
-        )],
-        files,
-    )?;
-    let facts = detect(&view)?;
-    let selected = |changed_file: &str| {
-        let changes = velnor_model::ChangeSet {
-            paths: BTreeSet::from([path(changed_file)]),
-            base_files: BTreeMap::new(),
-            head_files: BTreeMap::new(),
-        };
-        match velnor_rust::select(&facts, &changes).into_values().next() {
-            Some(RustSelection::Some(map)) => map.keys().map(ToString::to_string).collect(),
-            Some(RustSelection::All(_)) => vec!["*".to_owned()],
-            _ => Vec::new(),
-        }
+pub(super) fn view_of(
+    members: &[&str],
+    files: &[(&str, &str)],
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let crates = members
+        .iter()
+        .map(|member| lib(member, &format!("crates/{member}/Cargo.toml")))
+        .collect::<Result<Vec<_>, _>>()?;
+    repo(vec![("Cargo.toml", crates)], files)
+}
+
+pub(super) fn selections(
+    members: &[&str],
+    files: &[(&str, &str)],
+    changed_file: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    selected(&view_of(members, files)?, changed_file)
+}
+
+pub(super) fn audited(view: &mut RepoView) -> TestResult {
+    pinned(view, "0.1.117")
+}
+
+pub(super) fn pinned(view: &mut RepoView, version: &str) -> TestResult {
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", version, 1);
+    view.files
+        .insert(path(".velnor/rust-ci.lock"), lock.into_bytes());
+    Ok(())
+}
+
+pub(super) fn selected(
+    view: &RepoView,
+    changed_file: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let facts = detect(view)?;
+    let changes = velnor_model::ChangeSet {
+        paths: BTreeSet::from([path(changed_file)]),
+        base_files: BTreeMap::new(),
+        head_files: BTreeMap::new(),
     };
-    for (file, expected) in check {
-        assert_eq!(&selected(file), expected, "{file}");
+    Ok(
+        match velnor_rust::select(&facts, &changes).into_values().next() {
+            Some(RustSelection::Some(map)) => map
+                .into_iter()
+                .map(|(name, reason)| (name.to_string(), reason.to_string()))
+                .collect(),
+            Some(RustSelection::All(_)) => vec![("*".to_owned(), String::new())],
+            _ => Vec::new(),
+        },
+    )
+}
+
+pub(super) fn embedding(
+    files: &[(&str, &str)],
+    check: &[(&str, &[&str])],
+    evidence: Evidence,
+) -> TestResult {
+    let mut view = view_of(&["app", "tool", "reader", "left"], files)?;
+    if evidence == Evidence::Audited {
+        audited(&mut view)?;
     }
+    for (file, _) in check {
+        view.tracked_paths.insert(path(file));
+    }
+    for (file, expected) in check {
+        let names: Vec<String> = selected(&view, file)?
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(&names, expected, "{file}");
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Evidence {
+    Audited,
+    SourceOnly,
+}
+
+pub(super) fn unresolved(source: &str, evidence: Evidence) -> TestResult {
+    let mut view = view_of(
+        &["app", "c", "tool", "left"],
+        &[
+            ("crates/c/src/lib.rs", source),
+            ("crates/app/src/lib.rs", ""),
+            ("crates/c/src/x.md", ""),
+            ("x.md", ""),
+        ],
+    )?;
+    if evidence == Evidence::Audited {
+        audited(&mut view)?;
+    }
+    assert_eq!(
+        selected(&view, "docs/other.md")?,
+        [("c".to_owned(), "unresolved-include".to_owned())],
+        "{source}"
+    );
     Ok(())
 }
 
@@ -65,26 +135,7 @@ fn a_file_a_crate_embeds_selects_it_without_an_inputs_lock_line() -> TestResult 
             ("crates/left/src/banner.txt", &["left", "reader"]),
             ("docs/other.md", &[]),
         ],
-    )
-}
-
-#[test]
-fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() -> TestResult {
-    embedding(
-        &[
-            (
-                "crates/reader/src/lib.rs",
-                "include!(concat!(env!(\"GENERATED_ROOT\"), \"/x.rs\"));",
-            ),
-            (
-                "crates/app/src/lib.rs",
-                "include_str!(\"../../../docs/guide.md\");",
-            ),
-        ],
-        &[
-            ("docs/guide.md", &["app", "reader"]),
-            ("docs/other.md", &["reader"]),
-        ],
+        Evidence::SourceOnly,
     )
 }
 
@@ -108,18 +159,25 @@ fn a_file_an_included_file_embeds_selects_the_crate() -> TestResult {
             ("docs/deep.md", &["app"]),
             ("docs/other.md", &[]),
         ],
+        Evidence::SourceOnly,
     )
 }
 
 #[test]
 fn an_included_file_the_view_cannot_read_fails_closed() -> TestResult {
-    embedding(
+    let mut view = view_of(
+        &["app", "tool"],
         &[
             ("crates/app/src/lib.rs", "include!(\"body.inc\");"),
             ("crates/tool/src/lib.rs", ""),
         ],
-        &[("docs/other.md", &["app"])],
-    )
+    )?;
+    view.tracked_paths.insert(path("crates/app/src/body.inc"));
+    assert_eq!(
+        selected(&view, "docs/other.md")?,
+        [("app".to_owned(), "unresolved-include".to_owned())]
+    );
+    Ok(())
 }
 
 #[test]
@@ -141,6 +199,7 @@ fn a_comment_between_the_macro_and_its_bang_does_not_hide_it() -> TestResult {
             ("docs/commented.md", &[]),
             ("docs/quoted.md", &[]),
         ],
+        Evidence::SourceOnly,
     )
 }
 
@@ -163,19 +222,21 @@ fn a_nested_package_is_not_charged_with_its_ancestors_scan() -> TestResult {
                 "crates/inner/src/lib.rs",
                 "const B: &str = include_str!(\"../../../docs/inner.md\");",
             ),
+            ("docs/top.md", ""),
+            ("docs/inner.md", ""),
         ],
     )?;
     let facts = detect(&view)?;
     let owners = |file: &str| -> Option<Vec<String>> {
         facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
     };
     assert_eq!(owners("docs/top.md"), Some(vec!["top".to_owned()]));
     assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
     assert!(
-        !facts.compile_inputs.contains_key(&None),
+        !facts.compile_inputs.contains_key(&InputKey::Unresolved),
         "{:?}",
         facts.compile_inputs
     );
@@ -203,13 +264,15 @@ fn a_target_source_outside_the_package_directory_attributes_its_includes() -> Te
                 "const B: &str = include_str!(\"../docs/more.md\");",
             ),
             ("crates/tool/src/lib.rs", ""),
+            ("docs/guide.md", ""),
+            ("docs/more.md", ""),
         ],
     )?;
     let facts = detect(&view)?;
     for file in ["docs/guide.md", "docs/more.md"] {
         let names: Vec<String> = facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .into_iter()
             .flatten()
             .map(|owner| owner.name.to_string())
@@ -237,7 +300,7 @@ fn a_symlinked_rust_source_fails_closed_instead_of_being_skipped() -> TestResult
     let facts = detect(&view)?;
     let app = InputOwner::at(name("app"), path("crates/app/Cargo.toml"));
     assert_eq!(
-        facts.compile_inputs.get(&None),
+        facts.compile_inputs.get(&InputKey::Unresolved),
         Some(&BTreeSet::from([app]))
     );
     Ok(())

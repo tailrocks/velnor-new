@@ -3,6 +3,8 @@
 
 #[path = "offer_and_assigned.rs"]
 mod offer_and_assigned;
+#[path = "repository_pull_request.rs"]
+mod repository_pull_request;
 #[path = "schedule_merge_group_filters.rs"]
 mod schedule_merge_group_filters;
 
@@ -384,15 +386,12 @@ fn public_job_authority_policy_admits_release_and_workflow_dispatch_tags_under_s
             Err(HostError::Config)
         ));
     }
-    assert!(matches!(
-        SourcePolicy::try_new(
-            SourcePolicyMode::Repository,
-            Vec::new(),
-            Vec::new(),
-            vec![WorkflowEvent::PullRequest],
-            Vec::new(),
-        ),
-        Err(HostError::Config)
-    ));
+    SourcePolicy::try_new(
+        SourcePolicyMode::Repository,
+        Vec::new(),
+        Vec::new(),
+        vec![WorkflowEvent::PullRequest],
+        Vec::new(),
+    )?;
     Ok(())
 }

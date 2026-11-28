@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_gen::GenerateError;
 use velnor_model::{
-    AllTrigger, ChangeSet, InputOwner, PackageName, RepoView, RustSelection, SelectionReason,
+    AllTrigger, ChangeSet, InputKey, InputOwner, PackageName, RepoView, RustSelection,
+    SelectionReason,
 };
 use velnor_rust::{
     DetectError, INPUTS_LOCK, Owners, Reason, add_reads, detect, format_inputs_lock,
@@ -29,6 +30,8 @@ fn two_utils(lock: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>>
             "b/util/src/lib.rs",
             "const B: &str = include_str!(\"../../../docs/b.md\");",
         ),
+        ("docs/a.md", ""),
+        ("docs/b.md", ""),
     ];
     if let Some(lock) = lock {
         files.push((".velnor/rust-inputs.lock", lock));
@@ -68,7 +71,7 @@ fn two_packages_of_one_name_in_different_roots_keep_their_own_embedded_inputs() 
     let owner = |file: &str| -> Vec<InputOwner> {
         facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .into_iter()
             .flatten()
             .cloned()
@@ -145,7 +148,7 @@ fn a_lock_written_before_manifests_still_parses_and_a_lock_with_them_round_trips
     let old = "README.md\tapp\nshared/a.txt\tapp\n.\tlib\n";
     let parsed = parse_inputs_lock(old.as_bytes())?;
     assert_eq!(
-        parsed.get(&Some(path("README.md"))),
+        parsed.get(&InputKey::Path(path("README.md"))),
         Some(&BTreeSet::from([InputOwner::named(name("app"))]))
     );
     assert_eq!(

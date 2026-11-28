@@ -201,6 +201,15 @@ fn a_first_build_captures_inventory_before_its_target_exists() {
         "staged/debug/build/lib-f000000000000008/output",
         "cargo:rerun-if-changed=../../shared\n",
     );
+    for (_, _, file, _, _) in super::OWN_UNITS {
+        if let Some(folder) = file.strip_suffix("/output") {
+            unit(
+                &repo,
+                &format!("staged/debug/{folder}/root-output"),
+                &format!("{}/rust/target/debug/{folder}/out\n", repo.root().display()),
+            );
+        }
+    }
     assert!(!repo.root().join("rust/target").exists());
     let built = super::velnor_ci().current_dir(repo.root()).args(["inputs", "build", "--", "sh", "-c", "mkdir -p rust/target; mv staged/debug rust/target/debug; touch -m -t 206501010000 rust/target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");

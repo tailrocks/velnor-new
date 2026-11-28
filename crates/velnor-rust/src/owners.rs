@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{CompileInputs, InputOwner, PackageName, RepoFacts, RepoPath, RustMember};
+use velnor_model::{
+    CompileInputs, InputKey, InputOwner, PackageName, RepoFacts, RepoPath, RustMember,
+};
 
 use crate::select::{claims, relative};
 
@@ -236,7 +238,10 @@ pub fn add_reads(
     for read in reads {
         let Some(read) = read else {
             if !tracked.iter().all(|path| owner.claims(path)) {
-                found.entry(None).or_default().insert(owner.input());
+                found
+                    .entry(InputKey::Everything)
+                    .or_default()
+                    .insert(owner.input());
             }
             continue;
         };
@@ -257,7 +262,7 @@ pub fn add_reads(
         };
         if outside {
             found
-                .entry(Some(read.clone()))
+                .entry(InputKey::Path(read.clone()))
                 .or_default()
                 .insert(owner.input());
         }

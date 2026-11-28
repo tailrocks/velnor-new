@@ -3,8 +3,10 @@
 
 use velnor_rust::{dep_info_paths, rerun_if_changed};
 
+mod audited;
 mod embed;
 mod lock;
+mod unresolved;
 
 #[test]
 fn dep_info_and_build_script_output_become_the_paths_they_list() {
