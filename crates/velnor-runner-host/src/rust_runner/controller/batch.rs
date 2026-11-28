@@ -4,7 +4,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use velnor_runner_github::{ParsedBatch, Poll, SourceMetadata};
+use velnor_runner_github::{InnerKind, ParsedBatch, Poll, SourceMetadata};
 
 use super::admission::{Admission, JobExit};
 use super::github::{self, Acked, Acquisition};
@@ -19,9 +19,15 @@ use crate::rust_runner::ReservationId;
 const CHECK_BUDGET: Duration = Duration::from_secs(60);
 const POLL_GAP: Duration = Duration::from_millis(500);
 
+struct Offer {
+    request_id: i64,
+    source: SourceMetadata,
+    assigned: bool,
+}
+
 pub(super) struct Batch {
     parsed: ParsedBatch,
-    offers: VecDeque<(i64, SourceMetadata)>,
+    offers: VecDeque<Offer>,
     deferred: bool,
 }
 
@@ -31,7 +37,13 @@ impl Batch {
             .jobs
             .iter()
             .filter(|job| is_active_offer_job(&parsed, job))
-            .filter_map(|job| job.request_id.map(|id| (id, job.source.clone())))
+            .filter_map(|job| {
+                job.request_id.map(|request_id| Offer {
+                    request_id,
+                    source: job.source.clone(),
+                    assigned: job.kind == InnerKind::Assigned,
+                })
+            })
             .collect();
         Self {
             parsed,
@@ -112,7 +124,12 @@ impl Run<'_> {
             let Some(batch) = live.batch.as_mut() else {
                 return;
             };
-            let Some((request_id, source)) = batch.offers.pop_front() else {
+            let Some(Offer {
+                request_id,
+                source,
+                assigned,
+            }) = batch.offers.pop_front()
+            else {
                 self.finish_batch(connection);
                 return;
             };
@@ -123,7 +140,7 @@ impl Run<'_> {
                 self.defer(connection);
                 continue;
             }
-            self.spawn_check(connection, request_id, source);
+            self.spawn_check(connection, request_id, source, assigned);
             return;
         }
     }
@@ -138,7 +155,13 @@ impl Run<'_> {
         }
     }
 
-    fn spawn_check(&mut self, connection: usize, request_id: i64, source: SourceMetadata) {
+    fn spawn_check(
+        &mut self,
+        connection: usize,
+        request_id: i64,
+        source: SourceMetadata,
+        assigned: bool,
+    ) {
         let Some(live) = self.connections.get(connection) else {
             return;
         };
@@ -162,6 +185,7 @@ impl Run<'_> {
             Event::Checked {
                 connection,
                 request_id,
+                assigned,
                 result,
             }
         });
@@ -171,6 +195,7 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         request_id: i64,
+        assigned: bool,
         result: Result<LaunchGrant, Refusal>,
     ) {
         let grant = match result {
@@ -208,10 +233,19 @@ impl Run<'_> {
             return;
         }
         self.taken.insert((connection, request_id));
-        self.spawn_acquire(connection, reservation, request_id);
+        if assigned {
+            eprintln!("rust-runner reservation {reservation} is already assigned; acquire skipped");
+        }
+        self.spawn_acquire(connection, reservation, request_id, assigned);
     }
 
-    fn spawn_acquire(&mut self, connection: usize, reservation: ReservationId, request_id: i64) {
+    fn spawn_acquire(
+        &mut self,
+        connection: usize,
+        reservation: ReservationId,
+        request_id: i64,
+        assigned: bool,
+    ) {
         let Some(live) = self.connections.get(connection) else {
             return;
         };
@@ -221,7 +255,14 @@ impl Run<'_> {
         let runner_name = self.runner_name(connection, reservation);
         self.tasks.spawn(async move {
             let result = blocking(move || {
-                github::acquire_and_jit(&admin, &queue, scale_set_id, request_id, &runner_name)
+                github::acquire_and_jit(
+                    &admin,
+                    &queue,
+                    scale_set_id,
+                    request_id,
+                    &runner_name,
+                    assigned,
+                )
             })
             .await;
             Event::Acquired {

@@ -288,30 +288,33 @@ pub(super) fn acquire_and_jit(
     scale_set_id: i64,
     request_id: i64,
     runner_name: &str,
+    assigned: bool,
 ) -> Result<Acquisition, ListenFault> {
     let mut transport =
         HttpsTransport::with_deadline(&admin.base, Instant::now() + ACQUIRE_BUDGET)?;
-    let gate = RefreshGate::new();
-    let refresh_requested = Cell::new(false);
-    let outcome = acquire(
-        &mut transport,
-        scale_set_id,
-        &[request_id],
-        &[],
-        &queue.token,
-        &gate,
-        || {
-            refresh_requested.set(true);
-            Err(WireError::RefreshExhausted)
-        },
-    );
-    let Some(outcome) = refresh_or_fail(outcome, &refresh_requested)? else {
-        return Ok(Acquisition::RefreshRequired);
-    };
-    match outcome {
-        AcquireOutcome::Acquired(ids) if ids.is_empty() => return Ok(Acquisition::NotAcquired),
-        AcquireOutcome::Acquired(ids) if sole_grant(&ids, request_id) => {}
-        _ => return Err(EnsureError::Uncertain.into()),
+    if !assigned {
+        let gate = RefreshGate::new();
+        let refresh_requested = Cell::new(false);
+        let outcome = acquire(
+            &mut transport,
+            scale_set_id,
+            &[request_id],
+            &[],
+            &queue.token,
+            &gate,
+            || {
+                refresh_requested.set(true);
+                Err(WireError::RefreshExhausted)
+            },
+        );
+        let Some(outcome) = refresh_or_fail(outcome, &refresh_requested)? else {
+            return Ok(Acquisition::RefreshRequired);
+        };
+        match outcome {
+            AcquireOutcome::Acquired(ids) if ids.is_empty() => return Ok(Acquisition::NotAcquired),
+            AcquireOutcome::Acquired(ids) if sole_grant(&ids, request_id) => {}
+            _ => return Err(EnsureError::Uncertain.into()),
+        }
     }
     let request = jit_request(runner_name).map_err(|_| EnsureError::Rejected)?;
     let result = generate_jit(&mut transport, scale_set_id, &admin.token, &request)?;

@@ -20,7 +20,7 @@ export async function queue(path: string): Promise<never> {
       reply(202, undefined);
     }
     const jobs = next.offers.map((offer) => ({
-      messageType: "JobAvailable",
+      messageType: offer.kind ?? "JobAvailable",
       runnerRequestId: offer.request_id,
       jobId: `job-${offer.request_id}`,
       ownerName: config.owner,
