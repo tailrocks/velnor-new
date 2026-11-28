@@ -137,10 +137,17 @@ pub(super) fn record(
         .map_err(|e| CiError::new(format!("cannot record restored units: {e}")))
 }
 
-pub(super) fn read(target: &Path, prefix: &str) -> (Manifest, Option<RestoredUnits>) {
+pub(super) fn read(
+    target: &Path,
+    prefix: &str,
+    head: Option<&str>,
+) -> (Manifest, Option<RestoredUnits>) {
     match fs::read_to_string(target.join(restored_units_file(prefix))) {
         Ok(text) => match crate::restored_units::decode(&text) {
-            Some(units) => (Manifest::Present, Some(units)),
+            Some(units) if head.is_some() && units.head.as_deref() == head => {
+                (Manifest::Present, Some(units))
+            }
+            Some(_) => (Manifest::Absent, None),
             None => (Manifest::Unreadable, None),
         },
         Err(error) if error.kind() == ErrorKind::NotFound => (Manifest::Absent, None),

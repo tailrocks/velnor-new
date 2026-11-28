@@ -85,8 +85,23 @@ fn event(repo: &Repo, kind: &str, package: &str, version: &str, workspace: bool)
     json!({"kind":kind,"package":package,"version":version,"location":location})
 }
 
+fn restore_unborn(repo: &Repo) {
+    repo.git(&["add", "."]);
+    assert!(super::cli(repo, &["inputs", "save"]).status.success());
+    assert!(super::cli(repo, &["inputs", "restore"]).status.success());
+}
+
 fn restore(repo: &Repo) {
     repo.git(&["add", "."]);
+    let unborn = !Command::new("git")
+        .arg("-C")
+        .arg(repo.root())
+        .args(["rev-parse", "--verify", "--quiet", "HEAD"])
+        .status()
+        .is_ok_and(|status| status.success());
+    if unborn {
+        repo.commit();
+    }
     assert!(super::cli(repo, &["inputs", "save"]).status.success());
     assert!(super::cli(repo, &["inputs", "restore"]).status.success());
 }

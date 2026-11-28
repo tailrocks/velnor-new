@@ -86,9 +86,8 @@ pub(super) fn restored_hashes(
     head: Option<&str>,
 ) -> Result<Vec<BTreeSet<String>>, CiError> {
     let hashes = |target: &Path, prefix: &str| {
-        crate::io::restored_units::read(target, prefix)
+        crate::io::restored_units::read(target, prefix, head)
             .1
-            .filter(|units| head.is_some() && units.head.as_deref() == head)
             .map_or_else(BTreeSet::new, |units| units.restored)
     };
     let prefixes = workspaces

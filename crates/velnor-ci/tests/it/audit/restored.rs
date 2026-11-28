@@ -4,6 +4,7 @@
 use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
 
+use super::own_units::link_script;
 use super::{audit, own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
 use velnor_ci::inputs::restored_units_file;
@@ -11,6 +12,7 @@ use velnor_ci::inputs::restored_units_file;
 const TARGET: &str = "rust/target/debug";
 const STALE: &str = "f00000000000000e";
 const SCRIPT_STALE: &str = "f00000000000000f";
+const RUN: &str = "f000000000000010";
 const OTHER_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
 fn manifest_path() -> String {
@@ -28,6 +30,12 @@ fn head(repo: &Repo) -> String {
 }
 
 fn with_stale_unit() -> Repo {
+    let repo = stale_units();
+    repo.commit();
+    repo
+}
+
+fn stale_units() -> Repo {
     let repo = workspace_below_the_root();
     own_units(&repo, TARGET, &[]);
     let stale = format!("{TARGET}/deps/app-{STALE}.d");
@@ -53,7 +61,6 @@ fn with_stale_unit() -> Repo {
         "shared/greeting.txt",
         UNIX_EPOCH + Duration::from_secs(4_000_000_000),
     );
-    repo.commit();
     repo
 }
 
@@ -129,4 +136,30 @@ fn a_manifest_bound_to_no_commit_does_not_excuse_a_stale_dep_info() {
     let repo = with_stale_unit();
     manifest_of(&repo, "velnor-restored-units 4", &[STALE, SCRIPT_STALE]);
     refused(&repo);
+}
+
+#[test]
+fn an_audit_before_the_first_commit_does_not_trust_a_manifest_bound_to_no_commit() {
+    let repo = stale_units();
+    manifest_of(&repo, "velnor-restored-units 4", &[STALE, SCRIPT_STALE]);
+    refused(&repo);
+}
+
+#[test]
+fn a_build_script_run_of_a_restored_stale_script_is_credited_not_a_gap() {
+    let repo = with_stale_unit();
+    let script = format!("{TARGET}/build/app-{SCRIPT_STALE}/build_script_build-{SCRIPT_STALE}.d");
+    let output = format!("{TARGET}/build/app-{RUN}/output");
+    unit(&repo, &output, "cargo:rerun-if-changed=build.rs\n");
+    link_script(&repo, &script, &output);
+    unit(
+        &repo,
+        &format!("{TARGET}/.fingerprint/app-{RUN}/run-build-script-build-script-build"),
+        "",
+    );
+    repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_500_000_000));
+    manifest(&repo, &[STALE, SCRIPT_STALE]);
+
+    let output = audit(&repo, &["--write"]);
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
 }

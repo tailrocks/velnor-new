@@ -48,7 +48,11 @@ fn collect_root(
     let target = checkout.join(root.target_dir.as_str());
     let saved = read_snapshot(&target.join(snapshot_file(&prefix)))?;
     let saved_witness = read_witness(&target.join(witness_file(&prefix)))?;
-    let (manifest, restored_units) = super::restored_units::read(&target, &prefix);
+    let (manifest, restored_units) = super::restored_units::read(
+        &target,
+        &prefix,
+        super::restored_units::head(checkout).as_deref(),
+    );
     let usable = saved.is_some();
     let feeds = |path: &str| link_inputs::feeds(facts, root, path);
     let unverifiable_links = current.links.iter().any(|link| feeds(&link.path))

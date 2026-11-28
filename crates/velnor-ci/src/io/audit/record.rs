@@ -208,6 +208,15 @@ impl Audit<'_> {
                 .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
+            if known.is_empty()
+                && script
+                    .as_deref()
+                    .is_some_and(|script| self.restored_unit(&[index], script))
+            {
+                self.present
+                    .insert((index, configuration.to_owned(), hash.to_owned()));
+                continue;
+            }
             let mut gap = if known.is_empty() {
                 Some(RunGap::Uncompiled)
             } else {
