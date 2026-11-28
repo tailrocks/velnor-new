@@ -44,7 +44,7 @@ pub(super) fn resolve(
             .ok_or(Missing::Orb)?,
     };
     let runner_binary = match runner_binary {
-        Some(path) if path.is_absolute() => path.to_path_buf(),
+        Some(path) if executable(path) => path.to_path_buf(),
         Some(_) => return Err(Missing::Runner),
         None => host
             .parent()
@@ -71,6 +71,22 @@ pub(super) fn record(state: &Path, environment: &Environment) -> bool {
     };
     let body = serde_json::json!({ ORB_FIELD: orb, RUNNER_FIELD: runner }).to_string();
     atomic_write(&state.join(FILE), body.as_bytes()).is_ok()
+}
+
+pub(super) fn snapshot(state: &Path) -> Option<Vec<u8>> {
+    read_private(&state.join(FILE))
+}
+
+pub(super) fn restore(state: &Path, previous: Option<&[u8]>) {
+    let path = state.join(FILE);
+    match previous {
+        Some(bytes) => {
+            atomic_write(&path, bytes).ok();
+        }
+        None => {
+            std::fs::remove_file(&path).ok();
+        }
+    }
 }
 
 fn read_private(path: &Path) -> Option<Vec<u8>> {

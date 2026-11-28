@@ -11,7 +11,6 @@ use std::process::{Command, Output};
 
 const PLIST: &str = "Library/LaunchAgents/com.tailrocks.velnor.host.plist";
 const RECORD: &str = "state/service-environment.json";
-const RUNNER_ARG: [&str; 2] = ["--runner-binary", "/opt/velnor/bin/velnor-runner"];
 
 fn executable(path: &Path, mode: u32) -> std::io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
@@ -29,12 +28,23 @@ fn host_copy(dir: &Path, with_runner: bool) -> std::io::Result<PathBuf> {
     Ok(host)
 }
 
-fn fake_orb(dir: &Path) -> std::io::Result<PathBuf> {
+fn fake_tool(dir: &Path, name: &str) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
-    let orb = dir.join("orb");
-    std::fs::write(&orb, "#!/bin/sh\n")?;
-    executable(&orb, 0o755)?;
-    Ok(orb)
+    let tool = dir.join(name);
+    std::fs::write(&tool, "#!/bin/sh\n")?;
+    executable(&tool, 0o755)?;
+    Ok(tool)
+}
+
+fn fake_orb(dir: &Path) -> std::io::Result<PathBuf> {
+    fake_tool(dir, "orb")
+}
+
+fn fake_runner(dir: &Path) -> std::io::Result<String> {
+    Ok(fake_tool(dir, "velnor-runner")?
+        .to_str()
+        .ok_or(std::io::ErrorKind::InvalidData)?
+        .to_owned())
 }
 
 fn install(home: &Path, path: &str, extra: &[&str]) -> std::io::Result<Output> {
@@ -109,18 +119,18 @@ fn install_escapes_explicit_paths_and_is_idempotent() -> Result<(), Box<dyn Erro
     let home = temp.path().canonicalize()?;
     let orb = fake_orb(&home.join("a&b"))?;
     let orb_arg = orb.to_str().ok_or("utf8")?;
-    let args = ["--orb", orb_arg, RUNNER_ARG[0], RUNNER_ARG[1]];
+    let runner = fake_runner(&home.join("opt&r"))?;
+    let args = ["--orb", orb_arg, "--runner-binary", runner.as_str()];
     assert!(install(&home, "/usr/bin", &args)?.status.success());
     let first = plist(&home)?;
     assert!(first.contains(&format!(
         "<key>VELNOR_ORB</key><string>{}/a&amp;b/orb</string>",
         home.display()
     )));
-    assert!(
-        first.contains(
-            "<key>VELNOR_RUNNER_BINARY</key><string>/opt/velnor/bin/velnor-runner</string>"
-        )
-    );
+    assert!(first.contains(&format!(
+        "<key>VELNOR_RUNNER_BINARY</key><string>{}/opt&amp;r/velnor-runner</string>",
+        home.display()
+    )));
     assert!(install(&home, "/usr/bin", &args)?.status.success());
     assert_eq!(plist(&home)?, first);
     if cfg!(target_os = "macos") {
@@ -137,12 +147,13 @@ fn install_escapes_explicit_paths_and_is_idempotent() -> Result<(), Box<dyn Erro
 fn install_refuses_when_orb_is_missing_or_not_absolute() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let home = temp.path().canonicalize()?;
+    let runner = fake_runner(&home.join("opt"))?;
     for (path, extra) in [
         ("/nonexistent", vec![]),
         ("/nonexistent", vec!["--orb", "relative/orb"]),
         ("/nonexistent", vec!["--orb", "/nonexistent/orb"]),
     ] {
-        let extra = [extra, RUNNER_ARG.to_vec()].concat();
+        let extra = [extra, vec!["--runner-binary", runner.as_str()]].concat();
         let output = install(&home, path, &extra)?;
         assert!(!output.status.success(), "{extra:?}");
         assert!(!home.join(PLIST).exists(), "{extra:?}");
@@ -180,15 +191,39 @@ fn install_refuses_a_default_runner_that_is_missing_or_not_executable() -> Resul
 }
 
 #[test]
+fn install_refuses_an_explicit_runner_that_is_missing_or_not_executable()
+-> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let home = temp.path().canonicalize()?;
+    let orb = fake_orb(&home.join("bin"))?;
+    let orb = orb.to_str().ok_or("utf8")?;
+    let missing = home.join("opt/velnor-runner");
+    let plain = fake_runner(&home.join("plain"))?;
+    executable(plain.as_ref(), 0o644)?;
+    for runner in [missing.to_str().ok_or("utf8")?, plain.as_str()] {
+        let output = install(
+            &home,
+            "/nonexistent",
+            &["--orb", orb, "--runner-binary", runner],
+        )?;
+        assert!(!output.status.success(), "{runner}");
+        assert!(!home.join(PLIST).exists(), "{runner}");
+        assert!(!home.join(RECORD).exists(), "{runner}");
+    }
+    Ok(())
+}
+
+#[test]
 fn install_refuses_a_control_character_in_the_orb_path() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let home = temp.path().canonicalize()?;
     let orb = fake_orb(&home.join("a\u{b}b"))?;
     let orb = orb.to_str().ok_or("utf8")?;
+    let runner = fake_runner(&home.join("opt"))?;
     let output = install(
         &home,
         "/nonexistent",
-        &["--orb", orb, RUNNER_ARG[0], RUNNER_ARG[1]],
+        &["--orb", orb, "--runner-binary", runner.as_str()],
     )?;
     assert!(!output.status.success());
     assert!(!home.join(PLIST).exists());
@@ -203,7 +238,8 @@ fn start_asks_to_install_again_when_the_environment_was_never_recorded()
     let home = temp.path().canonicalize()?;
     let orb = fake_orb(&home.join("bin"))?;
     let orb = orb.to_str().ok_or("utf8")?;
-    let args = ["--orb", orb, RUNNER_ARG[0], RUNNER_ARG[1]];
+    let runner = fake_runner(&home.join("opt"))?;
+    let args = ["--orb", orb, "--runner-binary", runner.as_str()];
     assert!(install(&home, "/nonexistent", &args)?.status.success());
     assert!(home.join(RECORD).exists());
     std::fs::remove_file(home.join(RECORD))?;

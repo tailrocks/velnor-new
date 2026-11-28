@@ -72,6 +72,10 @@ fn uninstall(state: &Path) -> ExitCode {
         return different();
     };
     let stopped = spawn_status_code(&bootout_argv(installed.uid));
+    uninstall_installed(&installed, stopped)
+}
+
+fn uninstall_installed(installed: &InstalledPlist, stopped: Option<i32>) -> ExitCode {
     uninstall_after_stop(
         stopped,
         &installed.path,

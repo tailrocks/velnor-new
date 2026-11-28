@@ -68,7 +68,7 @@ fn tokens(text: &str) -> Option<Vec<Token>> {
             Token::Open(name(tag))
         });
     }
-    Some(out)
+    rest.trim().is_empty().then_some(out)
 }
 
 pub(super) fn parse(text: &str) -> Option<Value> {
@@ -80,7 +80,8 @@ pub(super) fn parse(text: &str) -> Option<Value> {
         return None;
     }
     let value = value(&mut stream)?;
-    matches!(stream.next(), Some(Token::Close(name)) if name == "plist").then_some(value)
+    let closed = matches!(stream.next(), Some(Token::Close(name)) if name == "plist");
+    (closed && stream.next().is_none()).then_some(value)
 }
 
 fn value(stream: &mut std::iter::Peekable<std::vec::IntoIter<Token>>) -> Option<Value> {
@@ -112,12 +113,12 @@ fn value(stream: &mut std::iter::Peekable<std::vec::IntoIter<Token>>) -> Option<
         Token::Open(name) if name == "dict" => {
             let mut pairs = Vec::new();
             while !matches!(stream.peek()?, Token::Close(close) if close == "dict") {
-                let (Token::Open(key), Token::Text(name), Token::Close(_)) =
+                let (Token::Open(open), Token::Text(name), Token::Close(close)) =
                     (stream.next()?, stream.next()?, stream.next()?)
                 else {
                     return None;
                 };
-                if key != "key" {
+                if open != "key" || close != "key" {
                     return None;
                 }
                 pairs.push((name, value(stream)?));
@@ -126,5 +127,33 @@ fn value(stream: &mut std::iter::Peekable<std::vec::IntoIter<Token>>) -> Option<
             Some(Value::Dict(pairs))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse;
+
+    const WELL_FORMED: &str = "<plist><dict><key>a</key><string>x</string></dict></plist>";
+
+    #[test]
+    fn the_parser_accepts_a_well_formed_plist() {
+        assert!(parse(WELL_FORMED).is_some());
+    }
+
+    #[test]
+    fn a_key_closed_by_another_name_is_rejected() {
+        assert!(parse("<plist><dict><key>a</string><string>x</string></dict></plist>").is_none());
+    }
+
+    #[test]
+    fn a_token_after_the_closing_plist_tag_is_rejected() {
+        assert!(parse(&format!("{WELL_FORMED}<true/>")).is_none());
+    }
+
+    #[test]
+    fn text_after_the_closing_plist_tag_is_rejected() {
+        assert!(parse(&format!("{WELL_FORMED}junk")).is_none());
+        assert!(parse(&format!("{WELL_FORMED}\n")).is_some());
     }
 }
