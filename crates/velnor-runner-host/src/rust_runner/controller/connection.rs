@@ -15,7 +15,7 @@ use crate::launch_blocking::ListenFault;
 pub(super) const ADMIN_RENEWAL: Duration = Duration::from_mins(20);
 const ADMIN_RETRY: Duration = Duration::from_secs(30);
 const DEFAULT_BRANCH_TTL: Duration = Duration::from_mins(5);
-const REFRESH_FAILURE_LIMIT: u32 = 3;
+const SESSION_FAILURE_LIMIT: u32 = 3;
 
 pub(super) struct DefaultBranch {
     name: String,
@@ -54,7 +54,8 @@ pub(super) struct Live {
     pub(super) poll_retry_at: Option<Instant>,
     pub(super) batch: Option<Batch>,
     pub(super) refreshing: bool,
-    refresh_failures: u32,
+    session_failures: u32,
+    ack_refusals: u32,
     pub(super) admin_due: Instant,
 }
 
@@ -81,7 +82,8 @@ impl Pending {
             poll_retry_at: None,
             batch: None,
             refreshing: false,
-            refresh_failures: 0,
+            session_failures: 0,
+            ack_refusals: 0,
             admin_due: self.admin_at + ADMIN_RENEWAL,
         })
     }
@@ -110,11 +112,23 @@ impl Live {
     }
 
     pub(super) const fn session_healthy(&mut self) {
-        self.refresh_failures = 0;
+        self.session_failures = 0;
+    }
+
+    pub(super) const fn session_failed(&mut self) {
+        self.session_failures = self.session_failures.saturating_add(1);
+    }
+
+    pub(super) const fn acknowledged(&mut self) {
+        self.ack_refusals = 0;
+    }
+
+    pub(super) const fn acknowledge_refused(&mut self) {
+        self.ack_refusals = self.ack_refusals.saturating_add(1);
     }
 
     pub(super) const fn session_failing(&self) -> bool {
-        self.refresh_failures >= REFRESH_FAILURE_LIMIT
+        self.session_failures >= SESSION_FAILURE_LIMIT || self.ack_refusals >= SESSION_FAILURE_LIMIT
     }
 
     pub(super) fn renewed(&mut self, now: Instant, admin: Option<Admin>) {
@@ -135,12 +149,12 @@ impl Live {
     ) -> Result<(), ListenFault> {
         self.refreshing = false;
         let Some((admin, session)) = renewed else {
-            self.refresh_failures = self.refresh_failures.saturating_add(1);
+            self.session_failed();
             self.poll_retry_at = Some(now + crate::launch::steady::RETRY);
             return Ok(());
         };
         self.queue = QueueAccess::of(&session, &admin)?;
-        self.refresh_failures = 0;
+        self.session_failures = 0;
         self.admin = admin;
         self.session = session;
         self.admin_due = now + ADMIN_RENEWAL;

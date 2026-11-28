@@ -81,6 +81,7 @@ impl Run<'_> {
         match result {
             Err(error) => {
                 eprintln!("rust-runner poll held: {error}");
+                live.session_failed();
                 live.polling = false;
                 live.poll_retry_at = Some(now + RETRY);
             }
@@ -317,8 +318,14 @@ impl Run<'_> {
         };
         let refresh = matches!(result, Ok(Acked::RefreshRequired));
         match result {
-            Ok(Acked::Done) => live.cursor.processed(message_id),
-            Ok(Acked::RefreshRequired) => live.cursor.deferred(message_id, now),
+            Ok(Acked::Done) => {
+                live.acknowledged();
+                live.cursor.processed(message_id);
+            }
+            Ok(Acked::RefreshRequired) => {
+                live.acknowledge_refused();
+                live.cursor.deferred(message_id, now);
+            }
             Err(error) => {
                 eprintln!("rust-runner acknowledge held: {error}");
                 live.cursor.deferred(message_id, now);
