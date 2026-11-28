@@ -4373,6 +4373,7 @@ name = "velnor-gen"
 version = "0.1.116"
 dependencies = [
  "clap",
+ "serde",
  "serde-saphyr",
  "serde_json",
  "sha2",

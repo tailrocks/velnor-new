@@ -11,7 +11,7 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView, SAMPLES};
+use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, RepoPath, RepoView, SAMPLES};
 use velnor_rust::METADATA_PATH;
 
 mod check;
@@ -27,7 +27,7 @@ mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{Drift, check_tag, notes, plan_generate};
+use crate::{Drift, JobAuthorityIdentity, check_tag, job_authority_identity, notes, plan_generate};
 pub use check::{Cargo, check_metadata};
 pub use error::Error;
 use pin::{check_lock, pin_helper};
@@ -44,11 +44,7 @@ use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
 pub fn version_text() -> String {
-    format!(
-        "{} ({})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("VELNOR_COMMIT").unwrap_or("unknown")
-    )
+    format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::build_commit())
 }
 
 pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
@@ -118,14 +114,14 @@ pub fn main() -> Exit {
         Command::Generate | Command::Check { .. } => {}
     }
     match execute(&cli) {
-        Ok(drifts) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
+        Ok((drifts, _)) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
             for drift in &drifts {
                 eprintln!("{drift}");
             }
             eprintln!("run `velnor-gen generate` to update the generated files");
             Exit::from(1)
         }
-        Ok(drifts) => {
+        Ok((drifts, identity)) => {
             if drifts.is_empty() {
                 println!("generated files are up to date");
             }
@@ -135,6 +131,9 @@ pub fn main() -> Exit {
                     Drift::Stale(path) => println!("removed {path}"),
                     Drift::Foreign(path) | Drift::Unmarked(path) => println!("kept {path}"),
                 }
+            }
+            if let Some(identity) = identity {
+                println!("{}\n{}", identity.source_sha, identity.artifact_sha256);
             }
             Exit::SUCCESS
         }
@@ -170,13 +169,14 @@ fn suggest(path: &Path) -> Exit {
     }
 }
 
-fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
+fn execute(cli: &Cli) -> Result<(Vec<Drift>, Option<JobAuthorityIdentity>), Error> {
     let root = toplevel(&cli.root)?;
     if let Command::Check { verify_release } = &cli.command {
         check_lock(&root, *verify_release)?;
     }
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
+    wanted.push(JOB_AUTHORITY_INVENTORY_PATH);
     let workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
     let view = read_view(&root, false, None)?.0;
@@ -196,10 +196,13 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
-    if cli.command == Command::Generate {
+    let identity = if cli.command == Command::Generate {
         apply(&root, &expected, &drifts)?;
-    }
-    Ok(drifts)
+        job_authority_identity(&view, crate::build_commit()).map_err(Error::Generate)?
+    } else {
+        None
+    };
+    Ok((drifts, identity))
 }
 
 pub fn apply(

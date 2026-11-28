@@ -13,6 +13,9 @@ pub const CACHE_TRIM_WORKFLOW_PATH: RepoPath =
 pub const RELEASE_WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/release.yml");
 pub const RELEASE_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/release.toml");
 pub const WORKFLOWS_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/workflows.toml");
+pub const JOB_AUTHORITY_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/job-authority.toml");
+pub const JOB_AUTHORITY_INVENTORY_PATH: RepoPath =
+    RepoPath::from_static(".velnor/job-authority-inventory.json");
 pub const RELEASE_PLZ_FILE: &str = "release-plz.toml";
 /// Recorded sample checkouts: data under this folder, never roots of the checkout that holds it.
 pub const SAMPLES: &str = "generator/samples";

@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use velnor_model::JOB_AUTHORITY_INVENTORY_PATH;
 use velnor_model::RepoPath;
 use velnor_render::{Owner, lf_normalized, owner_of};
 use velnor_rust::METADATA_PATH;
@@ -48,6 +49,10 @@ impl fmt::Display for Drift {
     }
 }
 
+fn is_record(path: &RepoPath) -> bool {
+    *path == METADATA_PATH || *path == JOB_AUTHORITY_INVENTORY_PATH
+}
+
 #[must_use]
 pub fn drift(
     expected: &BTreeMap<RepoPath, String>,
@@ -58,10 +63,10 @@ pub fn drift(
     paths
         .into_iter()
         .filter_map(|path| match (expected.get(path), workflows.get(path)) {
-            (Some(want), Some(have)) if *path == METADATA_PATH => {
+            (Some(want), Some(have)) if is_record(path) => {
                 (want.as_bytes() != have.as_slice()).then(|| Drift::Changed(path.clone()))
             }
-            (None, Some(_)) if *path == METADATA_PATH => Some(Drift::Stale(path.clone())),
+            (None, Some(_)) if is_record(path) => Some(Drift::Stale(path.clone())),
             (Some(want), Some(have)) => match owner_of(have) {
                 Owner::VelnorGen if want.as_bytes() == lf_normalized(have).as_ref() => None,
                 Owner::VelnorGen => Some(Drift::Changed(path.clone())),

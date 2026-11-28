@@ -114,7 +114,7 @@ pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
         return Ok(());
     };
     let bytes = fs::read(&path).map_err(|e| Error::File(path.clone(), e))?;
-    let commit = option_env!("VELNOR_COMMIT").unwrap_or("unknown");
+    let commit = crate::build_commit();
     let sha256 = if commit == "unknown" {
         None
     } else {

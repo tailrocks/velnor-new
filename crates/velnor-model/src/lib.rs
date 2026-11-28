@@ -98,9 +98,10 @@ pub use repo::{
 pub use runner_protocol::RUNNER_PROTOCOL_VERSION;
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{
-    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
-    RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
-    StepNeed, WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
+    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, JOB_AUTHORITY_CONFIG_PATH,
+    JOB_AUTHORITY_INVENTORY_PATH, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason, StepNeed,
+    WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};

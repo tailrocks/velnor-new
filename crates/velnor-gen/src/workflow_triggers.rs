@@ -26,7 +26,7 @@ fn declared_name(doc: &Value) -> Option<String> {
     }
 }
 
-pub(crate) fn workflow_facts(path: &str, text: &str) -> WorkflowFacts {
+pub(crate) fn parse_workflow(text: &str) -> Option<Value> {
     let mut budget = serde_saphyr::Budget::default();
     budget.max_depth = 32;
     budget.max_nodes = 262_144;
@@ -36,14 +36,18 @@ pub(crate) fn workflow_facts(path: &str, text: &str) -> WorkflowFacts {
     budget.enforce_alias_anchor_ratio = false;
     let mut options = serde_saphyr::Options::default();
     options.budget = Some(budget);
-    let parsed = (text.len() <= 500_000)
-        .then(|| serde_saphyr::from_str_with_options::<Value>(text, options));
-    match parsed {
-        Some(Ok(doc)) => WorkflowFacts {
+    (text.len() <= 500_000)
+        .then(|| serde_saphyr::from_str_with_options::<Value>(text, options).ok())
+        .flatten()
+}
+
+pub(crate) fn workflow_facts(path: &str, text: &str) -> WorkflowFacts {
+    match parse_workflow(text) {
+        Some(doc) => WorkflowFacts {
             name: declared_name(&doc).unwrap_or_else(|| path.to_owned()),
             pushes: doc.get("on").is_some_and(names_push),
         },
-        _ => WorkflowFacts {
+        None => WorkflowFacts {
             name: path.to_owned(),
             pushes: true,
         },

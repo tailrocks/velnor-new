@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "generator_source_sha": "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36",
+  "inventory_sha256": "f74fcca090bc30618de6792a9dd8cf8ab73784399bdae5cf1d29a5a521d01abf",
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "content_sha256": "9076dd0f8fd29d683d7200676f1042f63dfd752b8ae4795b26f7d10d7fbdacb8",
+      "calls": [],
+      "jobs": [
+        {
+          "root_path": ".github/workflows/ci.yml",
+          "workflow_path": ".github/workflows/ci.yml",
+          "job_key": "cache",
+          "role": "verification",
+          "contexts": [
+            {
+              "event": "pull_request",
+              "branch_filters": [],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "push",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "merge_group",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            }
+          ],
+          "permissions_declared": true,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "secrets": [],
+          "environments": [],
+          "condition_sha256": null,
+          "concurrency": null,
+          "needs": [
+            "rust",
+            "rust-trim"
+          ]
+        },
+        {
+          "root_path": ".github/workflows/ci.yml",
+          "workflow_path": ".github/workflows/ci.yml",
+          "job_key": "required",
+          "role": "verification",
+          "contexts": [
+            {
+              "event": "pull_request",
+              "branch_filters": [],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "push",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "merge_group",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            }
+          ],
+          "permissions_declared": true,
+          "permissions": {
+            "contents": "read"
+          },
+          "secrets": [],
+          "environments": [],
+          "condition_sha256": null,
+          "concurrency": null,
+          "needs": [
+            "rust"
+          ]
+        },
+        {
+          "root_path": ".github/workflows/ci.yml",
+          "workflow_path": ".github/workflows/ci.yml",
+          "job_key": "rust",
+          "role": "verification",
+          "contexts": [
+            {
+              "event": "pull_request",
+              "branch_filters": [],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "push",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            },
+            {
+              "event": "merge_group",
+              "branch_filters": [
+                "main"
+              ],
+              "tag_filters": [],
+              "pull_request_base_branches": []
+            }
+          ],
+          "permissions_declared": true,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "secrets": [],
+          "environments": [],
+          "condition_sha256": null,
+          "concurrency": null,
+          "needs": []
+        }
+      ]
+    }
+  ]
+}
