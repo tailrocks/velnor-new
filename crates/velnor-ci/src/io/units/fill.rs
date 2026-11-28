@@ -7,7 +7,7 @@ use velnor_model::PackageName;
 
 use crate::coverage::{Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
-use crate::io::audit::{Audit, UnitIdentity};
+use crate::io::audit::{Audit, Restored, UnitIdentity};
 
 impl Audit<'_> {
     pub(in crate::io) fn fingerprint(
@@ -58,7 +58,7 @@ impl Audit<'_> {
             indices[0],
             file,
             package,
-            &self.restored_digests(indices, hash),
+            Restored { indices, hash },
             UnitIdentity::BuildScript,
         )?
         else {

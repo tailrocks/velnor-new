@@ -5,7 +5,7 @@ use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::own_units::link_script;
-use super::{audit, own_units, unit, workspace_below_the_root};
+use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 use velnor_ci::inputs::restored_units_file;
 
@@ -184,10 +184,9 @@ fn an_audit_before_the_first_commit_does_not_trust_a_manifest_bound_to_no_commit
     refused(&repo);
 }
 
-#[test]
-fn a_build_script_run_of_a_restored_stale_script_is_credited_not_a_gap() {
+fn with_restored_run() -> Repo {
     let repo = with_stale_unit();
-    let script = format!("{TARGET}/build/app-{SCRIPT_STALE}/build_script_build-{SCRIPT_STALE}.d");
+    let script = dep_info_of(SCRIPT_STALE);
     let output = format!("{TARGET}/build/app-{RUN}/output");
     unit(&repo, &output, "cargo:rerun-if-changed=build.rs\n");
     link_script(&repo, &script, &output);
@@ -198,7 +197,80 @@ fn a_build_script_run_of_a_restored_stale_script_is_credited_not_a_gap() {
     );
     repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_500_000_000));
     manifest(&repo, &[STALE, SCRIPT_STALE]);
+    repo
+}
 
+fn uncompiled(repo: &Repo) {
+    let output = audit(repo, &["--write"]);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("build script run without a current dep-info of its compile"),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn a_build_script_run_of_a_restored_stale_script_is_credited_not_a_gap() {
+    let repo = with_restored_run();
     let output = audit(&repo, &["--write"]);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
+}
+
+#[test]
+fn a_restored_run_is_not_credited_when_its_script_dep_info_lost_build_rs() {
+    let repo = with_restored_run();
+    unit(&repo, &dep_info_of(SCRIPT_STALE), "out.d:\n");
+    uncompiled(&repo);
+}
+
+#[test]
+fn a_restored_run_is_not_credited_when_its_script_dep_info_is_deleted() {
+    let repo = with_restored_run();
+    std::fs::remove_file(repo.root().join(dep_info_of(SCRIPT_STALE)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    uncompiled(&repo);
+}
+
+#[test]
+fn a_restored_run_is_not_credited_when_its_script_dep_info_names_no_repository_path() {
+    let repo = with_restored_run();
+    unit(
+        &repo,
+        &dep_info_of(SCRIPT_STALE),
+        "out.d: /nowhere/build.rs\n",
+    );
+    uncompiled(&repo);
+}
+
+fn restore(repo: &Repo) {
+    for args in [["inputs", "save"], ["inputs", "restore"]] {
+        let output = velnor_ci()
+            .current_dir(repo.root().join("rust"))
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{args:?}: {output:?}");
+    }
+    for (path, seconds) in [
+        (dep_info_of(STALE), 3_000_000_001),
+        (dep_info_of(SCRIPT_STALE), 3_000_000_001),
+        ("shared/greeting.txt".to_owned(), 4_000_000_000),
+    ] {
+        repo.set_mtime(&path, UNIX_EPOCH + Duration::from_secs(seconds));
+    }
+}
+
+#[test]
+fn a_restore_then_audit_credits_a_restored_run_and_refuses_it_once_its_script_dep_info_changes() {
+    let repo = with_restored_run();
+    std::fs::remove_file(repo.root().join(manifest_path())).unwrap_or_else(|e| unreachable!("{e}"));
+    restore(&repo);
+    assert!(repo.root().join(manifest_path()).is_file());
+
+    let credited = audit(&repo, &["--write"]);
+    assert_eq!(credited.status.code(), Some(0), "{credited:?}");
+
+    unit(&repo, &dep_info_of(SCRIPT_STALE), "out.d:\n");
+    uncompiled(&repo);
 }

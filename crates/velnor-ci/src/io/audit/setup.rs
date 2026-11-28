@@ -73,6 +73,7 @@ pub(super) fn begin<'a>(
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
         restored: vec![BTreeMap::new(); workspaces.len()],
+        excused: BTreeSet::new(),
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::OnceCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -30,6 +30,12 @@ pub(in crate::io) enum UnitIdentity<'a> {
     BuildScript,
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::io) struct Restored<'a> {
+    pub(in crate::io) indices: &'a [usize],
+    pub(in crate::io) hash: &'a str,
+}
+
 struct Run {
     out: Option<PathBuf>,
     undeclared: bool,
@@ -50,7 +56,7 @@ impl Audit<'_> {
         index: usize,
         file: &Path,
         package: &str,
-        restored: &BTreeSet<String>,
+        restored: Restored<'_>,
         unit: UnitIdentity<'_>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
         let text = read(
@@ -61,6 +67,7 @@ impl Audit<'_> {
         )?;
         let built = modified(file)?;
         let paths = dep_info_paths(&text);
+        let excused = self.excused(restored, &text);
         let Some(source) = self.unit_source(workspace, &paths, Some(package)) else {
             return Ok(None);
         };
@@ -68,9 +75,14 @@ impl Audit<'_> {
             .changed_inputs(workspace, &paths, built, file, false, 1)?
             .is_empty()
         {
-            if !restored.contains(&crate::restored_units::digest(&text))
-                && !self.owners.of(Some(package), &source).is_empty()
-            {
+            if excused {
+                self.excused.extend(
+                    restored
+                        .indices
+                        .iter()
+                        .map(|i| (*i, restored.hash.to_owned())),
+                );
+            } else if !self.owners.of(Some(package), &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
             return Ok(None);
