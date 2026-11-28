@@ -144,3 +144,20 @@ fn a_relative_include_that_climbs_out_of_a_tracked_symlink_can_read_anything() {
     );
     assert!(planned.contains("b input:notes/x.md"), "{planned}");
 }
+
+#[test]
+fn a_crate_that_defines_its_own_concat_or_env_reads_any_file_for_a_build_output_include() {
+    for shadow in [
+        "macro_rules! concat { ($($t:tt)*) => { \"../notes/x.md\" }; }\n",
+        "macro_rules! env { ($($t:tt)*) => { \"../notes\" }; }\n",
+        "use helpers::concat;\n",
+        "use helpers::env as env;\n",
+    ] {
+        let include = format!("{shadow}include!(concat!(env!(\"OUT_DIR\"), \"/gen.rs\"));\n");
+        let planned = explained(&include, "notes/x.md");
+        assert!(
+            planned.contains("b input:notes/x.md"),
+            "{shadow}: {planned}"
+        );
+    }
+}

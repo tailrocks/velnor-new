@@ -54,6 +54,27 @@ fn closes(ending: &[Token<'_>]) -> bool {
 }
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
+const SHADOWABLE: &[&str] = &["concat", "env"];
+
+fn shadows_a_macro(tokens: &[Token<'_>]) -> bool {
+    let mut importing = false;
+    for (at, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Ident("macro_rules") => {
+                if let [Token::Punct('!'), Token::Ident(name), ..] = &tokens[at + 1..]
+                    && SHADOWABLE.contains(name)
+                {
+                    return true;
+                }
+            }
+            Token::Ident("use") => importing = true,
+            Token::Punct(';') => importing = false,
+            Token::Ident(name) if importing && SHADOWABLE.contains(name) => return true,
+            _ => {}
+        }
+    }
+    false
+}
 
 #[must_use]
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
@@ -136,6 +157,7 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
+        let shadowed = shadows_a_macro(&tokens);
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -150,7 +172,12 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
-            let resolved = match Argument::parse(argument, &tokens[at + 4..]) {
+            let parsed = if shadowed {
+                Argument::Unknown
+            } else {
+                Argument::parse(argument, &tokens[at + 4..])
+            };
+            let resolved = match parsed {
                 Argument::Relative(literal) => {
                     literal_path(literal).and_then(|path| resolve(&self.view.symlinks, file, path))
                 }

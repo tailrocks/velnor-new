@@ -10,7 +10,9 @@
 //! not follow that. A build the plan left out (its gate does not hold) is the only
 //! build that may be missing, and one build must have finished.
 
-use velnor_model::{Gate, GateNeed, PlanFrom, PrRun, When, mode_env};
+use std::collections::BTreeMap;
+
+use velnor_model::{Gate, GateNeed, PlanFrom, PrRun, RootSlug, When, mode_env};
 
 use crate::gate::{REPLAN_STEP, Setup, gate_parts, output};
 
@@ -52,29 +54,58 @@ fn unwrapped(condition: &str) -> &str {
     condition.trim_start_matches("${{ ").trim_end_matches(" }}")
 }
 
-pub(crate) fn mode_read(gate: &Gate) -> Option<(String, String)> {
+fn mode_read(gate: &Gate) -> Option<String> {
     let (PlanFrom::Job(from) | PlanFrom::WorkJob(from)) = &gate.from else {
         return None;
     };
     (gate.need == GateNeed::Selected && gate.also.is_empty()).then(|| {
         let key = output(&gate.slug, GateNeed::Selected);
-        (
-            mode_env(&gate.slug),
-            format!("${{{{ needs.{from}.outputs.{key} }}}}"),
-        )
+        format!("${{{{ needs.{from}.outputs.{key} }}}}")
     })
 }
 
+/// The plan modes a job reads into its env, named by position over its roots in sorted order.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Modes(BTreeMap<RootSlug, String>);
+
+impl Modes {
+    pub(crate) fn of<'a>(gates: impl Iterator<Item = &'a Gate>) -> Self {
+        Self(
+            gates
+                .filter_map(|gate| Some((gate.slug.clone(), mode_read(gate)?)))
+                .collect(),
+        )
+    }
+
+    fn name(&self, gate: &Gate) -> Option<String> {
+        mode_read(gate)?;
+        let index = self.0.keys().position(|slug| *slug == gate.slug)?;
+        Some(mode_env(index))
+    }
+
+    pub(crate) fn env(&self) -> Vec<(String, String)> {
+        self.0
+            .values()
+            .enumerate()
+            .map(|(index, read)| (mode_env(index), read.clone()))
+            .collect()
+    }
+}
+
 /// What a save, or the audit, waits for before the builds `compiled`.
-pub(crate) fn builds_finished(compiled: &[Compiled], saved_here: Option<&Gate>) -> Vec<String> {
+pub(crate) fn builds_finished(
+    compiled: &[Compiled],
+    saved_here: Option<&Gate>,
+    modes: &Modes,
+) -> Vec<String> {
     let mut required: Vec<String> = Vec::new();
     let mut every_build_is_optional = !compiled.is_empty();
     for build in compiled {
         let finished = build.built.finished();
         let term = match &build.gate {
             Some(gate) if Some(gate) != saved_here => {
-                let parts = match mode_read(gate) {
-                    Some((name, _)) => format!("env.{name} != 'none'"),
+                let parts = match modes.name(gate) {
+                    Some(name) => format!("env.{name} != 'none'"),
                     None => gate_parts(gate, false).join(" && "),
                 };
                 if build.setup == Setup::Replanned {
@@ -114,9 +145,13 @@ pub(crate) fn audit_passed(audit: &Audited) -> String {
 }
 
 /// What an audit waits for: no cancellation and the builds before it.
-pub(crate) fn audit_runs(compiled: &[Compiled], saved_here: Option<&Gate>) -> Vec<String> {
+pub(crate) fn audit_runs(
+    compiled: &[Compiled],
+    saved_here: Option<&Gate>,
+    modes: &Modes,
+) -> Vec<String> {
     std::iter::once("!cancelled()".to_owned())
-        .chain(builds_finished(compiled, saved_here))
+        .chain(builds_finished(compiled, saved_here, modes))
         .collect()
 }
 
@@ -132,10 +167,54 @@ mod tests {
         }
     }
 
+    fn selected(slug: &'static str) -> Gate {
+        Gate {
+            slug: RootSlug::from_static(slug),
+            need: GateNeed::Selected,
+            from: PlanFrom::Job(velnor_model::JobId::from_static("rust-plan")),
+            packages: Vec::new(),
+            unselected: false,
+            group: None,
+            also: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn each_root_of_a_job_reads_its_own_mode_named_by_its_position() {
+        let gates = [selected("zeta"), selected("alpha")];
+        let modes = Modes::of(gates.iter());
+        let env = modes.env();
+        assert_eq!(env.len(), 2, "{env:?}");
+        assert_eq!(env[0].0, "VELNOR_MODE_0");
+        assert_eq!(env[1].0, "VELNOR_MODE_1");
+        assert!(env[0].1.contains("rust_alpha_mode"), "{env:?}");
+        assert!(env[1].1.contains("rust_zeta_mode"), "{env:?}");
+        let builds: Vec<Compiled> = gates
+            .iter()
+            .enumerate()
+            .map(|(index, gate)| Compiled {
+                built: Built::Step(format!("build_{index}")),
+                gate: Some(gate.clone()),
+                setup: Setup::Restored,
+            })
+            .collect();
+        let terms = builds_finished(&builds, None, &modes).join(" ");
+        assert!(terms.contains("env.VELNOR_MODE_1 != 'none'"), "{terms}");
+        assert!(terms.contains("env.VELNOR_MODE_0 != 'none'"), "{terms}");
+    }
+
     #[test]
     fn both_ways_of_finishing_a_build_come_from_the_one_builder() {
-        let step = builds_finished(&[compiled(Built::Step("build_1".to_owned()))], None);
-        let recorded = builds_finished(&[compiled(Built::Recorded("test".to_owned()))], None);
+        let step = builds_finished(
+            &[compiled(Built::Step("build_1".to_owned()))],
+            None,
+            &Modes::default(),
+        );
+        let recorded = builds_finished(
+            &[compiled(Built::Recorded("test".to_owned()))],
+            None,
+            &Modes::default(),
+        );
         assert_eq!(step, ["steps.build_1.outcome == 'success'"]);
         assert_eq!(recorded, ["steps.test.outputs.built == 'true'"]);
     }
@@ -147,8 +226,8 @@ mod tests {
             Built::Recorded("test".to_owned()),
         ] {
             let builds = [compiled(built.clone())];
-            let finished = builds_finished(&builds, None);
-            let runs = audit_runs(&builds, None);
+            let finished = builds_finished(&builds, None, &Modes::default());
+            let runs = audit_runs(&builds, None, &Modes::default());
             assert_eq!(runs[0], "!cancelled()");
             assert_eq!(runs[1..], finished[..], "{built:?}");
         }

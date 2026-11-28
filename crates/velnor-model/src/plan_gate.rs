@@ -112,14 +112,8 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
 }
 
 #[must_use]
-pub fn mode_env(slug: &RootSlug) -> String {
-    let hash = slug
-        .as_str()
-        .bytes()
-        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-        });
-    format!("VELNOR_MODE_{hash:016X}")
+pub fn mode_env(index: usize) -> String {
+    format!("VELNOR_MODE_{index}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,15 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use velnor_model::{CargoCommand, Gate, HelperCommand, Job, PrRun, Step, StepKind, When};
 
 use crate::gate::Setup;
 use crate::rules::RenderedStep;
 use crate::rules::Value;
 use crate::save_condition::{
-    Audited, Built, Compiled, audit_passed, audit_runs, builds_finished, mode_read,
+    Audited, Built, Compiled, Modes, audit_passed, audit_runs, builds_finished,
 };
 use crate::tests::Tests;
 
@@ -24,7 +22,7 @@ pub(crate) struct SaveGate {
     required: Vec<String>,
     audit_runs: Vec<Option<String>>,
     saveable: Option<Saveable>,
-    modes: BTreeMap<String, String>,
+    modes: Modes,
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +83,14 @@ impl SaveGate {
                 .any(|step| matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestBuild)));
         let tests = Tests::of(job);
         let restores = crate::base_steps::job_setup(job).0;
+        let modes = Modes::of(
+            job.steps
+                .iter()
+                .take(first)
+                .filter(|step| is_build(step) || (!legacy && is_test_run(job, step)))
+                .filter_map(|step| step.gate.as_ref())
+                .filter(|gate| Some(*gate) != saved_here),
+        );
         let (mut compiled, mut audits) = (Vec::<Compiled>::new(), Vec::new());
         let mut checks = Vec::<String>::new();
         let mut replanned = false;
@@ -114,7 +120,7 @@ impl SaveGate {
                 let id = format!("{AUDIT_ID}_{}", audits.len() + 1);
                 gate.ids[index] = Some(id.clone());
                 if !compiled.is_empty() {
-                    let before = audit_runs(&compiled, saved_here);
+                    let before = audit_runs(&compiled, saved_here, &modes);
                     gate.audit_runs[index] = Some(format!("${{{{ {} }}}}", before.join(" && ")));
                 }
                 audits.push(Audited {
@@ -136,12 +142,8 @@ impl SaveGate {
                 terms.push("success()".to_owned());
             }
         } else {
-            terms = builds_finished(&compiled, saved_here);
-            gate.modes = compiled
-                .iter()
-                .filter_map(|build| build.gate.as_ref().filter(|gate| Some(*gate) != saved_here))
-                .filter_map(mode_read)
-                .collect();
+            terms = builds_finished(&compiled, saved_here, &modes);
+            gate.modes = modes;
             terms.extend(audits.iter().map(audit_passed));
         }
         if !terms.is_empty() {
@@ -168,8 +170,9 @@ impl SaveGate {
 
     pub(crate) fn mode_env(&self) -> Vec<(String, Value)> {
         self.modes
-            .iter()
-            .map(|(name, read)| (name.clone(), Value::Expr(read.clone())))
+            .env()
+            .into_iter()
+            .map(|(name, read)| (name, Value::Expr(read)))
             .collect()
     }
 

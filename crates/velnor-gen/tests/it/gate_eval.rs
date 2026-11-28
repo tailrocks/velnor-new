@@ -53,6 +53,24 @@ impl Context {
     pub(crate) fn set(&mut self, key: &str, value: &str) {
         self.values.insert(key.to_owned(), value.to_owned());
     }
+
+    /// Reads the job `env:` block as rendered, so `env.NAME` holds what the block says.
+    pub(crate) fn load_env(&mut self, job: &str) {
+        let block = job.split("\n    env:\n").nth(1).unwrap_or_default();
+        for line in block.lines().take_while(|line| line.starts_with("      ")) {
+            let Some((name, value)) = line.trim().split_once(": ") else {
+                continue;
+            };
+            let read = value
+                .trim_matches('\'')
+                .strip_prefix("${{ ")
+                .and_then(|rest| rest.strip_suffix(" }}"))
+                .and_then(|key| self.values.get(key))
+                .cloned()
+                .unwrap_or_default();
+            self.set(&format!("env.{name}"), &read);
+        }
+    }
 }
 
 /// The condition of a rendered step block, with the YAML quoting undone.
