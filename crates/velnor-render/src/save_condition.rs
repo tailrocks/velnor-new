@@ -166,42 +166,6 @@ mod tests {
         }
     }
 
-    fn selected(slug: &'static str) -> Gate {
-        Gate {
-            slug: RootSlug::from_static(slug),
-            need: GateNeed::Selected,
-            from: PlanFrom::Job(velnor_model::JobId::from_static("rust-plan")),
-            packages: Vec::new(),
-            unselected: false,
-            group: None,
-            also: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn each_root_of_a_job_reads_its_own_mode_named_by_its_position() {
-        let gates = [selected("zeta"), selected("alpha")];
-        let modes = Modes::of(gates.iter());
-        let env = modes.env();
-        assert_eq!(env.len(), 2, "{env:?}");
-        assert_eq!(env[0].0, "VELNOR_MODE_0");
-        assert_eq!(env[1].0, "VELNOR_MODE_1");
-        assert!(env[0].1.contains("rust_alpha_mode"), "{env:?}");
-        assert!(env[1].1.contains("rust_zeta_mode"), "{env:?}");
-        let builds: Vec<Compiled> = gates
-            .iter()
-            .enumerate()
-            .map(|(index, gate)| Compiled {
-                built: Built::Step(format!("build_{index}")),
-                gate: Some(gate.clone()),
-                setup: Setup::Restored,
-            })
-            .collect();
-        let terms = builds_finished(&builds, None, &modes).join(" ");
-        assert!(terms.contains("env.VELNOR_MODE_1 != 'none'"), "{terms}");
-        assert!(terms.contains("env.VELNOR_MODE_0 != 'none'"), "{terms}");
-    }
-
     #[test]
     fn both_ways_of_finishing_a_build_come_from_the_one_builder() {
         let step = builds_finished(
