@@ -106,7 +106,9 @@ fn a_multi_commit_push_whose_earlier_commit_bumps_the_lock_runs_everything() {
     )]);
     assert_everything(&outcome);
     assert!(
-        outcome.stdout.contains("Cargo.lock changed"),
+        outcome.stdout.contains(
+            "Cargo.lock changed in this push, so it builds and saves the base for the new lock"
+        ),
         "{}",
         outcome.stdout
     );
