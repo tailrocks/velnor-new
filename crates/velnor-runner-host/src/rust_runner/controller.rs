@@ -79,6 +79,11 @@ impl Context {
     }
 }
 
+enum Cleanup {
+    Owed,
+    Done,
+}
+
 enum Event {
     Polled {
         connection: usize,
@@ -148,6 +153,7 @@ struct Run<'a> {
     machine_probed: Instant,
     runner: &'a mut RunnerHealth,
     stopping: bool,
+    cleanup: Cleanup,
 }
 
 pub async fn run_rust_runner_host(
@@ -215,11 +221,12 @@ async fn run_with_health(
         machine_probed: Instant::now(),
         runner: health,
         stopping: false,
+        cleanup: Cleanup::Owed,
     };
     let result = run.serve(shutdown).await;
     if let Err(fault) = &result
         && !matches!(fault, ListenFault::Host(HostError::Lock))
-        && !run.stopping
+        && matches!(run.cleanup, Cleanup::Owed)
         && let Err(error) = run.stop().await
     {
         eprintln!("rust-runner cleanup after a controller error held: {error}");
