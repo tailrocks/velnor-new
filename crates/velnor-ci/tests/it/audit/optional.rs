@@ -122,8 +122,10 @@ fn an_inactive_optional_path_dependency_without_artifacts_is_accepted() {
     for gone in [
         "target/debug/deps/mid-0000000000000003.d",
         "target/debug/.fingerprint/mid-0000000000000003/lib-mid",
+        "target/debug/.fingerprint/mid-0000000000000003/lib-mid.json",
         "target/debug/build/mid-0000000000000006/build_script_build-0000000000000006.d",
         "target/debug/.fingerprint/mid-0000000000000006/build-script-build-script-build",
+        "target/debug/.fingerprint/mid-0000000000000006/build-script-build-script-build.json",
         "target/debug/build/mid-0000000000000004/output",
     ] {
         std::fs::remove_file(repo.root().join(gone)).unwrap_or_else(|e| unreachable!("{e}"));

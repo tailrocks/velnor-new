@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
-use velnor_model::{CompileInputs, InputOwner, PackageName, RepoPath};
+use velnor_model::{CompileInputs, InputKey, InputOwner, PackageName, RepoPath};
 
 use crate::error::{DetectError, Reason};
 
@@ -224,7 +224,7 @@ pub fn format_inputs_lock(inputs: &CompileInputs) -> String {
         .iter()
         .flat_map(|(path, owners)| {
             owners.iter().map(move |owner| {
-                let path = path.as_ref().map_or(REPOSITORY, RepoPath::as_str);
+                let path = path.path().map_or(REPOSITORY, RepoPath::as_str);
                 match &owner.manifest {
                     Some(manifest) => format!("{path}\t{}\t{manifest}\n", owner.name),
                     None => format!("{path}\t{}\n", owner.name),
@@ -259,8 +259,8 @@ pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
     for (index, line) in text.lines().enumerate() {
         let entry = line.split_once('\t').and_then(|(path, rest)| {
             let path = match path {
-                REPOSITORY => None,
-                path => Some(RepoPath::new(path).ok()?),
+                REPOSITORY => InputKey::Everything,
+                path => InputKey::Path(RepoPath::new(path).ok()?),
             };
             let (package, manifest) = match rest.split_once('\t') {
                 Some((package, manifest)) => (package, Some(RepoPath::new(manifest).ok()?)),

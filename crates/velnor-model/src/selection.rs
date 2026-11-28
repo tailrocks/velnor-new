@@ -87,6 +87,7 @@ pub enum SelectionReason {
     DependsOn(PackageName),
     DependsOnUnread(PackageName),
     Input(RepoPath),
+    UnresolvedInclude,
     Lock(String),
 }
 
@@ -146,6 +147,7 @@ impl fmt::Display for SelectionReason {
             Self::DependsOn(package) => write!(f, "depends-on:{package}"),
             Self::DependsOnUnread(package) => write!(f, "depends-on-unread:{package}"),
             Self::Input(path) => write!(f, "input:{path}"),
+            Self::UnresolvedInclude => f.write_str("unresolved-include"),
             Self::Lock(dependency) => write!(f, "lock:{dependency}"),
         }
     }

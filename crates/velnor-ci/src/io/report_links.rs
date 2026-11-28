@@ -31,10 +31,7 @@ pub(super) fn feeds(facts: &RepoFacts, root: &RustRoot, path: &str) -> bool {
         })
         .chain(facts.unowned.keys());
     if packages.into_iter().any(|manifest| under(Some(manifest)))
-        || facts
-            .compile_inputs
-            .keys()
-            .any(|input| under(input.as_ref()))
+        || facts.compile_inputs.keys().any(|input| under(input.path()))
     {
         return true;
     }

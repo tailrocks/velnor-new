@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{jobs, steps};
+use super::{pinned, steps};
+use crate::archive::jobs_of;
 use crate::facts::TestResult;
 use crate::gate_eval::{Context, condition_of, runs};
 use crate::pipeline::{pin_helper, view, workflow};
@@ -9,13 +10,12 @@ use crate::pipeline::{pin_helper, view, workflow};
 const EVERYTHING: &str = "on_main = \"everything\"\n";
 const LABEL: &str = "pr_ci = \"label\"\n";
 
-fn audit_runs(
-    helper: &str,
-    config: &str,
+pub(crate) fn audit_step_runs(
+    workflow: &str,
     event: &str,
     expired: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let lane = jobs(helper, config)?
+    let lane = jobs_of(workflow)
         .into_iter()
         .find(|(id, _)| id == "rust")
         .map(|(_, lane)| lane)
@@ -34,6 +34,15 @@ fn audit_runs(
     context.set("github.event_name", event);
     context.set("steps.restored.outputs.expired", &expired.to_string());
     runs(&condition_of(audit)?, &context)
+}
+
+fn audit_runs(
+    helper: &str,
+    config: &str,
+    event: &str,
+    expired: bool,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    audit_step_runs(&workflow(&pinned(helper, config)?)?, event, expired)
 }
 
 #[test]

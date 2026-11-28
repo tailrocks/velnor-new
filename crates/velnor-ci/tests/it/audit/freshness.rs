@@ -4,6 +4,7 @@
 use std::fs::{self, File, FileTimes};
 use std::time::{Duration, UNIX_EPOCH};
 
+use super::own_units::link_own_run;
 use super::{audit, own_units, unit, workspace_below_the_root};
 
 #[test]
@@ -159,6 +160,7 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
             &format!("cargo:rerun-if-changed={declared}\n"),
         );
         repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+        link_own_run(&repo, target, "lib", &format!("lib-f000000000000{hash}"));
     }
     for hash in ["008", "018"] {
         super::inventory::build(
@@ -203,6 +205,7 @@ fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
             &format!("cargo:rerun-if-changed={declared}\n"),
         );
         repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+        link_own_run(&repo, target, "lib", &format!("lib-f000000000000{hash}"));
     }
     for hash in ["008", "018"] {
         super::inventory::build(
