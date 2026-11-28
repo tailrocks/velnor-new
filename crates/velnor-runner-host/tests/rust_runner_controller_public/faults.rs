@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use serde_json::{Value, json};
 use velnor_runner_host::{Readiness, controller_readiness};
 
@@ -10,6 +12,7 @@ use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
 const HELD: &str = "FAKE_RUNNER_HOLD=1\n";
+const ESCAPING: &str = "FAKE_RUNNER_HOLD=1\nFAKE_RUNNER_ESCAPE=1\n";
 
 fn registered_runners(world: &World) -> TestResult<usize> {
     let state: Value =
@@ -17,8 +20,8 @@ fn registered_runners(world: &World) -> TestResult<usize> {
     Ok(state["runners"].as_array().map_or(0, Vec::len))
 }
 
-fn held_job(world: &mut World, test: &str) -> TestResult<(String, String)> {
-    world.configure_orb(HELD)?;
+fn held_job(world: &mut World, test: &str, orb: &str) -> TestResult<(String, String)> {
+    world.configure_orb(orb)?;
     world.queue_message(141, &[push_offer(1, 14_001, "main", WORKFLOW)])?;
     world.spawn_controller(test, &[])?;
     world.wait_for_event("the jit of the job", 60, |events| {
@@ -59,7 +62,7 @@ pub(super) fn degraded_session(test: &str) -> TestResult<()> {
 
 pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
     let mut world = World::new("T15", 1, true)?;
-    let (pid, child) = held_job(&mut world, test)?;
+    let (pid, child) = held_job(&mut world, test, HELD)?;
     world.script_refusals(&json!({
         "poll.expired": {"statuses": [401], "repeat_last": false},
         "session.refreshed": {"replies": [{"patch": {"messageQueueUrl": "http://queue.invalid/messages"}}]}
@@ -79,9 +82,35 @@ pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
     Ok(())
 }
 
+pub(super) fn finishes_a_stop_after_a_handler_fails(test: &str) -> TestResult<()> {
+    let mut world = World::new("T17", 1, true)?;
+    held_job(&mut world, test, ESCAPING)?;
+    let name = jit_name(reservation(&world.gh("jit")[0]));
+    std::fs::write(world.seen.join("hold-refresh"), "")?;
+    world.script_refusals(&json!({
+        "poll.expired": {"statuses": [401], "repeat_last": false},
+        "session.refreshed": {"replies": [{"patch": {"messageQueueUrl": "http://queue.invalid/messages"}}]}
+    }))?;
+    world.wait_for_event("the held session refresh", 30, |events| {
+        events.iter().any(|event| event.label == "session.refresh")
+    });
+    world.stop()?;
+    std::thread::sleep(Duration::from_secs(3));
+    std::fs::write(world.seen.join("release-refresh"), "")?;
+    let exit = world.finish(90)?;
+    assert!(exit.starts_with("Err("), "{exit}");
+    assert_eq!(registered_runners(&world)?, 0, "a runner stayed registered");
+    assert!(
+        !world.gh("session.delete").is_empty(),
+        "the session was never closed"
+    );
+    world.release(&name)?;
+    Ok(())
+}
+
 pub(super) fn leaves_everything_after_a_lost_lock(test: &str) -> TestResult<()> {
     let mut world = World::new("T16", 1, true)?;
-    held_job(&mut world, test)?;
+    held_job(&mut world, test, HELD)?;
     std::fs::remove_file(world.state.join("daemon.lock"))?;
     let exit = world.finish(30)?;
     assert_eq!(exit, "Err(daemon lock held)", "{exit}");

@@ -79,6 +79,11 @@ impl Context {
     }
 }
 
+enum Cleanup {
+    Owed,
+    Done,
+}
+
 enum Event {
     Polled {
         connection: usize,
@@ -100,12 +105,13 @@ enum Event {
     Acquired {
         connection: usize,
         reservation: ReservationId,
+        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     },
     Acked {
         connection: usize,
         message_id: i64,
-        result: Result<(), ListenFault>,
+        result: Result<github::Acked, ListenFault>,
     },
     Ended {
         reservation: ReservationId,
@@ -141,6 +147,7 @@ struct Run<'a> {
     connections: Vec<Live>,
     slots: Slots,
     taken: BTreeSet<(usize, i64)>,
+    refreshed_for: BTreeSet<(usize, i64)>,
     next_reservation: u64,
     tasks: JoinSet<Event>,
     machine_ok: bool,
@@ -148,6 +155,7 @@ struct Run<'a> {
     machine_probed: Instant,
     runner: &'a mut RunnerHealth,
     stopping: bool,
+    cleanup: Cleanup,
 }
 
 pub async fn run_rust_runner_host(
@@ -219,6 +227,7 @@ async fn run_with_health(
         connections,
         slots,
         taken: BTreeSet::new(),
+        refreshed_for: BTreeSet::new(),
         next_reservation: 1,
         tasks: JoinSet::new(),
         machine_ok: true,
@@ -226,11 +235,12 @@ async fn run_with_health(
         machine_probed: Instant::now(),
         runner: health,
         stopping: false,
+        cleanup: Cleanup::Owed,
     };
     let result = run.serve(shutdown).await;
     if let Err(fault) = &result
         && !matches!(fault, ListenFault::Host(HostError::Lock))
-        && !run.stopping
+        && matches!(run.cleanup, Cleanup::Owed)
         && let Err(error) = run.stop().await
     {
         eprintln!("rust-runner cleanup after a controller error held: {error}");
@@ -283,8 +293,9 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
+                request_id,
                 result,
-            } => self.on_acquired(connection, reservation, result),
+            } => self.on_acquired(connection, reservation, request_id, result),
             Event::Acked {
                 connection,
                 message_id,

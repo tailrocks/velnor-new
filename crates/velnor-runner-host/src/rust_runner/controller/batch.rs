@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::{ParsedBatch, Poll, SourceMetadata};
 
 use super::admission::{Admission, JobExit};
-use super::github::{self, Acquisition};
+use super::github::{self, Acked, Acquisition};
 use super::source::{LaunchGrant, Refusal};
 use super::{Event, Run, blocking};
 use crate::assign::is_active_offer_job;
@@ -228,6 +228,7 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
+                request_id,
                 result,
             }
         });
@@ -237,9 +238,32 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         reservation: ReservationId,
+        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     ) {
         match result {
+            Ok(Acquisition::RefreshRequired)
+                if self.refreshed_for.insert((connection, request_id)) =>
+            {
+                self.slots.abandon_launch(reservation);
+                self.taken.remove(&(connection, request_id));
+                self.defer(connection);
+                if let Some(batch) = self
+                    .connections
+                    .get_mut(connection)
+                    .and_then(|live| live.batch.as_mut())
+                {
+                    batch.offers.clear();
+                }
+                self.request_refresh(connection);
+            }
+            Ok(Acquisition::RefreshRequired) => {
+                eprintln!(
+                    "rust-runner acquire for reservation {reservation} was refused again after a session refresh"
+                );
+                self.defer(connection);
+                self.begin_proof(reservation, JobExit::AcquireFailed);
+            }
             Ok(Acquisition::Acquired { jit }) if self.stopping => {
                 drop(jit);
                 self.begin_proof(reservation, JobExit::Stopped);
@@ -286,14 +310,16 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         message_id: i64,
-        result: Result<(), ListenFault>,
+        result: Result<Acked, ListenFault>,
     ) {
         let now = Instant::now();
         let Some(live) = self.connections.get_mut(connection) else {
             return;
         };
+        let refresh = matches!(result, Ok(Acked::RefreshRequired));
         match result {
-            Ok(()) => live.cursor.processed(message_id),
+            Ok(Acked::Done) => live.cursor.processed(message_id),
+            Ok(Acked::RefreshRequired) => live.cursor.deferred(message_id, now),
             Err(error) => {
                 eprintln!("rust-runner acknowledge held: {error}");
                 live.cursor.deferred(message_id, now);
@@ -301,5 +327,18 @@ impl Run<'_> {
         }
         live.polling = false;
         live.poll_retry_at = Some(now + POLL_GAP);
+        if refresh {
+            self.request_refresh(connection);
+        }
+    }
+
+    pub(super) fn request_refresh(&mut self, connection: usize) {
+        if self
+            .connections
+            .get(connection)
+            .is_some_and(|live| !live.refreshing)
+        {
+            self.spawn_refresh(connection);
+        }
     }
 }
