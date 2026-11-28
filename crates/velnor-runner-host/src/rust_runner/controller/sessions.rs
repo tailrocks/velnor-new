@@ -11,18 +11,33 @@ use crate::launch_blocking::ListenFault;
 
 const CLOSE_WAIT: Duration = Duration::from_secs(10);
 
-pub(super) async fn close_all(sessions: Vec<(github::Admin, i64, String)>) {
-    let closes = sessions.into_iter().map(|(admin, id, session_id)| {
-        blocking(move || github::close_session(&admin, id, &session_id))
-    });
-    match tokio::time::timeout(CLOSE_WAIT, futures_util::future::join_all(closes)).await {
-        Ok(results) => {
-            for error in results.into_iter().filter_map(Result::err) {
+pub(super) type OpenSession = (github::Admin, i64, String);
+
+pub(super) async fn close_all(sessions: Vec<OpenSession>) -> Vec<OpenSession> {
+    let closes = sessions.into_iter().map(|session| async move {
+        let (admin, id, session_id) = session.clone();
+        let closed = tokio::time::timeout(
+            CLOSE_WAIT,
+            blocking(move || github::close_session(&admin, id, &session_id)),
+        )
+        .await;
+        match closed {
+            Ok(Ok(())) => None,
+            Ok(Err(error)) => {
                 eprintln!("rust-runner session close held: {error}");
+                Some(session)
+            }
+            Err(_) => {
+                eprintln!("rust-runner session close held: not finished within {CLOSE_WAIT:?}");
+                Some(session)
             }
         }
-        Err(_) => eprintln!("rust-runner session close held: not finished within {CLOSE_WAIT:?}"),
-    }
+    });
+    futures_util::future::join_all(closes)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 impl Run<'_> {

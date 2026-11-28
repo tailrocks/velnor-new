@@ -200,8 +200,11 @@ export function admin(path: string): never {
   if (method === "GET" && path === AGENTS) {
     const wanted = url.searchParams.get("agentName");
     const found = readState().runners.filter((runner) => wanted === null || runner.name === wanted);
-    if (wanted === null) record("runner.list", { names: found.map((runner) => runner.name).join(",") });
-    else record("runner.get", { name: wanted, found: found.length > 0 });
+    if (wanted === null) {
+      const refused = refusal("runner.list");
+      record("runner.list", { names: found.map((runner) => runner.name).join(","), status: refused?.status ?? 200 });
+      if (refused) reply(refused.status, { message: "runner list refused" });
+    } else record("runner.get", { name: wanted, found: found.length > 0 });
     reply(200, { count: found.length, value: found });
   }
   const runner = /\/agents\/(\d+)$/.exec(path);

@@ -12,7 +12,7 @@ use super::connection::{ADMIN_RENEWAL, Live, Pending};
 use super::github::{self, Admin};
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
-use super::sessions::close_all;
+use super::sessions::{OpenSession, close_all};
 use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
@@ -104,8 +104,7 @@ pub(super) async fn start(
     let (mut store_lock, mut machine, mut swept) = (None, false, false);
     while let Some(step) = next_step(&pending, store_lock.is_some(), machine, swept) {
         if config_changed(cx) {
-            close_pending(&pending).await;
-            return Ok(Started::ConfigChanged);
+            return Ok(close_until_closed(cx, shutdown, &pending).await);
         }
         let work = prepare(step, &cx.launcher, &cx.state, &pending)?;
         let finish = matches!(step, Step::Session(_));
@@ -163,8 +162,7 @@ pub(super) async fn start(
                     return Ok(Started::Shutdown);
                 }
                 if config_changed(cx) {
-                    close_pending(&pending).await;
-                    return Ok(Started::ConfigChanged);
+                    return Ok(close_until_closed(cx, shutdown, &pending).await);
                 }
             }
         }
@@ -282,13 +280,46 @@ fn prepare(
     })
 }
 
-pub(super) async fn close_pending(pending: &[Pending]) {
-    let sessions = pending
+fn open_sessions(pending: &[Pending]) -> Vec<OpenSession> {
+    pending
         .iter()
         .filter_map(|connection| {
             let ((admin, id), session) = (connection.set.as_ref()?, connection.session.as_ref()?);
             Some((admin.clone(), *id, session.session_id.clone()))
         })
-        .collect();
-    close_all(sessions).await;
+        .collect()
+}
+
+pub(super) async fn close_pending(pending: &[Pending]) {
+    close_all(open_sessions(pending)).await;
+}
+
+async fn close_until_closed(
+    cx: &Context,
+    shutdown: &mut Shutdown<'_>,
+    pending: &[Pending],
+) -> Started {
+    let mut remaining = open_sessions(pending);
+    let mut backoff = TICK;
+    loop {
+        remaining = close_all(remaining).await;
+        if remaining.is_empty() {
+            return Started::ConfigChanged;
+        }
+        let retry_at = Instant::now() + backoff;
+        backoff = (backoff * 2).min(STARTUP_RETRY);
+        while Instant::now() < retry_at {
+            let wait = guarded(
+                cx,
+                shutdown,
+                Phase::Startup,
+                tokio::time::sleep(TICK),
+                false,
+            )
+            .await;
+            if wait.stopped {
+                return Started::Shutdown;
+            }
+        }
+    }
 }

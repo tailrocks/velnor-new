@@ -214,12 +214,16 @@ impl World {
         Ok(())
     }
 
-    pub(super) fn publish_empty_census(&self, config_text: &str) -> TestResult<()> {
+    pub(super) fn publish_empty_census(
+        &self,
+        config_text: &str,
+        reconciled: bool,
+    ) -> TestResult<()> {
         let census = json!({
             "config_sha256": hex_sha256(config_text.as_bytes()),
             "updated_unix_ms": now_unix_ms(),
             "drain": null,
-            "reconciled": false,
+            "reconciled": reconciled,
             "connections": [],
         });
         self.write_marker(CENSUS, &census.to_string())

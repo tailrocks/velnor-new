@@ -1,15 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+use rustix::process::geteuid;
 
 use super::{JIT_DIRECTORY, RustRunnerLauncher, heartbeat_readiness, host_toml_sha256};
 use crate::error::{HostError, RustRunnerFailure};
 use crate::readiness::Readiness;
 
 const PRIVATE_MODE: u32 = 0o700;
+
+fn is_private(mode: u32, owner: u32, caller: u32) -> bool {
+    mode & 0o777 == PRIVATE_MODE && owner == caller
+}
+
+#[cfg(test)]
+mod tests;
 
 impl RustRunnerLauncher {
     pub fn probe(&self, timeout: Duration) -> Result<(), HostError> {
@@ -31,7 +40,11 @@ impl RustRunnerLauncher {
         if !metadata.is_dir() {
             return Err(HostError::RustRunner(RustRunnerFailure::HostStore));
         }
-        if metadata.permissions().mode() & 0o777 != PRIVATE_MODE {
+        if !is_private(
+            metadata.permissions().mode(),
+            metadata.uid(),
+            geteuid().as_raw(),
+        ) {
             return Err(HostError::RustRunner(
                 RustRunnerFailure::JitDirectoryAccessible,
             ));

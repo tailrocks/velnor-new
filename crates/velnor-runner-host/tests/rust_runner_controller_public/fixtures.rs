@@ -17,6 +17,7 @@ const SOURCE_SHA: &str = "1111111111111111111111111111111111111111";
 
 #[path = "spec.rs"]
 mod spec;
+use spec::Policy;
 pub(super) use spec::Spec;
 
 pub(super) type TestResult<T> = Result<T, Box<dyn Error>>;
@@ -199,7 +200,6 @@ fn inventory(merge_group: bool) -> TestResult<String> {
     })?)
 }
 
-const REPOSITORY_PULL_REQUEST_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = []";
 pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
 pub(super) const HOST_TOML_LIMIT: usize = 1_048_576;
 
@@ -224,16 +224,20 @@ pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<S
 }
 
 pub(super) fn merge_group_host_toml(root: &Path) -> TestResult<String> {
-    host_toml_with(root, 1, &[Spec::lab(KEYCHAIN_REFERENCE)], true)
+    host_toml_with(
+        root,
+        1,
+        &[Spec::lab(KEYCHAIN_REFERENCE)],
+        Policy::MergeGroup,
+    )
 }
 
 pub(super) fn repository_pull_request_host_toml(root: &Path) -> TestResult<String> {
     host_toml_with(
         root,
         1,
-        KEYCHAIN_REFERENCE,
-        "",
-        REPOSITORY_PULL_REQUEST_POLICY,
+        &[Spec::lab(KEYCHAIN_REFERENCE)],
+        Policy::RepositoryPullRequest,
     )
 }
 
@@ -249,19 +253,19 @@ pub(super) fn padded(text: &str, bytes: usize) -> String {
 }
 
 pub(super) fn host_toml_of(root: &Path, max_jobs: u32, specs: &[Spec<'_>]) -> TestResult<String> {
-    host_toml_with(root, max_jobs, specs, false)
+    host_toml_with(root, max_jobs, specs, Policy::Branch)
 }
 
 fn host_toml_with(
     root: &Path,
     max_jobs: u32,
     specs: &[Spec<'_>],
-    merge_group: bool,
+    policy: Policy,
 ) -> TestResult<String> {
     let connections: String = if specs.is_empty() {
         "connections = []\n".to_owned()
     } else {
-        specs.iter().map(|spec| spec.block(merge_group)).collect()
+        specs.iter().map(|spec| spec.block(policy)).collect()
     };
     let base = format!(
         "schema = 2\n\
@@ -287,7 +291,7 @@ fn host_toml_with(
         let connection = config.connection(&id).ok_or("connection")?;
         let policy = build_job_authority_policy_json(
             connection,
-            &inventory(merge_group)?,
+            &inventory(policy == Policy::MergeGroup)?,
             SOURCE_SHA,
             &"d".repeat(64),
             1,

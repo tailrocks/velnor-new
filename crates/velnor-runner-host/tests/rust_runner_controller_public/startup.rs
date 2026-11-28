@@ -52,3 +52,33 @@ pub(super) fn waits_while_the_store_is_held(test: &str) -> TestResult<()> {
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())
 }
+
+pub(super) fn holds_a_changed_config_until_the_session_is_closed(test: &str) -> TestResult<()> {
+    let mut world = World::new("T13c", 1, true)?;
+    world.script_refusals(&json!({
+        "runner.list": {"statuses": [500], "repeat_last": true},
+        "session.delete": {"statuses": [500, 404], "repeat_last": false}
+    }))?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("the session of a held startup", 60, |events| {
+        events.iter().any(|event| event.label == "session.create")
+    });
+    world.write_host_toml(2)?;
+    assert_eq!(world.finish(90)?, "Ok(ConfigChanged)");
+    let closes: Vec<String> = world
+        .gh("session.delete")
+        .iter()
+        .map(|event| event.field("status").to_owned())
+        .collect();
+    assert_eq!(
+        closes,
+        ["500", "404", "204"],
+        "a startup left before a 204 confirmed the close of its session"
+    );
+    assert!(
+        world.child_stderr().contains("session close held"),
+        "{}",
+        world.child_stderr()
+    );
+    Ok(())
+}

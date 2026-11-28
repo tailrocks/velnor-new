@@ -99,8 +99,8 @@ pub(super) fn open_scale_set(
             view.id
         }
         ScaleSetFound::NotFound => {
-            if owned::bound(state, &binding.connection_id)?.is_some() {
-                return Err(EnsureError::Uncertain.into());
+            if let Some(recorded) = owned::bound(state, &binding.connection_id)? {
+                return Err(recorded_set_held(recorded));
             }
             owned::write(state, &binding.connection_id, &intent)?;
             let created = match create_runner_scale_set(
@@ -141,6 +141,13 @@ pub(super) fn open_scale_set(
     Ok((admin, id))
 }
 
+fn recorded_set_held(recorded: i64) -> ListenFault {
+    eprintln!(
+        "rust-runner startup held: the ownership record holds scale set {recorded}, which GitHub does not list under this name; run `velnor-host disconnect`, then connect again"
+    );
+    EnsureError::Uncertain.into()
+}
+
 fn refused(error: &EnsureError) -> bool {
     matches!(error, EnsureError::Unexpected { status, .. } if (400..500).contains(status))
 }
@@ -156,8 +163,8 @@ fn adopt(
     if recorded == Some(scale_set_id) {
         return Ok(());
     }
-    if recorded.is_some() {
-        return Err(EnsureError::Uncertain.into());
+    if let Some(recorded) = recorded {
+        return Err(recorded_set_held(recorded));
     }
     if owned::adoptable(state, connection, intent)? {
         return Ok(owned::bind(state, connection, intent, scale_set_id)?);

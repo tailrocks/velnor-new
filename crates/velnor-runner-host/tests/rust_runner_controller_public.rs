@@ -335,6 +335,21 @@ controller_test!(
 );
 
 controller_test!(
+    rust_runner_detach_holds_the_set_while_the_replacing_connection_has_another_record,
+    claimant::conflict
+);
+
+controller_test!(
+    rust_runner_detach_waits_for_a_reconciled_census,
+    claimant::unreconciled
+);
+
+controller_test!(
+    rust_runner_startup_holds_a_changed_config_until_every_session_is_closed,
+    startup::holds_a_changed_config_until_the_session_is_closed
+);
+
+controller_test!(
     rust_runner_disconnect_removes_a_set_whose_create_response_was_lost,
     lost_create::run
 );

@@ -41,7 +41,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
 
     world.write_marker("connection-drain/lab", TOKEN_A)?;
     world.write_host_toml_text(&none)?;
-    world.publish_empty_census(&none)?;
+    world.publish_empty_census(&none, true)?;
     world.script_refusals(&json!({"set.stall": {"statuses": [8000], "repeat_last": false}}))?;
     let outcome = world.detach_within(test, "lab", &single, 4_000)?;
     assert!(
@@ -52,7 +52,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert_eq!(world.fake_state()?["scale_sets"]["velnor-lab"], 7);
 
     world.write_host_toml_text(&organization)?;
-    world.publish_empty_census(&organization)?;
+    world.publish_empty_census(&organization, true)?;
     assert_eq!(world.detach(test, "lab", &single)?, "Ok(Deleted)");
     assert_eq!(world.gh("scaleset.delete").len(), 1);
     assert!(world.fake_state()?["scale_sets"]["velnor-lab"].is_null());

@@ -12,7 +12,7 @@ use velnor_runner_github::{
 };
 
 use super::census::wait_until_unserved;
-use super::controller::owned::{self, Owned, Scope};
+use super::controller::owned::{self, Owned, Scope, Transfer};
 use crate::config::{ConnectionId, RepositoryConnection};
 use crate::controller_ipc::CreatedSetDeletion;
 use crate::daemon_lock::DaemonLock;
@@ -39,8 +39,14 @@ pub fn detach_rust_runner_connection(
         return Ok(CreatedSetDeletion::TimedOut);
     };
     if let Some(claimant) = claimant(state, binding)? {
-        if claimant != binding.connection_id {
-            owned::transfer(state, &binding.connection_id, &claimant)?;
+        if claimant != binding.connection_id
+            && owned::transfer(state, &binding.connection_id, &claimant)? == Transfer::Conflict
+        {
+            eprintln!(
+                "rust-runner disconnect held: the connection that replaced {} already holds another ownership record",
+                binding.connection_id.as_str()
+            );
+            return Ok(CreatedSetDeletion::Uncertain);
         }
         return Ok(CreatedSetDeletion::NotOwned);
     }

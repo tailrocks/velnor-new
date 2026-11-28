@@ -154,27 +154,35 @@ pub(in crate::rust_runner) fn forget(
     state: &Path,
     connection: &ConnectionId,
 ) -> Result<(), HostError> {
-    match std::fs::remove_file(record(state, connection)) {
-        Ok(()) => Ok(()),
+    let path = record(state, connection);
+    match std::fs::remove_file(&path) {
+        Ok(()) => crate::rust_runner::atomic::sync_parent(&path),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(_) => Err(HostError::Path),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::rust_runner) enum Transfer {
+    Settled,
+    Conflict,
 }
 
 pub(in crate::rust_runner) fn transfer(
     state: &Path,
     from: &ConnectionId,
     to: &ConnectionId,
-) -> Result<(), HostError> {
+) -> Result<Transfer, HostError> {
     let Some(moved) = read(state, from)? else {
-        return Ok(());
+        return Ok(Transfer::Settled);
     };
     match read(state, to)? {
         None => write(state, to, &moved)?,
         Some(existing) if existing == moved => {}
-        Some(_) => return Ok(()),
+        Some(_) => return Ok(Transfer::Conflict),
     }
-    forget(state, from)
+    forget(state, from)?;
+    Ok(Transfer::Settled)
 }
 
 #[cfg(test)]

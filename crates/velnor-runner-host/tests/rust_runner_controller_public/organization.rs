@@ -215,6 +215,11 @@ pub(super) fn holds_a_recorded_set_the_listing_does_not_show(test: &str) -> Test
     started(&mut world, test, None)?;
     held(&world, "a recorded set that the listing does not show");
     assert_eq!(recorded(&world)?["scale_set_id"], 9);
+    assert!(
+        world
+            .child_stderr()
+            .contains("run `velnor-host disconnect`, then connect again")
+    );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())
@@ -232,6 +237,11 @@ pub(super) fn holds_a_repository_set_listed_under_another_id_than_its_record(
     launched(&mut world, test, None)?;
     held(&world, "a set listed under another id than its record");
     assert_eq!(recorded(&world)?["scale_set_id"], 9);
+    assert!(
+        world
+            .child_stderr()
+            .contains("run `velnor-host disconnect`, then connect again")
+    );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())

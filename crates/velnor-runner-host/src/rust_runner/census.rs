@@ -204,7 +204,8 @@ pub(super) fn wait_until_unserved(
             return Some(false);
         };
         let released = read(state).is_some_and(|census| {
-            census.config_sha256 == current
+            census.reconciled
+                && census.config_sha256 == current
                 && census
                     .connections
                     .iter()

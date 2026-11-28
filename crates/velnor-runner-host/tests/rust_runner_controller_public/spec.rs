@@ -1,7 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) const MERGE_GROUP_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"merge_group\"]\npull_request_rules = []";
+const MERGE_GROUP_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"merge_group\"]\npull_request_rules = []";
+const REPOSITORY_PULL_REQUEST_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = []";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Policy {
+    Branch,
+    MergeGroup,
+    RepositoryPullRequest,
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct Spec<'a> {
@@ -41,20 +49,20 @@ impl<'a> Spec<'a> {
         self
     }
 
-    pub(crate) fn block(&self, merge_group: bool) -> String {
+    pub(crate) fn block(&self, selected: Policy) -> String {
         let (id, repo, rid) = (self.id, self.repo, self.repository_id);
         let organization = if self.organization {
             "organization = \"tailrocks\"\n"
         } else {
             ""
         };
-        let policy = if merge_group {
-            MERGE_GROUP_POLICY.to_owned()
-        } else {
-            format!(
+        let policy = match selected {
+            Policy::MergeGroup => MERGE_GROUP_POLICY.to_owned(),
+            Policy::RepositoryPullRequest => REPOSITORY_PULL_REQUEST_POLICY.to_owned(),
+            Policy::Branch => format!(
                 "mode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = [{{ base_repository_id = {rid}, base_branch = \"main\", head_repository_id = {rid}, head_branch = \"feature\" }}, {{ base_repository_id = {rid}, base_branch = \"main\", head_repository_id = {next}, head_branch = \"feature\" }}]",
                 next = rid + 1,
-            )
+            ),
         };
         format!(
             "[[connections]]\n\

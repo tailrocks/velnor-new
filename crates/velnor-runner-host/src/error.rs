@@ -70,7 +70,7 @@ pub enum RustRunnerFailure {
     StoreUnsafe,
 
     #[error(
-        "velnor-runner in the host store is not an owned, executable regular file that others cannot write"
+        "velnor-runner in the host store is not an owned, executable regular file, or group or others can write it"
     )]
     BinaryUnsafe,
 

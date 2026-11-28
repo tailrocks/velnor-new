@@ -28,3 +28,10 @@ pub(super) fn write(path: &Path, bytes: &[u8]) -> Result<(), HostError> {
     }
     Ok(())
 }
+
+pub(super) fn sync_parent(path: &Path) -> Result<(), HostError> {
+    let parent = path.parent().ok_or(HostError::Path)?;
+    File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|_| HostError::Path)
+}
