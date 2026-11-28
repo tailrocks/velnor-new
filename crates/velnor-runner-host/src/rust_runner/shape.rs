@@ -1,15 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
-
 use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct ListedMount {
-    source: String,
-    destination: String,
-}
 
 #[derive(Deserialize)]
 pub(super) struct ListedConfig {
@@ -18,34 +10,17 @@ pub(super) struct ListedConfig {
     forward_ssh_agent: Option<bool>,
     disk_limit_bytes: Option<u64>,
     #[serde(default)]
-    mounts: Vec<ListedMount>,
-}
-
-pub(super) struct Shape<'a> {
-    pub(super) share: &'a Path,
-    pub(super) guest_share: &'a str,
-    pub(super) disk_bytes: u64,
+    mounts: Vec<serde_json::Value>,
 }
 
 impl ListedConfig {
-    pub(super) fn matches(&self, shape: &Shape<'_>) -> bool {
-        let mounted = match self.mounts.as_slice() {
-            [mount] => {
-                canonical(Path::new(&mount.source)) == canonical(shape.share)
-                    && mount.destination == shape.guest_share
-            }
-            _ => false,
-        };
+    pub(super) fn matches(&self, disk_bytes: u64) -> bool {
         self.isolated == Some(true)
             && self.isolate_network == Some(true)
             && self.forward_ssh_agent == Some(false)
-            && self.disk_limit_bytes == Some(shape.disk_bytes)
-            && mounted
+            && self.disk_limit_bytes == Some(disk_bytes)
+            && self.mounts.is_empty()
     }
-}
-
-fn canonical(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 pub(super) fn orb_version(output: &str) -> Option<String> {

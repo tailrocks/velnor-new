@@ -12,12 +12,21 @@ const RUNNER_STAGE: &str = "/var/lib/velnor/bin/.stage";
 const STAGE_WRITER: &str = r#"set -e; umask 077; rm -f -- "$1"; cat > "$1"; chmod 0700 -- "$1""#;
 
 impl RustRunnerLauncher {
-    fn installed_runner_matches(&self, digest: &str) -> Result<bool, HostError> {
+    pub fn installed_runner_digest(&self) -> Result<String, HostError> {
+        self.installed_digest()?
+            .ok_or_else(|| failure(RustRunnerFailure::BinaryCopy))
+    }
+
+    fn installed_digest(&self) -> Result<Option<String>, HostError> {
         let owned = self
             .stat(&[GUEST_RUNNER])?
             .get(GUEST_RUNNER)
             .is_some_and(|entry| entry.is(super::REGULAR_FILE, 0o755));
-        Ok(owned && self.sha256_of(GUEST_RUNNER)?.as_deref() == Some(digest))
+        if owned {
+            self.sha256_of(GUEST_RUNNER)
+        } else {
+            Ok(None)
+        }
     }
 
     fn sha256_of(&self, path: &str) -> Result<Option<String>, HostError> {
@@ -26,7 +35,7 @@ impl RustRunnerLauncher {
     }
 
     pub(super) fn refresh_runner(&self, digest: &str) -> Result<(), HostError> {
-        if self.installed_runner_matches(digest)? {
+        if self.installed_digest()?.as_deref() == Some(digest) {
             return Ok(());
         }
         let staged = self.stage_runner(digest);
@@ -49,6 +58,12 @@ impl RustRunnerLauncher {
             return Err(failure(RustRunnerFailure::BinaryCopy));
         }
         self.apply(&["chmod", "0755", "--", RUNNER_STAGE])?;
-        self.apply(&["mv", "-f", "--", RUNNER_STAGE, GUEST_RUNNER])
+        self.apply(&["mv", "-fT", "--", RUNNER_STAGE, GUEST_RUNNER])?;
+        if self.installed_digest()?.as_deref() == Some(digest) {
+            Ok(())
+        } else {
+            let _ = self.apply(&["rm", "-f", "--", GUEST_RUNNER]);
+            Err(failure(RustRunnerFailure::BinaryCopy))
+        }
     }
 }

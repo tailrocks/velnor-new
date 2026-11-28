@@ -8,7 +8,7 @@ use std::process::Command;
 
 use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
-use super::support::{Fixture, SECRET_JIT, jit, reservation};
+use super::support::Fixture;
 
 type Check = Result<(), Box<dyn Error>>;
 
@@ -106,8 +106,7 @@ fn unsafe_roots() -> Check {
     assert_refused(&acl, RustRunnerFailure::StoreUnsafe, "an ACL on the root")?;
     let id = Command::new("id").arg("-u").output()?;
     assert_ne!(String::from_utf8_lossy(&id.stdout).trim(), "0");
-    let foreign =
-        Fixture::shaped(|config| config["mounts"][0]["source"] = serde_json::json!("/usr"))?;
+    let foreign = Fixture::ready()?;
     let launcher = RustRunnerLauncher::new(
         foreign.root.join("orb"),
         PathBuf::from("/usr"),
@@ -172,43 +171,27 @@ fn root_owned_binary() -> Check {
     )
 }
 
-fn symlinked_jit_directory() -> Check {
-    let fixture = fixture_with_directories()?;
-    let victim = fixture.root.join("victim");
-    std::fs::create_dir(&victim)?;
-    std::fs::write(victim.join("keep"), "")?;
-    let directory = fixture.store.join("jit");
-    std::fs::remove_dir(&directory)?;
-    symlink(&victim, &directory)?;
-    assert!(fixture.launcher().sweep().is_err(), "jit");
-    assert!(victim.join("keep").exists(), "jit");
-    Ok(())
-}
-
 fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
     let fixture = fixture()?;
     fixture.launcher().ensure_machine()?;
     Ok(fixture)
 }
 
-async fn acl_after_a_started_job() -> Check {
-    let fixture = fixture_with_directories()?;
-    let launcher = fixture.launcher();
-    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT))?;
-    assert!(job.wait().await?.success());
-    add_acl(&fixture.store)?;
-    assert_eq!(
-        launcher.start_job(reservation(52)?, &jit(SECRET_JIT)).err(),
-        Some(refused(RustRunnerFailure::StoreUnsafe))
-    );
-    Ok(())
+fn acl_on_the_runner() -> Check {
+    let fixture = fixture()?;
+    add_acl(&fixture.root.join("host-runner"))?;
+    assert_refused(
+        &fixture,
+        RustRunnerFailure::BinaryUnsafe,
+        "an ACL on the runner",
+    )
 }
 
 fn sweep_without_init() -> Check {
     let fixture = fixture_with_directories()?;
-    let planted = fixture.store.join("jit/99.jit");
+    let planted = fixture.guest("srv/velnor/gen/work/99/stale");
+    std::fs::create_dir_all(planted.parent().ok_or("no parent")?)?;
     std::fs::write(&planted, "stale")?;
-    chmod(&planted, 0o600)?;
     std::fs::write(fixture.root.join("ps.table"), "")?;
     fixture.configure("FAKE_ORB_PS_NO_INIT=1\n")?;
     assert_eq!(
@@ -228,11 +211,10 @@ fn sweep_without_init() -> Check {
     Ok(())
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn rust_runner_refuses_an_unsafe_host_store() -> Check {
+#[test]
+fn rust_runner_refuses_an_unsafe_host_store() -> Check {
     unsafe_roots()?;
     unsafe_binaries()?;
-    symlinked_jit_directory()?;
-    acl_after_a_started_job().await?;
+    acl_on_the_runner()?;
     sweep_without_init()
 }

@@ -17,24 +17,28 @@ fn plant(fixture: &Fixture, setting: &str) -> Check {
 }
 
 #[test]
-fn rust_runner_installs_nftables_once_and_needs_nft_and_ip() -> Check {
+fn rust_runner_installs_nftables_and_btrfs_progs_once_and_needs_their_tools() -> Check {
     let fixture = Fixture::ready()?;
     assert!(!fixture.guest("usr/sbin/nft").exists());
     fixture.launcher().ensure_machine()?;
     fixture.launcher().ensure_machine()?;
     assert!(fixture.guest("usr/sbin/nft").exists());
+    assert!(fixture.guest("usr/sbin/btrfs").exists());
     assert_eq!(fixture.commands("apt-get")?, 1);
     Ok(())
 }
 
 #[test]
-fn rust_runner_refuses_a_machine_without_nft_or_ip() -> Check {
+fn rust_runner_refuses_a_machine_without_nft_ip_or_btrfs() -> Check {
     let nft = Fixture::ready()?;
     plant(&nft, "FAKE_GUEST_NO_NFT_PACKAGE=1")?;
     nft.ensure_refused(RustRunnerFailure::MachineTools);
     let ip = Fixture::ready()?;
     std::fs::remove_file(ip.guest("usr/sbin/ip"))?;
     ip.ensure_refused(RustRunnerFailure::MachineTools);
+    let btrfs = Fixture::ready()?;
+    plant(&btrfs, "FAKE_GUEST_NO_BTRFS_PACKAGE=1")?;
+    btrfs.ensure_refused(RustRunnerFailure::MachineTools);
     Ok(())
 }
 
@@ -65,7 +69,7 @@ fn rust_runner_refuses_a_machine_that_still_reaches_the_mac() -> Check {
         ("a fuse subtype mount", |f| {
             plant(f, "FAKE_GUEST_MOUNTS=/mnt/x fuse.sshfs")
         }),
-        ("the share mounted twice", |f| {
+        ("the former host share still mounted", |f| {
             plant(f, "FAKE_GUEST_MOUNTS=/var/lib/velnor-host virtiofs")
         }),
         ("a qgroup limit above the cap", |f| {

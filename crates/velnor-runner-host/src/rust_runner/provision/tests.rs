@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use super::identity::{Databases, is_sole_identity, sudo_refused};
 use super::job_dirs::removal_verdict;
 use super::parse::{self, Entry};
 use super::user::USER_HOME;
@@ -61,7 +62,6 @@ fn an_ancestor_that_anyone_else_can_change_is_unsafe() {
 fn a_store_directory_that_is_wrong_is_repaired() {
     let wrong = [
         ("/var/lib/velnor/tools", entry(0, 0o775, DIRECTORY)),
-        ("/var/lib/velnor/cache", entry(0, 0o755, "symbolic link")),
         ("/var/lib/velnor/locks", entry(0, 0o755, DIRECTORY)),
         ("/var/lib/velnor/aside", entry(0, 0o750, DIRECTORY)),
     ];
@@ -74,6 +74,19 @@ fn a_store_directory_that_is_wrong_is_repaired() {
         let mut entries = sound();
         entries.remove(*path);
         assert_eq!(classify(&entries), Layout::Repair, "{path} missing");
+    }
+}
+
+#[test]
+fn a_store_entry_that_is_not_a_directory_is_unsafe_and_never_repaired() {
+    for path in OPEN_DIRECTORIES.iter().chain(&CLOSED_DIRECTORIES) {
+        for kind in ["symbolic link", "regular file"] {
+            for uid in [0, 1000] {
+                let mut entries = sound();
+                entries.insert((*path).to_owned(), entry(uid, 0o755, kind));
+                assert_eq!(classify(&entries), Layout::Unsafe, "{path} {kind} {uid}");
+            }
+        }
     }
 }
 
@@ -168,4 +181,82 @@ fn the_test_support_constructor_equals_a_parsed_user() {
         )),
         Some(GuestUser::for_tests(500, 501, USER_HOME))
     );
+}
+
+fn job() -> GuestUser {
+    GuestUser::for_tests(777, 778, USER_HOME)
+}
+
+#[test]
+fn only_a_sole_uid_and_gid_make_a_sole_identity() {
+    fn found<'a>(account: &'a str, passwd: &'a str, group: &'a str) -> Databases<'a> {
+        Databases {
+            uid_lookup: account,
+            all_accounts: passwd,
+            gid_lookup: "velnor-job:x:778:\n",
+            all_groups: group,
+        }
+    }
+    let account = format!("velnor-job:x:777:778::{USER_HOME}:/usr/sbin/nologin\n");
+    let base = format!("root:x:0:0:r:/root:/bin/sh\n{account}");
+    assert!(is_sole_identity(
+        &job(),
+        &found(&account, &base, "root:x:0:\nvelnor-job:x:778:\n")
+    ));
+    assert!(!is_sole_identity(
+        &job(),
+        &found(
+            &account,
+            &format!("{base}ubuntu:x:777:1::/:/bin/sh\n"),
+            "velnor-job:x:778:\n"
+        )
+    ));
+    assert!(!is_sole_identity(
+        &job(),
+        &found(
+            &account,
+            &format!("{base}ubuntu:x:1:778::/:/bin/sh\n"),
+            "velnor-job:x:778:\n"
+        )
+    ));
+    assert!(!is_sole_identity(
+        &job(),
+        &found(&account, &base, "sudo:x:778:\nvelnor-job:x:778:\n")
+    ));
+    assert!(!is_sole_identity(
+        &job(),
+        &found(&account, "garbage\n", "velnor-job:x:778:\n")
+    ));
+}
+
+#[test]
+fn a_reserved_uid_or_gid_is_refused_although_nothing_else_holds_it() {
+    for (uid, gid) in [(27, 778), (777, 27), (777, 0), (0, 778)] {
+        let user = GuestUser::for_tests(uid, gid, USER_HOME);
+        let account = format!("velnor-job:x:{uid}:{gid}::{USER_HOME}:/usr/sbin/nologin\n");
+        let group = format!("velnor-job:x:{gid}:\n");
+        let found = Databases {
+            uid_lookup: &account,
+            all_accounts: &account,
+            gid_lookup: &group,
+            all_groups: &group,
+        };
+        assert!(!is_sole_identity(&user, &found), "{uid} {gid}");
+    }
+}
+
+#[test]
+fn only_the_exact_denial_of_sudo_counts() {
+    assert!(sudo_refused(
+        "User velnor-job is not allowed to run sudo on box.\n"
+    ));
+    for report in [
+        "",
+        "User velnor-job may run the following commands on box:\n    (ALL) NOPASSWD: ALL\n",
+        "User velnor-job is not allowed to run sudo on box.\nextra\n",
+        "User other is not allowed to run sudo on box.\n",
+        "sudo: command not found\n",
+    ] {
+        assert!(!sudo_refused(report), "{report}");
+    }
 }

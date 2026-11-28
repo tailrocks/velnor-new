@@ -10,6 +10,7 @@ use super::{GUEST_GEN, GUEST_SRV, GUEST_STORE, RustRunnerLauncher, orb};
 use crate::error::{ErrorDetail, HostError, RustRunnerFailure};
 
 mod cap;
+mod identity;
 mod inside;
 mod job_dirs;
 mod parse;
@@ -39,8 +40,8 @@ const CLOSED_DIRECTORIES: [&str; 4] = [
 ];
 const STORE_FILESYSTEM: &str = "btrfs";
 const PROTECTED_LINKS: [&str; 2] = ["fs.protected_hardlinks", "fs.protected_symlinks"];
-const NFTABLES_PACKAGE: &str = "nftables";
-const REQUIRED_TOOLS: [&str; 2] = ["nft", "ip"];
+const TOOL_PACKAGES: [&str; 2] = ["nftables", "btrfs-progs"];
+const REQUIRED_TOOLS: [&str; 3] = ["nft", "ip", "btrfs"];
 const TOOLS_PROBE: &str = r#"for tool in "$@"; do command -v "$tool" >/dev/null || exit 1; done"#;
 const DIRECTORY: &str = "directory";
 const REGULAR_FILE: &str = "regular file";
@@ -74,10 +75,15 @@ fn classify(entries: &HashMap<String, Entry>) -> Layout {
     if !closed_ancestors {
         return Layout::Unsafe;
     }
-    let foreign = OPEN_DIRECTORIES
-        .iter()
-        .chain(&CLOSED_DIRECTORIES)
-        .find(|path| entries.get(**path).is_some_and(|entry| entry.uid != 0));
+    let stored = || OPEN_DIRECTORIES.iter().chain(&CLOSED_DIRECTORIES);
+    if stored().any(|path| {
+        entries
+            .get(*path)
+            .is_some_and(|entry| entry.kind != DIRECTORY)
+    }) {
+        return Layout::Unsafe;
+    }
+    let foreign = stored().find(|path| entries.get(**path).is_some_and(|entry| entry.uid != 0));
     if let Some(path) = foreign {
         return Layout::Foreign((*path).to_owned());
     }
@@ -200,15 +206,16 @@ impl RustRunnerLauncher {
         if self.tools_present()? {
             return Ok(());
         }
-        self.read(&[
+        let mut args = vec![
             "env",
             "DEBIAN_FRONTEND=noninteractive",
             "apt-get",
             "install",
             "-y",
             "--no-install-recommends",
-            NFTABLES_PACKAGE,
-        ])?;
+        ];
+        args.extend(TOOL_PACKAGES);
+        self.read(&args)?;
         if self.tools_present()? {
             Ok(())
         } else {

@@ -199,20 +199,31 @@ async fn run_with_health(
         config_sha256,
         launcher: launcher.with_machine_disk(cap, config.host.machine_disk.job_limit_gib),
     };
-    let (connections, _hold) = match startup::start(&cx, &config, &pats, shutdown).await? {
-        Started::Ready(connections, hold) => (connections, hold),
+    let (connections, _hold, wedged) = match startup::start(&cx, &config, &pats, shutdown).await? {
+        Started::Ready(connections, hold, wedged) => (connections, hold, wedged),
         Started::Shutdown => return Ok(RustRunnerExit::Shutdown),
         Started::ConfigChanged => return Ok(RustRunnerExit::ConfigChanged),
     };
     let capacity = config.host.max_jobs;
+    let mut slots = Slots::new(capacity);
+    for reservation in &wedged {
+        eprintln!(
+            "rust-runner quarantined reservation {reservation} at startup: its job directories cannot be removed; remove them in the velnor machine by hand, then restart the daemon"
+        );
+        slots.quarantine_at_startup(*reservation);
+    }
     let mut run = Run {
         cx,
         config,
         daemon_lock,
         connections,
-        slots: Slots::new(capacity),
+        slots,
         taken: BTreeSet::new(),
-        next_reservation: 1,
+        next_reservation: wedged
+            .iter()
+            .map(|reservation| reservation.get())
+            .max()
+            .map_or(1, |last| last.saturating_add(1)),
         tasks: JoinSet::new(),
         machine_ok: true,
         machine_checking: false,

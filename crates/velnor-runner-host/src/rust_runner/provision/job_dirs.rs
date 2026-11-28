@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use super::super::machine::failure;
-use super::super::{GUEST_GEN, JobPaths, RustRunnerLauncher, orb};
+use super::super::{GUEST_GEN, JobPaths, ReservationId, RustRunnerLauncher, orb};
+use super::parse;
 use crate::error::{HostError, RustRunnerFailure};
 
 const WEDGED_REMOVAL: i32 = 70;
@@ -14,11 +17,7 @@ fn remover() -> String {
     )
 }
 
-fn emptier() -> String {
-    format!(
-        r#"for dir in "$@"; do find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {{}} + || exit {WEDGED_REMOVAL}; done"#
-    )
-}
+const SWEEPER: &str = r#"for dir in "$@"; do find "$dir" -mindepth 1 -inum 256 -exec btrfs property set -ts {} ro false \; ; find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} \; ; done; find "$@" -mindepth 1 -maxdepth 1 -printf '%f\n'"#;
 
 impl RustRunnerLauncher {
     pub(crate) fn remove_job_dirs(&self, paths: &JobPaths) -> Result<(), HostError> {
@@ -28,10 +27,14 @@ impl RustRunnerLauncher {
         )
     }
 
-    pub(crate) fn empty_job_dirs(&self) -> Result<(), HostError> {
+    pub(crate) fn sweep_job_dirs(&self) -> Result<Vec<ReservationId>, HostError> {
         let work = format!("{GUEST_GEN}/work");
         let stage = format!("{GUEST_GEN}/stage");
-        self.job_dirs(&emptier(), &[&work, &stage])
+        let swept = self.read(&["sh", "-c", SWEEPER, "sh", &work, &stage])?;
+        if !swept.success() {
+            return Err(failure(RustRunnerFailure::JobFilesLeft));
+        }
+        survivors(&swept.text)
     }
 
     fn job_dirs(&self, script: &str, dirs: &[&str]) -> Result<(), HostError> {
@@ -48,4 +51,20 @@ pub(super) const fn removal_verdict(code: Option<i32>) -> Result<(), RustRunnerF
         Some(WEDGED_REMOVAL | WEDGED_REMAINS) => Err(RustRunnerFailure::JobDirsWedged),
         _ => Err(RustRunnerFailure::JobFilesLeft),
     }
+}
+
+fn survivors(listing: &str) -> Result<Vec<ReservationId>, HostError> {
+    let numbers: Result<BTreeSet<u64>, HostError> = parse::lines(listing)
+        .into_iter()
+        .map(|name| {
+            name.parse()
+                .ok()
+                .filter(|number| *number > 0)
+                .ok_or_else(|| failure(RustRunnerFailure::JobDirsWedged))
+        })
+        .collect();
+    Ok(numbers?
+        .into_iter()
+        .filter_map(ReservationId::new)
+        .collect())
 }

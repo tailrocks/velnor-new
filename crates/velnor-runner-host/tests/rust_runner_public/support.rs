@@ -26,20 +26,20 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) fn new(machines: &str) -> Result<Self, Box<dyn Error>> {
-        Self::build(|_| machines.to_owned())
+        Self::build(|| machines.to_owned())
     }
 
     pub(super) fn ready() -> Result<Self, Box<dyn Error>> {
-        Self::build(|store| guest::machines(store, CAP_GIB, |_| {}))
+        Self::build(|| guest::machines(CAP_GIB, |_| {}))
     }
 
     pub(super) fn shaped(
         mutate: impl FnOnce(&mut serde_json::Value),
     ) -> Result<Self, Box<dyn Error>> {
-        Self::build(|store| guest::machines(store, CAP_GIB, mutate))
+        Self::build(|| guest::machines(CAP_GIB, mutate))
     }
 
-    fn build(machines: impl FnOnce(&Path) -> String) -> Result<Self, Box<dyn Error>> {
+    fn build(machines: impl FnOnce() -> String) -> Result<Self, Box<dyn Error>> {
         let directory = tempfile::tempdir()?;
         let root = directory.path().canonicalize()?;
         let store = root.join("store");
@@ -47,7 +47,7 @@ impl Fixture {
         std::fs::create_dir_all(&store)?;
         std::fs::copy(FAKE_ORB, root.join("orb"))?;
         guest::install_guest_module(&root)?;
-        std::fs::write(root.join("list.json"), machines(&store))?;
+        std::fs::write(root.join("list.json"), machines())?;
         guest::prepare_guest(&root)?;
         std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700))?;
         let fixture = Self {
@@ -75,6 +75,10 @@ impl Fixture {
     }
 
     pub(super) fn launcher(&self) -> RustRunnerLauncher {
+        self.production_launcher().with_open_launch_for_tests()
+    }
+
+    pub(super) fn production_launcher(&self) -> RustRunnerLauncher {
         RustRunnerLauncher::new(
             self.root.join("orb"),
             self.store.clone(),
@@ -88,14 +92,6 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
             Err(error) => Err(error.into()),
         }
-    }
-
-    pub(super) fn list_share(&self, source: &Path) -> Result<(), Box<dyn Error>> {
-        std::fs::write(
-            self.root.join("list.json"),
-            guest::machines(source, CAP_GIB, |_| {}),
-        )?;
-        Ok(())
     }
 
     pub(super) fn guest(&self, path: &str) -> PathBuf {
@@ -123,10 +119,6 @@ impl Fixture {
 
     pub(super) fn seen(&self, name: &str) -> PathBuf {
         self.root.join("seen").join(name)
-    }
-
-    pub(super) fn jit_file(&self, reservation: u64) -> PathBuf {
-        self.store.join("jit").join(format!("{reservation}.jit"))
     }
 }
 

@@ -150,7 +150,8 @@ impl Run<'_> {
         }
         let launcher = self.cx.launcher.clone();
         self.tasks.spawn(async move {
-            let result = blocking(move || launcher.runner_digest().map_err(Into::into)).await;
+            let result =
+                blocking(move || launcher.installed_runner_digest().map_err(Into::into)).await;
             Event::RunnerBinary(result)
         });
     }

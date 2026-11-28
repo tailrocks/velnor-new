@@ -61,7 +61,8 @@ pub(super) fn run(root: &Path) -> TestResult<()> {
         root.join("orb"),
         root.join("store"),
         root.join("host-runner"),
-    );
+    )
+    .with_open_launch_for_tests();
     let _held = std::env::var_os(HOLD_STORE)
         .map(|_| launcher.hold_host())
         .transpose()?;
@@ -93,11 +94,14 @@ fn blocking(state: &Path, text: &str) -> TestResult<()> {
     let served = std::env::var_os(SERVED_SECRET)
         .map(|path| std::fs::read(root.join(path)))
         .transpose()?;
-    install_rust_runner_launcher(RustRunnerLauncher::new(
-        root.join("orb"),
-        root.join("store"),
-        root.join("host-runner"),
-    ))?;
+    install_rust_runner_launcher(
+        RustRunnerLauncher::new(
+            root.join("orb"),
+            root.join("store"),
+            root.join("host-runner"),
+        )
+        .with_open_launch_for_tests(),
+    )?;
     install_secret_source(Box::new(InjectedSecrets {
         served,
         lookups: root.join("seen").join(SECRET_LOOKUPS),

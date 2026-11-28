@@ -10,8 +10,10 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
+import { basename } from "node:path";
 import { createHash } from "node:crypto";
 import { Guest, complain, list, real, say } from "./fake_orb_base.ts";
 import { shapeScript, systemCommand } from "./fake_orb_system.ts";
@@ -109,11 +111,18 @@ function cleanup(guest: Guest, paths: string[]): number {
   return paths.some((path) => existsSync(real(guest, path))) ? 71 : 0;
 }
 
-function empty(guest: Guest, dirs: string[]): number {
-  if (guest.setting("FAKE_GUEST_WEDGE") !== "") return 70;
+function sweep(guest: Guest, body: string, dirs: string[]): number {
+  const wedged = guest.setting("FAKE_GUEST_WEDGE") !== "";
+  const readonly = list(guest, "FAKE_GUEST_READONLY");
+  const cleared = body.includes("btrfs property set -ts {} ro false");
+  const left = new Set<string>();
   for (const dir of dirs) {
-    for (const name of readdirSync(real(guest, dir))) purge(`${real(guest, dir)}/${name}`);
+    for (const name of readdirSync(real(guest, dir))) {
+      if (wedged || (readonly.includes(name) && !cleared)) left.add(name);
+      else purge(`${real(guest, dir)}/${name}`);
+    }
   }
+  for (const name of left) say(`${name}\n`);
   return 0;
 }
 
@@ -122,7 +131,7 @@ function script(guest: Guest, rest: string[]): number | undefined {
   if (body.includes("fallocate -l")) return fallocate(guest, body, Number(args[0]), args[1]);
   if (body.includes("set -e; umask 077")) return stage(guest, args[0]);
   if (body.includes("rm -rf -- \"$@\" || exit")) return cleanup(guest, args);
-  if (body.includes("-mindepth")) return empty(guest, args);
+  if (body.includes("-mindepth")) return sweep(guest, body, args);
   if (body.includes("printf")) {
     const target = real(guest, args[1]);
     writeFileSync(`${target}.new`, `${args[0]}\n`);
@@ -144,8 +153,7 @@ export function guestCommand(guest: Guest, rest: string[]): number | undefined {
     case "sha256sum":
       return sha256(guest, rest[1]);
     case "mv":
-      renameSync(real(guest, rest[3]), real(guest, rest[4]));
-      return 0;
+      return move(guest, rest.slice(1));
     case "chmod":
       chmodSync(real(guest, rest[3]), parseInt(rest[1], 8));
       return 0;
@@ -165,6 +173,24 @@ export function guestCommand(guest: Guest, rest: string[]): number | undefined {
     default:
       return systemCommand(guest, rest);
   }
+}
+
+function move(guest: Guest, args: string[]): number {
+  const split = args.indexOf("--");
+  const [source, destination] = args.slice(split + 1).map((path) => real(guest, path));
+  const noTarget = args.slice(0, split).some((flag) => /^-[a-zA-Z]*T/.test(flag));
+  let target = destination;
+  const entry = noTarget ? lstatSync(destination, { throwIfNoEntry: false }) : statSync(destination, { throwIfNoEntry: false });
+  if (entry?.isDirectory()) {
+    if (noTarget) {
+      complain(`mv: cannot overwrite directory '${destination}' with non-directory\n`);
+      return 1;
+    }
+    target = `${destination}/${basename(source)}`;
+  }
+  renameSync(source, target);
+  if (guest.setting("FAKE_GUEST_SWAP_STAGE") !== "") writeFileSync(target, "swapped-in-flight");
+  return 0;
 }
 
 function purge(path: string): void {
@@ -201,15 +227,13 @@ function statFilesystem(guest: Guest, paths: string[]): number {
 export function listing(args: string[]): string {
   const flag = (name: string): boolean => args.includes(name);
   const value = (name: string): string => args[args.indexOf(name) + 1] ?? "";
-  const mount = value("--mount");
-  const split = mount.lastIndexOf(":");
   const disk = value("--disk");
   const config: Record<string, unknown> = {
     isolated: flag("--isolated"),
     forward_ssh_agent: !flag("--isolated"),
     isolate_network: flag("--isolate-network"),
   };
-  if (mount !== "") config.mounts = [{ source: mount.slice(0, split), destination: mount.slice(split + 1) }];
+  if (flag("--mount")) config.mounts = [{ source: value("--mount").split(":")[0], destination: value("--mount").split(":")[1] }];
   if (disk.endsWith("G")) config.disk_limit_bytes = Number(disk.slice(0, -1)) * 2 ** 30;
   return `${JSON.stringify([{ name: "velnor", image: { distro: "ubuntu", arch: "arm64" }, config }])}\n`;
 }

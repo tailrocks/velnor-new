@@ -17,12 +17,12 @@ use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
 use crate::launch_blocking::ListenFault;
-use crate::rust_runner::{HostHold, RustRunnerLauncher};
+use crate::rust_runner::{HostHold, ReservationId, RustRunnerLauncher};
 
 const STARTUP_RETRY: Duration = Duration::from_secs(30);
 
 pub(super) enum Started {
-    Ready(Vec<Live>, HostHold),
+    Ready(Vec<Live>, HostHold, Vec<ReservationId>),
     Shutdown,
     ConfigChanged,
 }
@@ -54,7 +54,7 @@ fn renew_held(step: Step, admin_age: Duration) -> Option<usize> {
 enum Done {
     Held(HostHold),
     Machine,
-    Swept,
+    Swept(Vec<ReservationId>),
     Set(usize, Admin, i64),
     Renewed(usize, Admin),
     Session(usize, QueueSession),
@@ -101,8 +101,8 @@ pub(super) async fn start(
     shutdown: &mut Shutdown<'_>,
 ) -> Result<Started, ListenFault> {
     let mut pending = pending_connections(config, pats)?;
-    let (mut store_lock, mut machine, mut swept) = (None, false, false);
-    while let Some(step) = next_step(&pending, store_lock.is_some(), machine, swept) {
+    let (mut store_lock, mut machine, mut swept) = (None, false, None);
+    while let Some(step) = next_step(&pending, store_lock.is_some(), machine, swept.is_some()) {
         if config_changed(cx) {
             close_pending(&pending).await;
             return Ok(Started::ConfigChanged);
@@ -115,7 +115,7 @@ pub(super) async fn start(
             Some(Ok(done)) => match done {
                 Done::Held(acquired) => store_lock = Some(acquired),
                 Done::Machine => machine = true,
-                Done::Swept => swept = true,
+                Done::Swept(wedged) => swept = Some(wedged),
                 Done::Set(index, admin, id) => {
                     pending[index].set = Some((admin, id));
                     pending[index].admin_at = Instant::now();
@@ -174,7 +174,7 @@ pub(super) async fn start(
         live.push(connection.into_live()?);
     }
     let store_lock = store_lock.ok_or(HostError::Config)?;
-    Ok(Started::Ready(live, store_lock))
+    Ok(Started::Ready(live, store_lock, swept.unwrap_or_default()))
 }
 
 fn config_changed(cx: &Context) -> bool {
@@ -251,7 +251,7 @@ fn prepare(
                 .map(|_| Done::Machine)
                 .map_err(Into::into)
         }),
-        Step::Sweep => Box::new(move || launcher.sweep().map(|()| Done::Swept).map_err(Into::into)),
+        Step::Sweep => Box::new(move || launcher.sweep().map(Done::Swept).map_err(Into::into)),
         Step::Set(index) => {
             let connection = pending.get(index).ok_or(HostError::Config)?;
             let (pat, binding) = (connection.pat.clone(), connection.binding.clone());

@@ -1,24 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{DirBuilder, File};
-use std::io::Write;
+use std::fs::DirBuilder;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, fchmod, flock, fstat, fsync, mkdirat, openat,
-    renameat, statat, unlinkat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, fchmod, flock, fstat, openat, unlinkat,
 };
 use rustix::io::Errno;
 use rustix::path::Arg;
 use rustix::process::geteuid;
 
 use self::remove::BOUNDS;
+use super::OBSOLETE_DIRECTORIES;
 use super::machine::failure;
-use super::{JIT_DIRECTORY, PRIVATE_DIRECTORIES};
 use crate::error::{HostError, RustRunnerFailure};
 
 mod remove;
@@ -60,11 +58,7 @@ impl Store {
             .mode(0o700)
             .create(path)
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        let store = Self::open(path)?;
-        for name in PRIVATE_DIRECTORIES {
-            store.ensure_directory(name)?;
-        }
-        Ok(store)
+        Self::open(path)
     }
 
     pub(super) fn hold(&self) -> Result<HostHold, HostError> {
@@ -83,99 +77,33 @@ impl Store {
     }
 
     pub(super) fn require_no_acl(&self) -> Result<(), HostError> {
-        require_no_acl(&self.path)
+        require_no_acl(&self.path, RustRunnerFailure::StoreUnsafe)
     }
 
-    pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
-        self.ensure_directory(JIT_DIRECTORY)?;
-        let jit = self.jit_directory()?;
-        let staging = format!(".{name}.tmp");
-        let write = || -> Result<(), Errno> {
-            remove_entry(&jit, &staging)?;
-            let descriptor = openat(
-                &jit,
-                staging.as_str(),
-                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
-            )?;
-            let mut file = File::from(descriptor);
-            file.write_all(bytes).map_err(|_| Errno::IO)?;
-            fsync(&file)?;
-            renameat(&jit, staging.as_str(), &jit, name)
-        };
-        write().map_err(|_| {
-            let _ = remove_entry(&jit, &staging);
-            failure(RustRunnerFailure::JitFile)
-        })
+    pub(super) fn remove_obsolete(&self) -> Result<(), HostError> {
+        OBSOLETE_DIRECTORIES
+            .iter()
+            .try_for_each(|name| self.remove_tree(name))
     }
 
-    pub(super) fn remove_jit(&self, name: &str) -> Result<(), HostError> {
-        let jit = self.jit_directory()?;
-        remove_entry(&jit, name).map_err(|_| failure(RustRunnerFailure::HostStore))
-    }
-
-    pub(super) fn jit_remains(&self, name: &str) -> Result<bool, HostError> {
-        exists(&self.jit_directory()?, name)
-    }
-
-    pub(super) fn empty_jit(&self) -> Result<(), HostError> {
-        remove::contents(&self.jit_directory()?, BOUNDS).map_err(|error| failure(error.failure()))
-    }
-
-    fn jit_directory(&self) -> Result<OwnedFd, HostError> {
-        let descriptor = openat(&self.root, JIT_DIRECTORY, directory_flags(), Mode::empty())
-            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        require_directory(
-            &descriptor,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )?;
-        Ok(descriptor)
-    }
-
-    fn ensure_directory(&self, name: &str) -> Result<(), HostError> {
-        let descriptor = match openat(&self.root, name, directory_flags(), Mode::empty()) {
-            Ok(descriptor) => descriptor,
-            Err(Errno::NOENT) => self.create_directory(name)?,
+    fn remove_tree(&self, name: &str) -> Result<(), HostError> {
+        let stored = || failure(RustRunnerFailure::HostStore);
+        let tree = match openat(&self.root, name, directory_flags(), Mode::empty()) {
+            Ok(tree) => tree,
+            Err(Errno::NOENT) => return Ok(()),
             Err(Errno::ACCESS) => {
-                remove::make_owner_accessible(&self.root, name)
-                    .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-                openat(&self.root, name, directory_flags(), Mode::empty())
-                    .map_err(|_| failure(RustRunnerFailure::HostStore))?
+                remove::make_owner_accessible(&self.root, name).map_err(|_| stored())?;
+                openat(&self.root, name, directory_flags(), Mode::empty()).map_err(|_| stored())?
             }
             Err(Errno::LOOP | Errno::NOTDIR) => {
-                remove_entry(&self.root, name)
-                    .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-                self.create_directory(name)?
+                return remove_entry(&self.root, name).map_err(|_| stored());
             }
-            Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
+            Err(_) => return Err(stored()),
         };
-        close_to_others(&descriptor)
+        fchmod(&tree, Mode::RWXU).map_err(|_| stored())?;
+        remove::contents(&tree, BOUNDS).map_err(|error| failure(error.failure()))?;
+        unlinkat(&self.root, name, AtFlags::REMOVEDIR).map_err(|_| stored())
     }
-
-    fn create_directory(&self, name: &str) -> Result<OwnedFd, HostError> {
-        match mkdirat(&self.root, name, Mode::RWXU) {
-            Ok(()) | Err(Errno::EXIST) => {}
-            Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
-        }
-        openat(&self.root, name, directory_flags(), Mode::empty())
-            .map_err(|_| failure(RustRunnerFailure::HostStore))
-    }
-}
-
-fn close_to_others(descriptor: &OwnedFd) -> Result<(), HostError> {
-    let stat = fstat(descriptor).map_err(|_| failure(RustRunnerFailure::HostStore))?;
-    if Mode::from_raw_mode(stat.st_mode).intersects(others_can_reach())
-        && FileType::from_raw_mode(stat.st_mode) == FileType::Directory
-        && stat.st_uid == geteuid().as_raw()
-    {
-        fchmod(descriptor, Mode::RWXU).map_err(|_| failure(RustRunnerFailure::HostStore))?;
-    }
-    require_directory(
-        descriptor,
-        others_can_reach(),
-        RustRunnerFailure::JitDirectoryAccessible,
-    )
 }
 
 fn require_directory(
@@ -194,7 +122,7 @@ fn require_directory(
     Ok(())
 }
 
-fn require_no_acl(path: &Path) -> Result<(), HostError> {
+pub(super) fn require_no_acl(path: &Path, refusal: RustRunnerFailure) -> Result<(), HostError> {
     let mut command = Command::new("/bin/ls");
     command.env_clear().arg(if cfg!(target_os = "macos") {
         "-lde"
@@ -207,9 +135,8 @@ fn require_no_acl(path: &Path) -> Result<(), HostError> {
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
-        .map_err(|_| failure(RustRunnerFailure::StoreUnsafe))?;
-    let text =
-        String::from_utf8(output.stdout).map_err(|_| failure(RustRunnerFailure::StoreUnsafe))?;
+        .map_err(|_| failure(refusal))?;
+    let text = String::from_utf8(output.stdout).map_err(|_| failure(refusal))?;
     let mut lines = text.lines().filter(|line| !line.trim().is_empty());
     let marker = lines
         .next()
@@ -218,15 +145,7 @@ fn require_no_acl(path: &Path) -> Result<(), HostError> {
     if output.status.success() && lines.next().is_none() && marker != Some(b'+') {
         Ok(())
     } else {
-        Err(failure(RustRunnerFailure::StoreUnsafe))
-    }
-}
-
-fn exists(directory: &OwnedFd, name: &str) -> Result<bool, HostError> {
-    match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(_) => Ok(true),
-        Err(Errno::NOENT) => Ok(false),
-        Err(_) => Err(failure(RustRunnerFailure::HostStore)),
+        Err(failure(refusal))
     }
 }
 

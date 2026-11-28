@@ -137,6 +137,7 @@ velnor-resource-probe = { version = "=0.1.0", path = "../velnor-resource-probe" 
 security-framework = { version = "=3.7.0" }
 
 [dev-dependencies]
+velnor-runner-host = { path = ".", features = ["test-support"] }
 bollard = { workspace = true, features = ["http"] }
 tokio = { workspace = true, features = ["test-util"] }
 

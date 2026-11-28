@@ -70,7 +70,7 @@ impl World {
         guest::install_guest_module(&world.root)?;
         std::fs::write(
             world.root.join("list.json"),
-            guest::machines(&world.store, CAP_GIB, |_| {}),
+            guest::machines(CAP_GIB, |_| {}),
         )?;
         guest::prepare_guest(&world.root)?;
         for name in FAKE_GITHUB {
@@ -112,7 +112,6 @@ impl World {
             "canary_tag": self.tag,
             "queue_url": "https://queue.example.com/messages",
             "admin_url": "https://pipelines.example.com/",
-            "store": self.store,
             "work_dir": self.work(),
             "ps_table": self.root.join("ps.table"),
             "default_branch": default_branch,

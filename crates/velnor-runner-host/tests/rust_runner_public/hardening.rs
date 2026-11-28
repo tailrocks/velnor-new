@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use super::support::{Fixture, GUEST, SECRET_JIT, jit, reservation, wait_for};
@@ -96,10 +95,10 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
     let log = fixture.log()?;
     for expected in [
         "list -f json".to_owned(),
-        "create --isolated --isolate-network --disk 172G --mount ".to_owned(),
+        "create --isolated --isolate-network --disk 172G -a arm64 ubuntu velnor".to_owned(),
         format!("{GUEST} install -d -o root -g root -m 0755"),
         format!("{GUEST} sha256sum /var/lib/velnor/bin/.stage"),
-        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/41.jit".to_owned(),
+        "/var/lib/velnor/bin/velnor-runner run --jit @/dev/stdin --work-dir /srv/velnor/gen/work/41".to_owned(),
         format!("{GUEST} ps -eo pid=,args="),
         format!("{GUEST} kill -9 4242"),
     ] {
@@ -156,60 +155,4 @@ fn assert_environments_are_cleared(fixture: &Fixture) -> Result<(), Box<dyn Erro
         );
     }
     Ok(())
-}
-
-#[test]
-fn rust_runner_jit_directory_is_private() -> Result<(), Box<dyn Error>> {
-    const TEST: &str = "hardening::rust_runner_jit_directory_is_private";
-    if !is_child_of(TEST) {
-        rerun(TEST, "umask 0;", &[])?;
-        return Ok(());
-    }
-    let fresh = Fixture::ready()?;
-    fresh.launcher().ensure_machine()?;
-    assert_eq!(mode_of(&fresh.store.join("jit"))?, 0o700);
-    assert_eq!(mode_of(&fresh.store.join("trusted"))?, 0o700);
-
-    for name in ["jit", "trusted"] {
-        for mode in [0o755, 0o750, 0o710, 0o770, 0o701, 0o777, 0o000] {
-            let fixture = Fixture::ready()?;
-            let directory = fixture.store.join(name);
-            std::fs::create_dir_all(&directory)?;
-            std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(mode))?;
-            fixture.launcher().ensure_machine()?;
-            assert_eq!(mode_of(&directory)?, 0o700, "{name} {mode:o}");
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn rust_runner_recreates_a_share_directory_that_was_swapped_for_a_link_or_a_file() -> Check {
-    for name in ["jit", "trusted"] {
-        let linked = Fixture::ready()?;
-        let victim = linked.root.join("victim");
-        std::fs::create_dir(&victim)?;
-        std::fs::write(victim.join("keep"), "")?;
-        std::os::unix::fs::symlink(&victim, linked.store.join(name))?;
-        linked.launcher().ensure_machine()?;
-        let made = linked.store.join(name);
-        assert!(!std::fs::symlink_metadata(&made)?.file_type().is_symlink());
-        assert_eq!(mode_of(&made)?, 0o700, "{name}");
-        assert!(
-            victim.join("keep").exists(),
-            "{name}: the link target changed"
-        );
-
-        let filed = Fixture::ready()?;
-        std::fs::write(filed.store.join(name), "not a directory")?;
-        filed.launcher().ensure_machine()?;
-        assert!(filed.store.join(name).is_dir(), "{name}");
-    }
-    Ok(())
-}
-
-type Check = Result<(), Box<dyn Error>>;
-
-fn mode_of(path: &Path) -> Result<u32, Box<dyn Error>> {
-    Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
 }

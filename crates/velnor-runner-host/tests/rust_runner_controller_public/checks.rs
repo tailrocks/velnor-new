@@ -8,7 +8,6 @@ use super::harness::World;
 
 #[derive(Debug)]
 pub(super) struct Snapshot {
-    pub(super) jit: Vec<String>,
     pub(super) work: Vec<String>,
     pub(super) runners: Vec<String>,
     pub(super) ps: String,
@@ -72,7 +71,6 @@ pub(super) fn snapshot(world: &World, acquire: &Event) -> Snapshot {
         })
     };
     Snapshot {
-        jit: list("jit"),
         work: list("work"),
         runners: list("runners"),
         ps: text

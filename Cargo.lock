@@ -4552,6 +4552,7 @@ dependencies = [
  "velnor-resource-probe",
  "velnor-runner-core",
  "velnor-runner-github",
+ "velnor-runner-host",
  "velnor-runner-image-manifest",
  "velnor-runner-qualification",
  "zeroize",

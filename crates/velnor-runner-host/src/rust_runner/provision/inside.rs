@@ -4,7 +4,7 @@
 use super::parse;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::rust_runner::machine::failure;
-use crate::rust_runner::{GUEST_GEN, GUEST_SHARE, RustRunnerLauncher};
+use crate::rust_runner::{GUEST_GEN, RustRunnerLauncher};
 
 const MAC_MOUNT: &str = "/mnt/mac";
 const ORBSTACK_GUEST: &str = "/opt/orbstack-guest";
@@ -28,7 +28,7 @@ impl RustRunnerLauncher {
         self.require_no_mac_mount()?;
         self.require_no_orbstack_sockets()?;
         self.require_mac_command_refused()?;
-        self.require_only_the_share_mounted()?;
+        self.require_no_mounts()?;
         self.require_cap_quota()
     }
 
@@ -47,9 +47,9 @@ impl RustRunnerLauncher {
         shaped(!reached.success())
     }
 
-    fn require_only_the_share_mounted(&self) -> Result<(), HostError> {
+    fn require_no_mounts(&self) -> Result<(), HostError> {
         let table = self.read(&["findmnt", "-rn", "-o", "TARGET,FSTYPE"])?;
-        shaped(table.success() && foreign_mounts(&table.text) == [GUEST_SHARE])
+        shaped(table.success() && foreign_mounts(&table.text).is_empty())
     }
 
     fn require_cap_quota(&self) -> Result<(), HostError> {

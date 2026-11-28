@@ -43,11 +43,13 @@ pub enum RustRunnerFailure {
     MachineIncompatible,
 
     #[error(
-        "the velnor machine does not have the required shape (isolated, network-isolated, no ssh agent forwarding, the disk cap on the machine and in its btrfs qgroup, only the host share mount, no route to the Mac, protected hardlinks and symlinks); delete it with orb delete velnor"
+        "the velnor machine does not have the required shape (isolated, network-isolated, no ssh agent forwarding, the disk cap on the machine and in its btrfs qgroup, no mounts, no route to the Mac, protected hardlinks and symlinks); delete it with orb delete velnor"
     )]
     MachineShape,
 
-    #[error("nft or ip is missing from the velnor machine and nftables could not be installed")]
+    #[error(
+        "nft, ip or btrfs is missing from the velnor machine and nftables and btrfs-progs could not be installed"
+    )]
     MachineTools,
 
     #[error("the velnor machine does not enforce its disk cap; delete it with orb delete velnor")]
@@ -62,7 +64,9 @@ pub enum RustRunnerFailure {
     #[error("a command of the velnor machine provisioning failed")]
     MachineProvision,
 
-    #[error("the machine store layout is not root-owned with the required modes")]
+    #[error(
+        "the machine store layout is not made of root-owned directories with the required modes"
+    )]
     MachineLayout,
 
     #[error(
@@ -74,27 +78,29 @@ pub enum RustRunnerFailure {
     MachineFilesystem,
 
     #[error(
-        "the velnor-job user of the velnor machine is missing or not unprivileged, with its own group, the nologin shell, no sudo rule"
+        "the velnor-job user of the velnor machine is missing or not unprivileged, with its own unshared uid and gid, its own group, the nologin shell, no sudo rights"
     )]
     GuestUser,
 
     #[error("velnor-runner is missing from the host runner path")]
     BinaryMissing,
 
-    #[error("the velnor-runner copy in the machine does not match the host runner")]
+    #[error("the velnor-runner copy in the machine is missing or does not match the host runner")]
     BinaryCopy,
 
-    #[error("the JIT file could not be written")]
-    JitFile,
+    #[error(
+        "jobs cannot start: the launch would run them as root in the velnor machine and stays closed until the sandbox confines them"
+    )]
+    LaunchClosed,
+
+    #[error("the JIT could not be passed to velnor-runner")]
+    JitDelivery,
 
     #[error("velnor-runner could not be started in the velnor machine")]
     Spawn,
 
     #[error("velnor-runner could not be waited for or stopped")]
     Wait,
-
-    #[error("the jit directory of the host store is readable by other users")]
-    JitDirectoryAccessible,
 
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,

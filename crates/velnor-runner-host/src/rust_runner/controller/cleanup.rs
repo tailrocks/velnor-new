@@ -4,7 +4,6 @@
 use super::github::{Admin, remove_runner_named};
 use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
-use crate::rust_runner::store::Store;
 use crate::rust_runner::{JobPaths, ReservationId, RustRunnerLauncher};
 
 #[derive(Debug)]
@@ -29,7 +28,7 @@ pub(super) struct ProofInputs {
 pub(super) fn prove(inputs: &ProofInputs) -> Result<CleanupProof, ListenFault> {
     let paths = JobPaths::of(inputs.reservation);
     end_processes(&inputs.launcher, paths.guest_work_dir())?;
-    remove_files(&inputs.launcher, &paths)?;
+    inputs.launcher.remove_job_dirs(&paths)?;
     remove_runner_named(&inputs.admin, inputs.scale_set_id, &inputs.runner_name)?;
     Ok(CleanupProof {
         reservation: inputs.reservation,
@@ -56,15 +55,4 @@ fn naming(launcher: &RustRunnerLauncher, guest_work_dir: &str) -> Result<Vec<u32
         .filter(|process| process.names_work_dir(guest_work_dir))
         .map(|process| process.pid)
         .collect())
-}
-
-fn remove_files(launcher: &RustRunnerLauncher, paths: &JobPaths) -> Result<(), ListenFault> {
-    let left = || HostError::RustRunner(RustRunnerFailure::JobFilesLeft);
-    let store = Store::open(launcher.host_store()).map_err(|_| left())?;
-    store.remove_jit(paths.jit_name()).map_err(|_| left())?;
-    launcher.remove_job_dirs(paths)?;
-    if store.jit_remains(paths.jit_name()).map_err(|_| left())? {
-        return Err(left().into());
-    }
-    Ok(())
 }

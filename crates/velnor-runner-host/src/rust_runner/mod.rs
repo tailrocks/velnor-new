@@ -31,7 +31,6 @@ pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::{GUEST_GEN, JobPaths};
 
 const MACHINE_NAME: &str = "velnor";
-const GUEST_SHARE: &str = "/var/lib/velnor-host";
 const GUEST_STORE: &str = "/var/lib/velnor";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const GUEST_SRV: &str = "/srv/velnor";
@@ -59,9 +58,9 @@ const PID_NAMESPACE: [&str; 6] = [
     "--fork",
     "--kill-child",
 ];
-const PRIVATE_DIRECTORIES: [&str; 2] = [JIT_DIRECTORY, TRUSTED_DIRECTORY];
-const JIT_DIRECTORY: &str = "jit";
-const TRUSTED_DIRECTORY: &str = "trusted";
+const OBSOLETE_DIRECTORIES: [&str; 10] = [
+    "bin", "crates", "tools", "git", "gen", "cache", "records", "work", "jit", "trusted",
+];
 
 fn default_runner_binary() -> PathBuf {
     std::env::current_exe()
@@ -84,6 +83,7 @@ pub struct RustRunnerLauncher {
     disk_cap_gib: u64,
     job_limit_gib: u64,
     deadline: Duration,
+    launch_open: bool,
 }
 
 impl RustRunnerLauncher {
@@ -96,7 +96,15 @@ impl RustRunnerLauncher {
             disk_cap_gib: crate::config::DEFAULT_ONE_JOB_CAP_GIB,
             job_limit_gib: crate::config::DEFAULT_JOB_LIMIT_GIB,
             deadline: ORB_DEADLINE,
+            launch_open: false,
         }
+    }
+
+    #[cfg(feature = "test-support")]
+    #[must_use]
+    pub const fn with_open_launch_for_tests(mut self) -> Self {
+        self.launch_open = true;
+        self
     }
 
     #[must_use]

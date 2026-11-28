@@ -3,11 +3,11 @@
 
 use super::machine::failure;
 use super::store::Store;
-use super::{MachineProcess, RustRunnerLauncher};
+use super::{MachineProcess, ReservationId, RustRunnerLauncher};
 use crate::error::{HostError, RustRunnerFailure};
 
 impl RustRunnerLauncher {
-    pub fn sweep(&self) -> Result<(), HostError> {
+    pub fn sweep(&self) -> Result<Vec<ReservationId>, HostError> {
         let runners = self.runner_pids()?;
         if !runners.is_empty() {
             self.kill_processes(&runners)?;
@@ -15,8 +15,8 @@ impl RustRunnerLauncher {
                 return Err(failure(RustRunnerFailure::ProcessesSurvive));
             }
         }
-        Store::open(&self.host_store)?.empty_jit()?;
-        self.empty_job_dirs()
+        Store::open(&self.host_store)?.remove_obsolete()?;
+        self.sweep_job_dirs()
     }
 
     fn runner_pids(&self) -> Result<Vec<u32>, HostError> {

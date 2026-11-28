@@ -79,3 +79,56 @@ fn run() -> TestResult<()> {
     assert_clean(&world, "1");
     Ok(())
 }
+
+const STARTUP_TEST: &str =
+    "wedged::rust_runner_controller_starts_with_a_wedged_job_dir_quarantined";
+
+#[test]
+fn rust_runner_controller_starts_with_a_wedged_job_dir_quarantined() -> TestResult<()> {
+    match super::child_root() {
+        Some(root) => super::child::run(&root),
+        None => run_startup(),
+    }
+}
+
+fn run_startup() -> TestResult<()> {
+    let mut world = World::new("T22", 2, true)?;
+    std::fs::create_dir_all(world.work().join("99/data"))?;
+    world.configure_orb(WEDGED)?;
+    world.queue_message(
+        71,
+        &[
+            push_offer(1, 7001, "main", WORKFLOW),
+            push_offer(2, 7002, "main", WORKFLOW),
+        ],
+    )?;
+    world.spawn_controller(STARTUP_TEST, &[])?;
+    world.wait_for_event("the first jit", 60, |events| {
+        events.iter().any(|event| event.label == "jit")
+    });
+    let first = reservation(&world.gh("jit")[0]);
+    assert_eq!(first, 100, "the quarantined reservation was reused");
+    assert!(
+        world
+            .child_stderr()
+            .contains("quarantined reservation 99 at startup"),
+        "{}",
+        world.child_stderr()
+    );
+    assert!(world.work().join("99/data").exists());
+    wait_for("its stand-in", 20, || {
+        world.pid_of(&jit_name(first)).is_some()
+    });
+    let ticks = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < ticks {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(
+        acquire_ids(&world),
+        ["1"],
+        "the quarantined slot was reused"
+    );
+    world.stop()?;
+    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    Ok(())
+}

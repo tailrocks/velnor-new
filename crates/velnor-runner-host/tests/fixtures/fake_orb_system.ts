@@ -5,6 +5,7 @@ import { appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeF
 import { Guest, complain, list, real, say } from "./fake_orb_base.ts";
 
 const ACCOUNT = "velnor-job";
+const HOST = "velnor-fake";
 const HOME = "/home" + "/velnor-job";
 const CREATE_USER = [
   "--system",
@@ -26,18 +27,28 @@ function present(path: string): boolean {
   }
 }
 
-function accounts(guest: Guest): string[] {
-  const file = real(guest, "/etc/passwd");
+function account(guest: Guest): string | undefined {
+  return database(guest, "/etc/passwd").find((line) => line.startsWith(`${ACCOUNT}:`));
+}
+
+function database(guest: Guest, path: string): string[] {
+  const file = real(guest, path);
   return present(file) ? readFileSync(file, "utf8").split("\n").filter((line) => line !== "") : [];
 }
 
-function account(guest: Guest): string | undefined {
-  return accounts(guest).find((line) => line.startsWith(`${ACCOUNT}:`));
-}
-
 function getent(guest: Guest, rest: string[]): number {
-  const found = account(guest);
-  if (rest[1] !== "passwd" || found === undefined) return 2;
+  if (rest[1] !== "passwd" && rest[1] !== "group") return 2;
+  const lines = database(guest, rest[1] === "group" ? "/etc/group" : "/etc/passwd");
+  if (rest[2] === undefined) {
+    for (const line of lines) say(`${line}\n`);
+    return 0;
+  }
+  const numeric = /^[0-9]+$/.test(rest[2]);
+  const found = lines.find((line) => {
+    const fields = line.split(":");
+    return numeric ? fields[2] === rest[2] : fields[0] === rest[2];
+  });
+  if (found === undefined) return 2;
   say(`${found}\n`);
   return 0;
 }
@@ -47,7 +58,51 @@ function useradd(guest: Guest, rest: string[]): number {
   if (account(guest) !== undefined) return 9;
   mkdirSync(real(guest, "/etc"), { recursive: true });
   appendFileSync(real(guest, "/etc/passwd"), `${ACCOUNT}:x:500:500::${HOME}:/usr/sbin/nologin\n`);
+  appendFileSync(real(guest, "/etc/group"), `${ACCOUNT}:x:500:\n`);
   return 0;
+}
+
+type Membership = { name: string; gid: string };
+
+function memberships(guest: Guest, name: string, primary: string): Membership[] {
+  return database(guest, "/etc/group")
+    .map((line) => line.split(":"))
+    .filter((fields) => fields[2] === primary || (fields[3] ?? "").split(",").includes(name))
+    .map((fields) => ({ name: fields[0], gid: fields[2] }));
+}
+
+function applies(spec: string, name: string, uid: string, groups: Membership[]): boolean {
+  if (spec === "ALL" || spec === name || spec === `#${uid}`) return true;
+  if (spec.startsWith("%#")) return groups.some((group) => group.gid === spec.slice(2));
+  return spec.startsWith("%") && groups.some((group) => group.name === spec.slice(1));
+}
+
+function privileges(guest: Guest): string[] {
+  return ["/etc/sudoers", "/etc/sudoers.d"]
+    .flatMap((path) => files(real(guest, path)))
+    .flatMap((file) => readFileSync(file, "utf8").split("\n"))
+    .map((line) => line.trim())
+    .filter((line) => line.includes("=") && (!line.startsWith("#") || /^#[0-9]/.test(line)));
+}
+
+function sudo(guest: Guest, rest: string[]): number {
+  if (rest.slice(1).join(" ") !== "-n -l -U velnor-job") return 64;
+  const found = account(guest)?.split(":");
+  if (found === undefined) return 1;
+  const [name, , uid, gid] = found;
+  const groups = memberships(guest, name, gid);
+  const granted = privileges(guest).some((line) =>
+    line
+      .split(/\s+/)[0]
+      .split(",")
+      .some((spec) => applies(spec, name, uid, groups)),
+  );
+  say(
+    granted
+      ? `User ${name} may run the following commands on ${HOST}:\n    (ALL) NOPASSWD: ALL\n`
+      : `User ${name} is not allowed to run sudo on ${HOST}.\n`,
+  );
+  return guest.setting("FAKE_GUEST_SUDO_EXIT") === "" ? 0 : 1;
 }
 
 function id(guest: Guest, rest: string[]): number {
@@ -78,13 +133,14 @@ function apt(guest: Guest, rest: string[]): number {
   if (rest.includes("apt-get")) {
     if (guest.setting("FAKE_GUEST_NO_NFT_PACKAGE") !== "") return 100;
     writeFileSync(real(guest, "/usr/sbin/nft"), "");
+    if (guest.setting("FAKE_GUEST_NO_BTRFS_PACKAGE") === "") writeFileSync(real(guest, "/usr/sbin/btrfs"), "");
     return 0;
   }
   return 64;
 }
 
 function findmnt(guest: Guest): number {
-  say("/ btrfs\n/var/lib/velnor-host virtiofs\n/proc proc\n");
+  say("/ btrfs\n/proc proc\n");
   for (const mount of list(guest, "FAKE_GUEST_MOUNTS")) say(`${mount}\n`);
   return 0;
 }
@@ -93,6 +149,8 @@ export function systemCommand(guest: Guest, rest: string[]): number | undefined 
   switch (rest[0]) {
     case "getent":
       return getent(guest, rest);
+    case "sudo":
+      return sudo(guest, rest);
     case "useradd":
       return useradd(guest, rest);
     case "id":

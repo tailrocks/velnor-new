@@ -104,6 +104,16 @@ impl Slots {
         true
     }
 
+    pub(super) fn quarantine_at_startup(&mut self, reservation: ReservationId) {
+        self.entries.insert(
+            reservation,
+            Slot {
+                connection: 0,
+                phase: Phase::Quarantined,
+            },
+        );
+    }
+
     pub(super) fn abandon_launch(&mut self, reservation: ReservationId) {
         if matches!(
             self.entries.get(&reservation),

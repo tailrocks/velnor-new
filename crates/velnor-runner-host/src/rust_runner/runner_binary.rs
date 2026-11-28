@@ -11,6 +11,7 @@ use rustix::process::geteuid;
 use sha2::{Digest, Sha256};
 
 use super::machine::failure;
+use super::store::require_no_acl;
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -33,11 +34,11 @@ pub(super) fn open(path: &Path) -> Result<File, HostError> {
         && stat.st_uid == geteuid().as_raw()
         && !mode.intersects(Mode::WGRP | Mode::WOTH)
         && mode.contains(Mode::XUSR);
-    if safe {
-        Ok(File::from(descriptor))
-    } else {
-        Err(failure(RustRunnerFailure::BinaryUnsafe))
+    if !safe {
+        return Err(failure(RustRunnerFailure::BinaryUnsafe));
     }
+    require_no_acl(path, RustRunnerFailure::BinaryUnsafe)?;
+    Ok(File::from(descriptor))
 }
 
 pub(super) fn digest(path: &Path) -> Result<String, HostError> {

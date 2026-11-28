@@ -43,7 +43,6 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     wait_for("the stand-in and its child to end", 10, || {
         !process_exists(&pid) && !process_exists(&child)
     });
-    assert!(!world.store.join("jit").join(&name).exists());
     assert!(!world.work().join(job.to_string()).exists());
     assert!(!world.stage().join(job.to_string()).exists());
     let state: serde_json::Value =

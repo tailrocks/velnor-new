@@ -131,8 +131,9 @@ impl HostConfig {
     }
 
     pub(crate) fn validate(&self) -> Result<(), HostError> {
-        if self.schema != 2 || self.host.max_jobs == 0 || self.host.machine_disk_cap_gib().is_none()
-        {
+        let disk_unsound = self.host.launch_mode == LaunchMode::RustRunner
+            && self.host.machine_disk_cap_gib().is_none();
+        if self.schema != 2 || self.host.max_jobs == 0 || disk_unsound {
             return Err(HostError::Config);
         }
         self.resource_budget()?

@@ -23,7 +23,6 @@ export interface Config {
   canary_tag: string;
   queue_url: string;
   admin_url: string;
-  store: string;
   work_dir: string;
   ps_table: string;
   default_branch?: string;

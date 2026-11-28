@@ -6,11 +6,9 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::shape::{GuestUser, ListedConfig, Shape};
+use super::shape::{GuestUser, ListedConfig};
 use super::store::{HostHold, Store};
-use super::{
-    GIB, GUEST_SHARE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb, runner_binary,
-};
+use super::{GIB, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb, runner_binary};
 use crate::error::{HostError, RustRunnerFailure};
 
 const MACHINE_DISTRO: &str = "ubuntu";
@@ -70,24 +68,13 @@ impl RustRunnerLauncher {
             Some(image) if image.distro == MACHINE_DISTRO && image.arch == MACHINE_ARCH => {}
             _ => return Err(failure(RustRunnerFailure::MachineIncompatible)),
         }
-        let shape = Shape {
-            share: &self.host_store,
-            guest_share: GUEST_SHARE,
-            disk_bytes: self.disk_cap_bytes(),
-        };
         match &machine.config {
-            Some(config) if config.matches(&shape) => Ok(true),
+            Some(config) if config.matches(self.disk_cap_bytes()) => Ok(true),
             _ => Err(failure(RustRunnerFailure::MachineShape)),
         }
     }
 
     fn create_machine(&self) -> Result<(), HostError> {
-        let share = self
-            .host_store
-            .to_str()
-            .filter(|path| !path.contains(':'))
-            .map(|path| format!("{path}:{GUEST_SHARE}"))
-            .ok_or_else(|| failure(RustRunnerFailure::MachineCreate))?;
         let disk = format!("{}G", self.disk_cap_gib);
         let mut command = self.orb();
         command.args([
@@ -96,8 +83,6 @@ impl RustRunnerLauncher {
             "--isolate-network",
             "--disk",
             &disk,
-            "--mount",
-            &share,
             "-a",
             MACHINE_ARCH,
             MACHINE_DISTRO,

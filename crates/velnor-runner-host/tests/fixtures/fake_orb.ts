@@ -5,13 +5,11 @@
 import {
   appendFileSync,
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -21,7 +19,6 @@ import { basename } from "node:path";
 import { guestCommand, listing } from "./fake_orb_guest.ts";
 
 const RUNNER = "/var/lib/velnor/bin/velnor-runner";
-const GUEST = "/var/lib/velnor-host";
 const root = import.meta.dir;
 const settings = new Map<string, string>();
 for (const line of readFileSync(`${root}/fake_orb.env`, "utf8").split("\n")) {
@@ -181,7 +178,7 @@ function inGuest(args: string[]): never {
     case RUNNER:
       return runner(rest);
     default: {
-      const guest = { root: `${root}/guest`, share: setting("FAKE_ORB_STORE"), setting };
+      const guest = { root: `${root}/guest`, setting };
       const code = guestCommand(guest, rest);
       return finish(code ?? 64);
     }
@@ -228,12 +225,10 @@ function escapeGroup(): void {
 
 function runner(rest: string[]): never {
   if (setting("FAKE_RUNNER_ESCAPE") !== "") escapeGroup();
-  const jit = `${setting("FAKE_ORB_STORE")}${text(rest[3]).replace(`@${GUEST}`, "")}`;
   const work = `${root}/guest${text(rest[5])}`;
-  const name = basename(jit);
-  copyFileSync(jit, `${seen}/${name}`);
+  const name = `${basename(work)}.jit`;
+  writeFileSync(`${seen}/${name}`, readFileSync(0));
   writeFileSync(`${seen}/${name}.env`, environment());
-  writeFileSync(`${seen}/${name}.mode`, `${(statSync(jit).mode & 0o777).toString(8)}\n`);
   mkdirSync(work, { recursive: true });
   const stage = work.replace("/gen/work/", "/gen/stage/");
   mkdirSync(stage, { recursive: true });

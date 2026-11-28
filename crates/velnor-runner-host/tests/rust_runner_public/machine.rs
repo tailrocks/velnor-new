@@ -13,7 +13,6 @@ use super::support::Fixture;
 type Check = Result<(), Box<dyn Error>>;
 type Mutation = fn(&mut serde_json::Value);
 
-const SHARE: &str = "/var/lib/velnor-host";
 const CAP_BYTES: u64 = 172 << 30;
 const OPEN: [&str; 10] = [
     "var/lib/velnor",
@@ -43,16 +42,13 @@ fn mode(path: &PathBuf) -> Result<u32, Box<dyn Error>> {
 }
 
 #[test]
-fn rust_runner_creates_the_isolated_machine_with_the_disk_cap_and_the_share() -> Check {
+fn rust_runner_creates_the_isolated_machine_with_the_disk_cap_and_no_mounts() -> Check {
     let fixture = Fixture::new("[]")?;
     fixture.launcher().ensure_machine()?;
     let log = fixture.log()?;
     assert_eq!(log[0], "list -f json");
-    let create = format!(
-        "create --isolated --isolate-network --disk 172G --mount {}:{SHARE} -a arm64 ubuntu velnor",
-        fixture.store.display()
-    );
-    assert!(log.contains(&create), "{log:?}");
+    let create = "create --isolated --isolate-network --disk 172G -a arm64 ubuntu velnor";
+    assert!(log.contains(&create.to_owned()), "{log:?}");
     fixture.launcher().ensure_machine()?;
     let creates = fixture
         .log()?
@@ -60,10 +56,8 @@ fn rust_runner_creates_the_isolated_machine_with_the_disk_cap_and_the_share() ->
         .filter(|line| line.starts_with("create"))
         .count();
     assert_eq!(creates, 1);
-    for name in ["jit", "trusted"] {
-        assert!(fixture.store.join(name).is_dir(), "{name}");
-    }
-    assert!(!fixture.store.join("bin").exists());
+    assert!(fixture.store.is_dir());
+    assert_eq!(std::fs::read_dir(&fixture.store)?.count(), 0);
     let small = Fixture::new("[]")?;
     small.configure(&format!("FAKE_GUEST_CAP_BYTES={}\n", 8u64 << 30))?;
     small.launcher().with_machine_disk(8, 64).ensure_machine()?;
@@ -71,7 +65,8 @@ fn rust_runner_creates_the_isolated_machine_with_the_disk_cap_and_the_share() ->
         small
             .log()?
             .iter()
-            .any(|line| line.starts_with("create --isolated --isolate-network --disk 8G --mount ")),
+            .any(|line| line
+                == "create --isolated --isolate-network --disk 8G -a arm64 ubuntu velnor"),
         "{:?}",
         small.log()?
     );
@@ -108,7 +103,7 @@ fn rust_runner_keeps_a_machine_of_the_required_shape() -> Check {
 
 #[test]
 fn rust_runner_refuses_a_machine_that_is_not_confined() -> Check {
-    let breaks: [(&str, Mutation); 9] = [
+    let breaks: [(&str, Mutation); 6] = [
         ("not isolated", |c| {
             c["isolated"] = json!(false);
         }),
@@ -126,19 +121,8 @@ fn rust_runner_refuses_a_machine_that_is_not_confined() -> Check {
                 object.remove("disk_limit_bytes");
             }
         }),
-        ("no mount", |c| {
-            c["mounts"] = json!([]);
-        }),
-        ("another mount source", |c| {
-            c["mounts"][0]["source"] = json!("/opt/other-share");
-        }),
-        ("another mount target", |c| {
-            c["mounts"][0]["destination"] = json!("/mnt/mac");
-        }),
-        ("an extra mount", |c| {
-            if let Some(mounts) = c["mounts"].as_array_mut() {
-                mounts.push(json!({"source": "/opt/home", "destination": "/mnt/home"}));
-            }
+        ("a mount", |c| {
+            c["mounts"] = json!([{"source": "/opt/share", "destination": "/var/lib/velnor-host"}]);
         }),
     ];
     for (name, mutate) in breaks {
@@ -168,42 +152,6 @@ fn rust_runner_refuses_a_machine_that_is_not_confined() -> Check {
             .with_machine_disk(8, 64)
             .ensure_machine()
             .err(),
-        Some(refused(RustRunnerFailure::MachineShape))
-    );
-    Ok(())
-}
-
-#[test]
-fn rust_runner_compares_the_canonical_share_path() -> Check {
-    for listed_through_alias in [true, false] {
-        let fixture = Fixture::ready()?;
-        let alias = fixture.root.join("alias");
-        std::os::unix::fs::symlink(&fixture.root, &alias)?;
-        let through_alias = alias.join("store");
-        let (listed, used) = if listed_through_alias {
-            (&through_alias, &fixture.store)
-        } else {
-            (&fixture.store, &through_alias)
-        };
-        fixture.list_share(listed)?;
-        let launcher = velnor_runner_host::RustRunnerLauncher::new(
-            fixture.root.join("orb"),
-            used.clone(),
-            fixture.root.join("host-runner"),
-        );
-        launcher.ensure_machine()?;
-        assert!(
-            fixture
-                .log()?
-                .iter()
-                .all(|line| !line.starts_with("create")),
-            "{listed_through_alias}"
-        );
-    }
-    let other = Fixture::ready()?;
-    other.list_share(&other.root.join("elsewhere"))?;
-    assert_eq!(
-        other.launcher().ensure_machine().err(),
         Some(refused(RustRunnerFailure::MachineShape))
     );
     Ok(())
@@ -358,43 +306,5 @@ fn rust_runner_job_limit_follows_the_configured_machine_disk() -> Check {
         fixture.launcher().with_machine_disk(8, 9).job_limit_gib(),
         9
     );
-    Ok(())
-}
-
-#[test]
-fn rust_runner_sweep_empties_the_job_dirs_inside_the_machine() -> Check {
-    let fixture = Fixture::ready()?;
-    fixture.launcher().ensure_machine()?;
-    for dir in ["work", "stage"] {
-        let locked = fixture.guest(&format!("srv/velnor/gen/{dir}/9/locked"));
-        std::fs::create_dir_all(locked.join("inner"))?;
-        std::fs::write(locked.join("keep"), "")?;
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500))?;
-        std::fs::write(fixture.guest(&format!("srv/velnor/gen/{dir}/.hidden")), "")?;
-    }
-    fixture.launcher().sweep()?;
-    for dir in ["work", "stage"] {
-        let left = std::fs::read_dir(fixture.guest(&format!("srv/velnor/gen/{dir}")))?.count();
-        assert_eq!(left, 0, "{dir}");
-        assert!(fixture.guest(&format!("srv/velnor/gen/{dir}")).is_dir());
-    }
-    Ok(())
-}
-
-#[test]
-fn rust_runner_sweep_refuses_job_dirs_it_cannot_empty() -> Check {
-    let fixture = Fixture::ready()?;
-    fixture.launcher().ensure_machine()?;
-    let planted = fixture.guest("srv/velnor/gen/work/9/data");
-    std::fs::create_dir_all(&planted)?;
-    fixture.configure("FAKE_GUEST_WEDGE=1\n")?;
-    assert_eq!(
-        fixture.launcher().sweep().err(),
-        Some(refused(RustRunnerFailure::JobDirsWedged))
-    );
-    assert!(planted.exists());
-    fixture.configure("")?;
-    fixture.launcher().sweep()?;
-    assert!(!planted.exists());
     Ok(())
 }

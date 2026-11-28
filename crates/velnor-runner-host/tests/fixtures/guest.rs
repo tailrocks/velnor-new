@@ -9,11 +9,7 @@ pub(crate) fn environment(cap_gib: u64) -> String {
     format!("FAKE_GUEST_CAP_BYTES={}\n", cap_gib << 30)
 }
 
-pub(crate) fn machines(
-    store: &Path,
-    cap_gib: u64,
-    mutate: impl FnOnce(&mut serde_json::Value),
-) -> String {
+pub(crate) fn machines(cap_gib: u64, mutate: impl FnOnce(&mut serde_json::Value)) -> String {
     let mut machine = serde_json::json!({
         "name": "velnor",
         "image": {"distro": "ubuntu", "arch": "arm64"},
@@ -22,7 +18,6 @@ pub(crate) fn machines(
             "isolate_network": true,
             "forward_ssh_agent": false,
             "disk_limit_bytes": cap_gib << 30,
-            "mounts": [{"source": store, "destination": "/var/lib/velnor-host"}],
         },
     });
     mutate(&mut machine["config"]);
@@ -57,7 +52,11 @@ pub(crate) fn prepare_guest(root: &Path) -> io::Result<()> {
     std::fs::write(root.join("guest/usr/sbin/ip"), "")?;
     std::fs::write(
         root.join("guest/etc/passwd"),
-        "root:x:0:0:root:/root:/bin/bash\n",
+        "root:x:0:0:root:/root:/bin/bash\nubuntu:x:501:501::/home/ubuntu:/bin/bash\n",
+    )?;
+    std::fs::write(
+        root.join("guest/etc/group"),
+        "root:x:0:\nsudo:x:27:ubuntu\nubuntu:x:501:\n",
     )?;
     for path in ["guest", "guest/var", "guest/var/lib", "guest/srv"] {
         std::fs::set_permissions(root.join(path), std::fs::Permissions::from_mode(0o755))?;
