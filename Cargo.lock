@@ -4473,6 +4473,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-tungstenite",
+ "toml",
  "url",
  "uuid",
  "velnor-cache-rules",

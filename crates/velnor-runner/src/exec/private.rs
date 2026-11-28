@@ -36,6 +36,12 @@ pub(super) async fn write_replacing(path: &Path, contents: &[u8]) -> Result<(), 
     write(options, path, contents).await
 }
 
+pub(crate) async fn append(path: &Path, contents: &[u8]) -> Result<(), ExecError> {
+    let mut options = OpenOptions::new();
+    options.append(true);
+    write(options, path, contents).await
+}
+
 async fn write(options: OpenOptions, path: &Path, contents: &[u8]) -> Result<(), ExecError> {
     let context = || format!("write {}", path.display());
     let mut file = options

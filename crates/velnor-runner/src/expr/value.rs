@@ -106,6 +106,25 @@ impl ObjectValue {
             .map(|(_, value)| value)
     }
 
+    pub(crate) fn with_strings(&self, pairs: &[(String, String)]) -> Self {
+        let mut entries = self.entries.as_ref().clone();
+        for (name, value) in pairs {
+            let same = |known: &str| {
+                if self.case_sensitive {
+                    known == name
+                } else {
+                    ordinal_ignore_case_eq(known, name)
+                }
+            };
+            entries.retain(|(known, _)| !same(known));
+            entries.push((name.clone(), Value::String(value.clone())));
+        }
+        Self {
+            entries: Arc::new(entries),
+            case_sensitive: self.case_sensitive,
+        }
+    }
+
     fn same_instance(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.entries, &other.entries)
     }

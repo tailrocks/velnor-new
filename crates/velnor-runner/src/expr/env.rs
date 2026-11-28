@@ -169,6 +169,26 @@ impl ExprEnv {
         Ok(())
     }
 
+    pub fn merge_strings(&mut self, root: RootContext, pairs: &[(String, String)]) {
+        let merged = match self.context(root) {
+            Value::Object(object) => object.with_strings(pairs),
+            _ => ObjectValue::new(Vec::new()).with_strings(pairs),
+        };
+        self.update_contexts(|contexts| {
+            contexts.insert(root, Value::Object(merged));
+        });
+    }
+
+    pub fn retain_only(&mut self, keep: &[RootContext]) {
+        self.update_contexts(|contexts| contexts.retain(|root, _| keep.contains(root)));
+    }
+
+    fn update_contexts(&mut self, update: impl FnOnce(&mut BTreeMap<RootContext, Value>)) {
+        let mut contexts = std::mem::take(&mut self.contexts).into_inner();
+        update(&mut contexts);
+        self.contexts = Secret::new(contexts);
+    }
+
     pub(crate) fn context(&self, root: RootContext) -> Value {
         self.contexts
             .expose()
@@ -180,7 +200,7 @@ impl ExprEnv {
 
 impl ParseEnvironment for ExprEnv {
     fn root_context(&self, name: &str) -> Option<RootContext> {
-        RootContext::parse(name)
+        RootContext::parse(name).filter(|root| self.contexts.expose().contains_key(root))
     }
 
     fn function(&self, name: &str) -> Option<Function> {

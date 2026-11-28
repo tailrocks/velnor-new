@@ -40,6 +40,7 @@ pub use cancel::JobCancel;
 pub use facts::JobFacts;
 pub use inputs::Inputs;
 pub use job::run_job;
+pub(crate) use private::append;
 pub use sink::{LogSink, StdoutSink};
 pub use tool_cache::{TOOL_CACHE_VARIABLES, tool_cache_from_env};
 

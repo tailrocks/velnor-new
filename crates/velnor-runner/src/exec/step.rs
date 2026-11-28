@@ -340,7 +340,7 @@ impl Captured {
 pub(super) async fn capture(
     spec: &ProcessSpec<'_>,
     limits: &Limits<'_>,
-) -> Result<String, ExecError> {
+) -> Result<Vec<u8>, ExecError> {
     let mut stdout = Captured::default();
     let mut stderr = Captured::default();
     let ending = drive(spec, limits, false, |chunk| {
@@ -358,9 +358,7 @@ pub(super) async fn capture(
         Ending::Exited(status) if status.success() && stdout.truncated => Err(ExecError::Invalid(
             format!("{} printed more than {CAPTURE_LIMIT} bytes", command()),
         )),
-        Ending::Exited(status) if status.success() => {
-            Ok(String::from_utf8_lossy(&stdout.bytes).into_owned())
-        }
+        Ending::Exited(status) if status.success() => Ok(stdout.bytes),
         Ending::Exited(_) => Err(ExecError::Invalid(format!(
             "{} failed: {}",
             command(),
