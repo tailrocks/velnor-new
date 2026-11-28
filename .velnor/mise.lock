@@ -3,14 +3,14 @@
 lockfile_version = 3
 
 [[tools."github:jdx/jactionlint"]]
-version = "2.6.0"
+version = "2.7.0"
 backend = "github:jdx/jactionlint"
-specifiers = ["2.6.0"]
+specifiers = ["v2.7.0"]
 
 [tools."github:jdx/jactionlint"."platforms.linux-x64"]
-checksum = "sha256:d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8"
-url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/740515801"
+checksum = "sha256:a86405db17b2dd04c0b431d07da7c4cc3ff49f13f5b3c0f72d732d72af4bee7a"
+url = "https://github.com/jdx/jactionlint/releases/download/v2.7.0/jactionlint_2.7.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/jdx/jactionlint/releases/assets/804234322"
 provenance = "github-attestations"
 
 [[tools.mr-boxington]]
