@@ -283,20 +283,20 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
-            packages: scope(peers, root, &normalized, |lane| lane.lint),
+            packages: gate_packages(peers, root, &normalized, |lane| lane.lint),
             features: features(),
         });
     }
     if lane.doc && documented.insert(normalized.clone()) {
         commands.push(CargoCommand::DocFeatures {
-            packages: scope(peers, root, &normalized, |lane| lane.doc),
+            packages: gate_packages(peers, root, &normalized, |lane| lane.doc),
             features: features(),
         });
     }
     commands
 }
 
-fn scope(
+fn gate_packages(
     peers: &[&TestLane],
     root: &RustRoot,
     normalized: &LaneFeatures,

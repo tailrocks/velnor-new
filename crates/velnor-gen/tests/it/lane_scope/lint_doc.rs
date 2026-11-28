@@ -32,13 +32,11 @@ fn step(config: &str, name: &str) -> Result<(String, String), Box<dyn Error>> {
     step_in(&lane_view(HELPER, config)?, name)
 }
 
-fn with_member(repo: &mut RepoView, name: &str, features: &str) -> Result<(), Box<dyn Error>> {
+fn with_member(repo: &mut RepoView, name: &str, manifest_text: &str) -> Result<(), Box<dyn Error>> {
     let manifest = RepoPath::new(format!("{name}/Cargo.toml"))?;
     repo.tracked_paths.insert(manifest.clone());
-    repo.files.insert(
-        manifest.clone(),
-        format!("[features]\n{features}").into_bytes(),
-    );
+    repo.files
+        .insert(manifest.clone(), manifest_text.as_bytes().to_vec());
     let members = &mut repo
         .rust_metadata
         .get_mut(&RepoPath::new("Cargo.toml")?)
@@ -66,21 +64,29 @@ fn step_in(repo: &RepoView, name: &str) -> Result<(String, String), Box<dyn Erro
     Ok((text("if")?, text("run")?))
 }
 
+fn lane_with(features: &str) -> String {
+    NAMED.replace("local-mode", features)
+}
+
+fn gated_on(condition: &str, package: &str) -> bool {
+    condition.contains(&format!("' -p {package} '"))
+}
+
 #[test]
-fn a_named_feature_lane_lints_only_its_packages_and_only_when_one_is_selected() -> TestResult {
+fn a_named_feature_lane_lints_the_workspace_and_gates_on_its_packages() -> TestResult {
     let (condition, run) = step(NAMED, LINT)?;
     assert!(condition.contains(&selected("package-0")), "{condition}");
-    assert!(run.contains("clippy -p package-0 --all-targets"), "{run}");
-    assert!(!run.contains("--workspace"), "{run}");
+    assert!(run.contains("clippy --workspace --all-targets"), "{run}");
+    assert!(!run.contains("-p package-0"), "{run}");
     Ok(())
 }
 
 #[test]
-fn a_named_feature_lane_documents_only_its_packages_and_only_when_one_is_selected() -> TestResult {
+fn a_named_feature_lane_documents_the_workspace_and_gates_on_its_packages() -> TestResult {
     let (condition, run) = step(NAMED, DOC)?;
     assert!(condition.contains(&selected("package-0")), "{condition}");
-    assert!(run.contains("cargo doc -p package-0 --no-deps"), "{run}");
-    assert!(!run.contains("--workspace"), "{run}");
+    assert!(run.contains("cargo doc --workspace --no-deps"), "{run}");
+    assert!(!run.contains("-p package-0"), "{run}");
     Ok(())
 }
 
@@ -104,7 +110,7 @@ fn an_all_features_or_no_default_features_lane_lints_and_documents_the_workspace
 }
 
 #[test]
-fn a_lint_and_a_doc_shared_with_a_lane_without_packages_stay_unscoped() -> TestResult {
+fn a_lint_and_a_doc_shared_with_a_lane_without_packages_are_not_gated_on_packages() -> TestResult {
     let config = format!("{NAMED}{WITHOUT_PACKAGES}");
     let (lint, lint_run) = step(&config, LINT)?;
     assert!(!lint.contains("package_args"), "{lint}");
@@ -116,33 +122,52 @@ fn a_lint_and_a_doc_shared_with_a_lane_without_packages_stay_unscoped() -> TestR
 }
 
 #[test]
-fn lanes_sharing_features_and_a_package_lint_that_package_once() -> TestResult {
+fn lanes_sharing_features_and_a_package_gate_on_that_package_once() -> TestResult {
     let second = NAMED.replace("test(~local::)", "test(~other::)");
-    let (_, run) = step(&format!("{NAMED}{second}"), LINT)?;
-    assert_eq!(run.matches("-p package-0").count(), 1, "{run}");
+    let (condition, _) = step(&format!("{NAMED}{second}"), LINT)?;
+    assert_eq!(
+        condition.matches("' -p package-0 '").count(),
+        1,
+        "{condition}"
+    );
     Ok(())
 }
 
 #[test]
-fn a_member_defining_the_lane_feature_is_linted_and_documented_with_the_lane_packages() -> TestResult
-{
+fn a_member_defining_the_lane_feature_joins_the_gate_of_the_lane_packages() -> TestResult {
     let mut repo = lane_view(HELPER, NAMED)?;
-    with_member(&mut repo, "definer", "local-mode = []\n")?;
-    with_member(&mut repo, "bystander", "other = []\n")?;
+    with_member(&mut repo, "definer", "[features]\nlocal-mode = []\n")?;
+    with_member(&mut repo, "bystander", "[features]\nother = []\n")?;
     for (name, command) in [(LINT, "clippy"), (DOC, "cargo doc")] {
         let (condition, run) = step_in(&repo, name)?;
-        assert!(
-            run.contains(&format!("{command} -p definer -p package-0 ")),
-            "{run}"
-        );
-        assert!(!run.contains("bystander"), "{run}");
-        assert!(condition.contains("' -p definer '"), "{condition}");
+        assert!(run.contains(&format!("{command} --workspace ")), "{run}");
+        assert!(!run.contains("-p definer"), "{run}");
+        assert!(gated_on(&condition, "definer"), "{condition}");
+        assert!(gated_on(&condition, "package-0"), "{condition}");
+        assert!(!condition.contains("bystander"), "{condition}");
     }
     Ok(())
 }
 
 #[test]
-fn lanes_sharing_features_with_different_packages_lint_and_document_the_union() -> TestResult {
+fn a_member_with_an_optional_dependency_of_the_lane_feature_name_joins_the_gate() -> TestResult {
+    let manifests = [
+        "[dependencies]\nx = { version = \"1\", optional = true }\n",
+        "[dependencies]\nx = { package = \"other\", version = \"1\", optional = true }\n",
+    ];
+    for manifest in manifests {
+        let mut repo = lane_view(HELPER, &lane_with("x"))?;
+        with_member(&mut repo, "optional", manifest)?;
+        for name in ["Lint (features: x)", "Documentation (features: x)"] {
+            let (condition, _) = step_in(&repo, name)?;
+            assert!(gated_on(&condition, "optional"), "{manifest}: {condition}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn lanes_sharing_features_with_different_packages_gate_on_the_union() -> TestResult {
     let mut repo = lane_view(
         HELPER,
         &format!(
@@ -153,12 +178,11 @@ fn lanes_sharing_features_with_different_packages_lint_and_document_the_union() 
         ),
     )?;
     with_member(&mut repo, "package-1", "")?;
-    for (name, command) in [(LINT, "clippy"), (DOC, "cargo doc")] {
-        let (_, run) = step_in(&repo, name)?;
-        assert!(
-            run.contains(&format!("{command} -p package-0 -p package-1 ")),
-            "{run}"
-        );
+    for name in [LINT, DOC] {
+        let (condition, run) = step_in(&repo, name)?;
+        assert!(gated_on(&condition, "package-0"), "{condition}");
+        assert!(gated_on(&condition, "package-1"), "{condition}");
+        assert!(run.contains("--workspace"), "{run}");
     }
     Ok(())
 }

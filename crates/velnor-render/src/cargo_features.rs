@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{FilterRef, LaneFeatures, PackageName, TEST_STEP};
+use velnor_model::{FilterRef, LaneFeatures, TEST_STEP};
 
-use crate::cargo::{WORKSPACE, clippy, lane_flags, nextest_run, without_binaries};
+use crate::cargo::{DOC_RUN, clippy, lane_flags, nextest_run, without_binaries};
 use crate::rules::Value;
 
 /// The default step may select nothing, because the plan narrows it to the
@@ -64,46 +64,18 @@ pub(crate) fn expr(expr: &str, except: &[String]) -> String {
 pub(crate) fn clippy_features(
     cargo: &str,
     features: &LaneFeatures,
-    packages: &[PackageName],
 ) -> (String, String, Vec<(String, Value)>) {
-    let (name, run, env) = clippy(
-        &format!("{cargo}{}", lane_flags(features)),
-        &[],
-        "",
-        &package_scope(packages),
-    );
+    let (name, run, env) = clippy(&format!("{cargo}{}", lane_flags(features)), &[], "");
     (format!("{name} ({})", features.label()), run, env)
 }
 
 pub(crate) fn doc_features(
     cargo: &str,
     features: &LaneFeatures,
-    packages: &[PackageName],
 ) -> (String, String, Vec<(String, Value)>) {
     (
         format!("Documentation ({})", features.label()),
-        format!(
-            "{}{cargo}{}",
-            doc_run(&package_scope(packages)),
-            lane_flags(features)
-        ),
+        format!("{DOC_RUN}{cargo}{}", lane_flags(features)),
         vec![],
     )
-}
-
-pub(crate) fn doc_run(scope: &str) -> String {
-    format!(
-        "cargo doc {scope} --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
-    )
-}
-
-pub(crate) fn package_scope(packages: &[PackageName]) -> String {
-    if packages.is_empty() {
-        return WORKSPACE.to_owned();
-    }
-    packages
-        .iter()
-        .map(|package| format!("-p {package}"))
-        .collect::<Vec<_>>()
-        .join(" ")
 }

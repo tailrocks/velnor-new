@@ -1,19 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::fs::symlink;
+
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo, selected};
 
 const NOTHING: &str = "Cargo.toml: none\ntools/Cargo.toml: none\n";
 
-fn explained(include: &str, changed: &str) -> String {
-    let repo = plan_repo(&format!("embedded-{}", changed.replace('/', "-")));
+fn embedded_repo(name: &str, include: &str) -> Repo {
+    let repo = plan_repo(name);
     repo.write_all(&[
         (".velnor/rust-ci.toml", "non_inputs = [\"notes/**\"]\n"),
         ("b/src/lib.rs", include),
         ("notes/x.md", "# notes\n"),
         ("shared/h.txt", "header\n"),
     ]);
+    repo
+}
+
+fn explained(include: &str, changed: &str) -> String {
+    let repo = embedded_repo(&format!("embedded-{}", changed.replace('/', "-")), include);
     explain(&repo, changed)
 }
 
@@ -88,4 +95,34 @@ fn a_build_output_include_tail_without_a_leading_slash_can_read_anything() {
 fn a_manifest_dir_include_with_a_trailing_comma_still_reads_only_the_file_it_names() {
     let include = "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../shared/h.txt\",));\n";
     assert_eq!(explained(include, "notes/x.md"), NOTHING);
+}
+
+fn linked(name: &str, include: &str, link: &str, target: &str) -> String {
+    let repo = embedded_repo(name, include);
+    symlink(target, repo.root().join(link)).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--all"]);
+    explain(&repo, "notes/x.md")
+}
+
+#[test]
+fn a_manifest_dir_include_through_a_tracked_symlink_can_read_anything() {
+    let include = "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/data.txt\"));\n";
+    let planned = linked(
+        "embedded-link-manifest",
+        include,
+        "b/data.txt",
+        "../notes/x.md",
+    );
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
+
+#[test]
+fn a_relative_include_below_a_tracked_symlinked_folder_can_read_anything() {
+    let planned = linked(
+        "embedded-link-relative",
+        "include_str!(\"inc/x.md\");\n",
+        "b/src/inc",
+        "../../notes",
+    );
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
 }

@@ -162,11 +162,26 @@ impl<'a> Scan<'a> {
                 self.reads.insert(None);
                 continue;
             };
+            if self.through_symlink(&resolved) {
+                self.reads.insert(None);
+                continue;
+            }
             if *name == "include" {
                 self.follow(&resolved);
             }
             self.reads.insert(Some(resolved));
         }
+    }
+
+    fn through_symlink(&self, path: &RepoPath) -> bool {
+        let mut at = Some(path.clone());
+        while let Some(current) = at {
+            if self.view.symlinks.contains(&current) {
+                return true;
+            }
+            at = current.parent();
+        }
+        false
     }
 
     fn under_manifest_dir(&self, rest: &str) -> Option<RepoPath> {
