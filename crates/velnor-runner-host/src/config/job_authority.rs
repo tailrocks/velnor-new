@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{ConnectionId, PullRequestRule, WorkflowEvent};
-pub(crate) use schema_probe::{require_current_json_policy, require_current_toml_policies};
+pub(crate) use schema_probe::{
+    require_current_journal_policy, require_current_json_policy, require_current_toml_policies,
+};
 pub(crate) use validate::validate_policies;
 
 pub(crate) struct JobAuthorityLookup<'a> {

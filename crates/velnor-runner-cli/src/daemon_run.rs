@@ -37,10 +37,13 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
                 continue;
             }
         };
-        let Ok(config) = HostConfig::parse(&text) else {
-            eprintln!("invalid config");
-            pause();
-            continue;
+        let config = match HostConfig::parse(&text) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("{error}");
+                pause();
+                continue;
+            }
         };
         return drive(state, &config, lock);
     }

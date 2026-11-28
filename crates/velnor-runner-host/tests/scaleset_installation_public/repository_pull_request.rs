@@ -309,26 +309,37 @@ fn public_repository_mode_refuses_a_trusted_publication_pull_request_context() -
 #[test]
 fn public_outdated_job_authority_policy_asks_for_regeneration() -> TestResult<()> {
     let (config, id, genuine) = repository_config_and_policy()?;
+    let expected = HostError::JobAuthorityPolicySchema {
+        found: 1,
+        expected: 2,
+    };
     let outdated = genuine.replace("\"schema_version\":2", "\"schema_version\":1");
     assert_ne!(outdated, genuine);
     assert_eq!(
         config
             .with_job_authority_policy_json(&id, &reseal(&outdated)?)
             .err(),
-        Some(HostError::JobAuthorityPolicyOutdated)
+        Some(expected)
     );
     assert!(
-        HostError::JobAuthorityPolicyOutdated
+        expected
             .to_string()
-            .contains("regenerate the job-authority policy")
+            .contains("schema 1, expected 2; regenerate the job-authority policy")
+    );
+    let newer = genuine.replace("\"schema_version\":2", "\"schema_version\":3");
+    assert_eq!(
+        config
+            .with_job_authority_policy_json(&id, &reseal(&newer)?)
+            .err(),
+        Some(HostError::JobAuthorityPolicySchema {
+            found: 3,
+            expected: 2
+        })
     );
     let persisted = format!(
         "{}[[job_authority_policies]]\nschema_version = 1\npull_request_rules = []\n",
         host_toml(REPOSITORY_POLICY_TOML)
     );
-    assert_eq!(
-        HostConfig::parse_draft(&persisted).err(),
-        Some(HostError::JobAuthorityPolicyOutdated)
-    );
+    assert_eq!(HostConfig::parse_draft(&persisted).err(), Some(expected));
     Ok(())
 }

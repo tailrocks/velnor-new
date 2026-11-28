@@ -172,9 +172,14 @@ pub enum HostError {
     Config,
 
     #[error(
-        "the job-authority policy is from an older schema; regenerate the job-authority policy"
+        "the job-authority policy is schema {found}, expected {expected}; regenerate the job-authority policy"
     )]
-    JobAuthorityPolicyOutdated,
+    JobAuthorityPolicySchema { found: u32, expected: u32 },
+
+    #[error(
+        "the journal launch.db holds a job-authority policy of schema {found}, expected {expected}; remove launch.db from the state directory, then reconnect"
+    )]
+    JournalPolicySchema { found: u32, expected: u32 },
 
     #[error("scale set selector does not match the runner platform")]
     PlatformSelector,
@@ -295,7 +300,8 @@ impl HostError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
-            Self::JobAuthorityPolicyOutdated => "job_authority_policy_outdated",
+            Self::JobAuthorityPolicySchema { .. } => "job_authority_policy_schema",
+            Self::JournalPolicySchema { .. } => "journal_policy_schema",
             Self::PlatformSelector => "platform_selector",
             Self::DeveloperImages => "developer_images",
             Self::Path => "path",

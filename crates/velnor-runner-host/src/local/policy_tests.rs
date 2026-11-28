@@ -318,3 +318,19 @@ fn a_request_with_another_repository_id_than_the_policy_names_is_refused() {
     assert!(approved().approves(&push(), Side::Trusted, Some(CONTENT)));
     assert!(!approved().approves(&other, Side::Trusted, Some(CONTENT)));
 }
+
+#[test]
+fn a_policy_of_another_schema_asks_for_regeneration() {
+    let mut value = document(
+        &json!([]),
+        &[entry("ci", &[context("push", &["main"], &json!([]))])],
+    );
+    value["schema_version"] = json!(1);
+    assert_eq!(
+        Policy::parse(value.to_string().as_bytes()).err(),
+        Some(crate::error::HostError::JobAuthorityPolicySchema {
+            found: 1,
+            expected: 2
+        })
+    );
+}

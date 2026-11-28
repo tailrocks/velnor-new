@@ -11,6 +11,7 @@ mod github;
 mod historical;
 mod inbox;
 mod late_creation;
+mod outdated_policy;
 mod policy_rotation;
 mod population;
 mod probe_docker;

@@ -20,6 +20,9 @@ mod source_policy;
 
 pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
 pub use developer_images::DeveloperImages;
+pub(crate) use job_authority::require_current_journal_policy;
+#[cfg(feature = "local-mode")]
+pub(crate) use job_authority::require_current_json_policy;
 pub(crate) use job_authority::{
     ApprovedJobAuthorityEntry, ApprovedWorkflowSource, JobAuthorityLookup,
 };
