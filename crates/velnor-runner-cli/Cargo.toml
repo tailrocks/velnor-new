@@ -35,6 +35,10 @@ name = "velnor_runner_cli"
 path = "src/lib.rs"
 
 [[test]]
+name = "daemon_environment_public"
+path = "tests/daemon_environment_public.rs"
+
+[[test]]
 name = "daemon_lock_process"
 path = "tests/daemon_lock_process.rs"
 
@@ -49,6 +53,10 @@ path = "tests/service_environment_public.rs"
 [[test]]
 name = "home_resolution_public"
 path = "tests/home_resolution_public.rs"
+
+[[test]]
+name = "outdated_policy_public"
+path = "tests/outdated_policy_public.rs"
 
 [[bin]]
 name = "velnor-host"

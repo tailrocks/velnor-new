@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::filesystem::atomic_write;
 use super::quarantine::{open_file, safe_plist_metadata};
-use super::trust::untrusted;
+use velnor_runner_host::untrusted_path;
 
 const ORB: &str = "orb";
 const RUNNER: &str = "velnor-runner";
@@ -61,7 +61,7 @@ pub(super) fn resolve(
 }
 
 fn refuse_untrusted(path: &Path, installer: u32) -> Result<(), Missing> {
-    untrusted(path, installer).map_or(Ok(()), |unsafe_path| Err(Missing::Unsafe(unsafe_path)))
+    untrusted_path(path, installer).map_or(Ok(()), |unsafe_path| Err(Missing::Unsafe(unsafe_path)))
 }
 
 pub(super) fn verify_recorded(state: &Path, installer: u32) -> Result<(), Missing> {

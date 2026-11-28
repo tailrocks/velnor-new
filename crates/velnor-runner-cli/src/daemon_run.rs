@@ -8,11 +8,16 @@ use std::time::Duration;
 
 use velnor_runner_host::{
     DaemonLock, HostConfig, ListenFault, MAX_HOST_TOML_BYTES, run_host_blocking,
+    untrusted_launch_environment,
 };
 
 const RETRY: Duration = Duration::from_secs(5);
 
 pub(crate) fn run_daemon(state: &Path) -> ExitCode {
+    if let Some(path) = untrusted_launch_environment(rustix::process::geteuid().as_raw()) {
+        eprintln!("{} is not safe to run as this user.", path.display());
+        return ExitCode::from(1);
+    }
     let Ok(lock) = DaemonLock::try_acquire_daemon(state) else {
         eprintln!("daemon already running");
         return ExitCode::from(1);
@@ -37,10 +42,13 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
                 continue;
             }
         };
-        let Ok(config) = HostConfig::parse(&text) else {
-            eprintln!("invalid config");
-            pause();
-            continue;
+        let config = match HostConfig::parse(&text) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("{error}");
+                pause();
+                continue;
+            }
         };
         return drive(state, &config, lock);
     }

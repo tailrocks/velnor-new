@@ -15,7 +15,10 @@ const CONTENT: &str = "111111111111111111111111111111111111111111111111111111111
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn context(event: &str, refs: &[&str], rules: &Value) -> Value {
-    json!({"event": event, "refs": refs, "pull_request_rules": rules})
+    if rules.as_array().is_some_and(Vec::is_empty) {
+        return json!({"event": event, "refs": refs});
+    }
+    json!({"event": event, "refs": refs, "pull_request": {"rules": rules}})
 }
 
 fn entry(job: &str, contexts: &[Value]) -> Value {
@@ -42,7 +45,7 @@ fn document(calls: &Value, jobs: &[Value]) -> Value {
 
 fn unsealed(calls: &Value, jobs: &[Value]) -> Value {
     json!({
-        "schema_version": 1, "connection_id": "local", "binding_sha256": CONTENT,
+        "schema_version": 2, "connection_id": "local", "binding_sha256": CONTENT,
         "generation": 1, "policy_sha256": CONTENT,
         "generator": {"source_sha": SHA, "artifact_sha256": CONTENT},
         "workflows": [{
@@ -314,4 +317,20 @@ fn a_request_with_another_repository_id_than_the_policy_names_is_refused() {
     let other: ExecutionSourceRequest = serde_json::from_value(other).expect("request");
     assert!(approved().approves(&push(), Side::Trusted, Some(CONTENT)));
     assert!(!approved().approves(&other, Side::Trusted, Some(CONTENT)));
+}
+
+#[test]
+fn a_policy_of_another_schema_asks_for_regeneration() {
+    let mut value = document(
+        &json!([]),
+        &[entry("ci", &[context("push", &["main"], &json!([]))])],
+    );
+    value["schema_version"] = json!(1);
+    assert_eq!(
+        Policy::parse(value.to_string().as_bytes()).err(),
+        Some(crate::error::HostError::JobAuthorityPolicySchema {
+            found: 1,
+            expected: 2
+        })
+    );
 }

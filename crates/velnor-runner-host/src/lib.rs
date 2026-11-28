@@ -42,6 +42,7 @@ mod launch_identity;
 mod listen;
 #[cfg(feature = "local-mode")]
 pub mod local;
+mod path_trust;
 mod plist;
 mod readiness;
 mod readiness_scan;
@@ -100,6 +101,7 @@ pub use launch::{
 };
 pub use launch_blocking::ListenFault;
 pub use listen::queue_path;
+pub use path_trust::{untrusted_launch_environment, untrusted_path};
 pub use plist::{is_plist_text, keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
 pub use readiness_scan::{READINESS_BUDGET, controller_readiness};

@@ -6,7 +6,6 @@ mod filesystem;
 mod plist;
 mod quarantine;
 mod staging;
-mod trust;
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -46,26 +45,72 @@ pub(crate) fn service(action: &ServiceAction, state: &Path) -> ExitCode {
     }
 }
 
+struct Location {
+    uid: u32,
+    binary: PathBuf,
+    plist: PathBuf,
+}
+
+fn location() -> Option<Location> {
+    Some(Location {
+        uid: read_uid()?,
+        binary: std::env::current_exe().ok()?,
+        plist: plist_path()?,
+    })
+}
+
 fn start(state: &Path, logs: &Path) -> ExitCode {
+    match location() {
+        Some(location) => start_with(&location, state, logs, spawn),
+        None => different(),
+    }
+}
+
+fn stop(state: &Path) -> ExitCode {
+    match (location(), log_dir()) {
+        (Some(location), Some(logs)) => stop_with(&location, state, &logs, spawn),
+        _ => different(),
+    }
+}
+
+fn start_with(
+    location: &Location,
+    state: &Path,
+    logs: &Path,
+    launch: impl FnOnce(&[String]) -> ExitCode,
+) -> ExitCode {
     if create_private_dir_all(logs).is_err() {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
-    let Some(installed) = verified_plist(state) else {
+    let Some(installed) = verified_plist(location, state, logs) else {
         return different();
     };
-    let result = spawn(&bootstrap_argv(installed.uid, &installed.path));
+    let result = launch(&bootstrap_argv(installed.uid, &installed.path));
     drop(installed);
     result
 }
 
-fn stop(state: &Path) -> ExitCode {
-    let Some(installed) = verified_plist(state) else {
+fn stop_with(
+    location: &Location,
+    state: &Path,
+    logs: &Path,
+    launch: impl FnOnce(&[String]) -> ExitCode,
+) -> ExitCode {
+    let Some(installed) = verified_plist(location, state, logs) else {
         return different();
     };
-    let result = spawn(&bootout_argv(installed.uid));
+    let result = launch(&bootout_argv(installed.uid));
     drop(installed);
     result
+}
+
+fn verified_plist(location: &Location, state: &Path, logs: &Path) -> Option<InstalledPlist> {
+    if let Err(Missing::Unsafe(path)) = environment::verify_recorded(state, location.uid) {
+        eprintln!("{} is not safe to run as this user.", path.display());
+        return None;
+    }
+    installed_plist_at(location.uid, &location.binary, &location.plist, state, logs)
 }
 
 fn uninstall(state: &Path) -> ExitCode {
@@ -88,14 +133,6 @@ fn uninstall_installed(installed: &InstalledPlist, stopped: Option<i32>) -> Exit
 fn different() -> ExitCode {
     eprintln!("Service configuration is different. Run `velnor-host service install` again.");
     ExitCode::from(1)
-}
-
-fn verified_plist(state: &Path) -> Option<InstalledPlist> {
-    if let Err(Missing::Unsafe(path)) = environment::verify_recorded(state, read_uid()?) {
-        eprintln!("{} is not safe to run as this user.", path.display());
-        return None;
-    }
-    installed_plist(state)
 }
 
 fn installed_plist(state: &Path) -> Option<InstalledPlist> {
@@ -147,7 +184,7 @@ fn install(state: &Path, orb: Option<&Path>, runner_binary: Option<&Path>) -> Ex
         }
         Err(Missing::Unsafe(path)) => {
             eprintln!(
-                "{} is not safe to run: it and every directory above it must be owned by root or this user and not writable by group or others.",
+                "{} is not safe to run: it, every directory above it and every link on the way must be owned by root or this user and closed to writes by others.",
                 path.display()
             );
             return ExitCode::from(1);
@@ -226,6 +263,9 @@ fn bootout_argv(uid: u32) -> Vec<String> {
         format!("gui/{uid}/{LABEL}"),
     ]
 }
+
+#[cfg(test)]
+mod lifecycle_tests;
 
 #[cfg(test)]
 mod tests {
