@@ -231,6 +231,30 @@ fn a_written_key_is_refused_one_release_below_its_row() -> Result<(), Box<dyn Er
             "0.1.87",
         ),
         ("hosted = true\n", "hosted", "0.1.99", "0.1.98"),
+        (
+            "[[test_lane]]\nroot = \".\"\nall_features = true\njob = \"parallel\"\nrunner = \"ubuntu-latest\"\n",
+            "test_lane.runner",
+            "0.1.118",
+            "0.1.117",
+        ),
+        (
+            "[[test_lane]]\nroot = \".\"\nall_features = true\njob = \"parallel\"\nneeds = [\"docker\"]\n",
+            "test_lane.needs",
+            "0.1.118",
+            "0.1.117",
+        ),
+        (
+            "[[test_lane]]\nroot = \".\"\nall_features = true\npackages = [\"package-0\"]\nfilter = \"all()\"\nexclusive = true\n",
+            "test_lane.exclusive",
+            "0.1.118",
+            "0.1.117",
+        ),
+        (
+            "[[test_lane]]\nroot = \".\"\nall_features = true\njob = \"parallel\"\nrunner = \"ubuntu-latest\"\nhosted = true\n",
+            "test_lane.hosted",
+            "0.1.118",
+            "0.1.117",
+        ),
     ] {
         let refused = refusal(config, below)?;
         assert!(

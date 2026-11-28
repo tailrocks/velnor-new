@@ -375,6 +375,15 @@ impl RootJobs<'_> {
         jobs
     }
 
+    fn docker_check(&self) -> Step {
+        self.gated(StepKind::TestSetup {
+            name: "Check that Docker answers".to_owned(),
+            run: "docker info".to_owned(),
+            before_build: false,
+            offline_after_private_fetch: false,
+        })
+    }
+
     fn gated(&self, kind: StepKind) -> Step {
         Step {
             gate: self.lane.steps(),

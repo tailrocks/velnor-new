@@ -31,11 +31,14 @@ impl RootJobs<'_> {
         if groups.is_empty() {
             self.member().filter(self.facts)
         } else {
-            FilterRef::Group {
-                include: None,
-                exclude: groups.iter().map(|group| group.filter.clone()).collect(),
-                except: self.member().direct_binaries(self.facts),
-            }
+            self.member().without_exclusive_lanes(
+                self.facts,
+                FilterRef::Group {
+                    include: None,
+                    exclude: groups.iter().map(|group| group.filter.clone()).collect(),
+                    except: self.member().direct_binaries(self.facts),
+                },
+            )
         }
     }
 
@@ -76,11 +79,14 @@ impl RootJobs<'_> {
         ];
         for group in groups {
             let base = TEST_JOB.suffixed(group.name.as_str());
-            let filter = FilterRef::Group {
-                include: Some(group.filter.clone()),
-                exclude: Vec::new(),
-                except: member.direct_binaries(self.facts),
-            };
+            let filter = member.without_exclusive_lanes(
+                self.facts,
+                FilterRef::Group {
+                    include: Some(group.filter.clone()),
+                    exclude: Vec::new(),
+                    except: member.direct_binaries(self.facts),
+                },
+            );
             let count = group.partition_count();
             if count < 2 {
                 jobs.push(self.archive_runner(
@@ -243,12 +249,7 @@ impl RootJobs<'_> {
             into: self.member().root.manifest.parent(),
         }));
         if docker {
-            steps.push(self.gated(StepKind::TestSetup {
-                name: "Check that Docker answers".to_owned(),
-                run: "docker info".to_owned(),
-                before_build: false,
-                offline_after_private_fetch: false,
-            }));
+            steps.push(self.docker_check());
         }
         steps.extend(
             self.cargo(

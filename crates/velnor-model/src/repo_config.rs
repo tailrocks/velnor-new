@@ -12,6 +12,7 @@ use crate::mbx::MbxMode;
 use crate::policy_table::PolicyTable;
 pub use crate::public_sources::{GitRepository, PublicSources};
 use crate::shape::Shape;
+use crate::test_lane::TestLane;
 
 mod default;
 
@@ -209,35 +210,6 @@ impl LaneFeatures {
             ..self.clone()
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestLane {
-    pub root: Option<RepoPath>,
-    pub features: LaneFeatures,
-    pub filter: Option<String>,
-    pub lint: bool,
-    pub doc: bool,
-    pub packages: Vec<PackageName>,
-    pub job: LaneJob,
-    /// The `timeout_minutes` key: the time limit of the lane's own job, or of the root's test job
-    /// that runs an inline lane. `None` keeps the root's limit.
-    pub timeout_minutes: Option<u16>,
-    pub written: LaneKeysWritten,
-}
-
-/// Which optional keys of a `[[test_lane]]` table were written, whatever their values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct LaneKeysWritten {
-    pub job: bool,
-    pub feature_flags: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LaneJob {
-    #[default]
-    Inline,
-    Parallel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

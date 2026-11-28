@@ -11,4 +11,22 @@ pub enum FilterRef {
         exclude: Vec<String>,
         except: Vec<String>,
     },
+    Excluding {
+        base: Box<FilterRef>,
+        lanes: Vec<String>,
+    },
+}
+
+impl FilterRef {
+    #[must_use]
+    pub fn excluding(self, lanes: Vec<String>) -> Self {
+        if lanes.is_empty() {
+            self
+        } else {
+            Self::Excluding {
+                base: Box::new(self),
+                lanes,
+            }
+        }
+    }
 }

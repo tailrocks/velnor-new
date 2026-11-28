@@ -460,6 +460,30 @@ job = "parallel"
 
 `timeout_minutes` is optional, 1 to 360, and sets the time limit of the lane's job when `job = "parallel"`. The lane's job takes it instead of its root's `[root_timeouts]` value or `timeout_minutes`. An inline lane (the default) has no job of its own: it runs inside its root's test job, which then takes the larger of its own limit and the lane's, so a lane can raise that job but never lower it. The key needs velnor-ci `0.1.109` or later, see Per-root time limits.
 
+### A lane that owns its tests, on its own runner
+
+A parallel lane can run on a runner of its own, can check Docker before its tests, and can take its tests away from the root's default test steps.
+
+```toml
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["velnor-runner-host", "velnor-local"]
+filter = "(package(velnor-runner-host) and (test(~local::) or binary(local_host_public))) or (package(velnor-local) and binary(it) and test(removal_audit::))"
+exclusive = true
+job = "parallel"
+runner = "ubuntu-latest"
+hosted = true
+needs = ["docker"]
+lint = true
+doc = true
+```
+
+- `exclusive` is an optional boolean, `false` by default, and needs `filter`; `exclusive = true` without a `filter` is refused. A lane with a `filter` and without `exclusive` only re-runs the selected tests, and the root's default test steps still run them. With `exclusive = true` the lane owns them: every default test step of the root, in the one job, the test job and the archive runners of every test group alike, runs `-E "(<selection>) and not (<filter>)"`, so each of those tests runs once, in the lane. The lane's own step keeps `($TEST_FILTER) and (<filter>)`. The lane guard still checks the lane's filter.
+- `runner` is optional and only for `job = "parallel"`; an inline lane that writes it is refused. The lane's job renders `runs-on: <runner>`. A label spelled like a GitHub-hosted one needs `hosted = true` or `hosted = false`, the same rule as `test_groups.runner`: only `hosted = true` opens the job to pull requests from forks. `hosted` without `runner` is refused. A crates mirror that serves only its own runner is set up in the lane's job only when that runner is the mirror's.
+- `needs` is optional and only for `job = "parallel"`. It accepts only `"docker"`, without repeats: `"cargo"` and every other value is refused, naming `test_lane.needs`. With `needs = ["docker"]` the job gets a step named `Check that Docker answers` that runs `docker info`, right before the lane's first test step, so a runner without an engine fails there and not in the middle of the tests.
+- The keys `exclusive`, `runner`, `hosted` and `needs` need velnor-ci 0.1.118 or later, and `velnor-gen generate` refuses an older pin when a lane writes any of them, naming the key.
+
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
 ## Workspace features

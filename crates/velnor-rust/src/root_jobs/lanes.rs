@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BuildRecord, CargoCommand, Job, JobId, LaneFeatures};
+use velnor_model::{
+    BuildRecord, CargoCommand, Job, JobId, LaneFeatures, RunnerLabel, Step, StepKind, TestNeed,
+};
 
 use super::RootJobs;
+use crate::plan_tools::mirror_step_on;
 
 const LANE_JOB_PREFIX: &str = "rust-lane";
 
@@ -21,12 +24,19 @@ impl RootJobs<'_> {
                 let id = self.id(id);
                 let timeout = lane.timeout_minutes;
                 let quick = lane.commands.iter().any(CargoCommand::is_compile_check);
+                let runner = lane.job.runner.as_ref().map(|runner| &runner.label);
                 let mut steps = self.setup(&id);
-                let tests = self
+                if let Some(runner) = runner {
+                    steps = self.mirrored_on(steps, runner);
+                }
+                let mut tests: Vec<Step> = self
                     .cargo(member, lane.commands)
                     .into_iter()
                     .map(|step| self.heavy(step))
                     .collect();
+                if lane.job.needs.contains(&TestNeed::Docker) {
+                    tests.insert(0, self.docker_check());
+                }
                 steps.extend(self.member_steps(member, tests));
                 steps.extend(self.audit());
                 steps.extend(self.saves(&id, None, false));
@@ -40,10 +50,28 @@ impl RootJobs<'_> {
                 if let Some(minutes) = timeout {
                     job.timeout_minutes = minutes;
                 }
+                if let Some(runner) = runner {
+                    job.runs_on = runner.clone();
+                }
                 jobs.push(job);
             }
         }
         jobs
+    }
+
+    fn mirrored_on(&self, steps: Vec<Step>, runner: &RunnerLabel) -> Vec<Step> {
+        steps
+            .into_iter()
+            .filter_map(|step| match step.kind {
+                StepKind::CratesMirror(_) => {
+                    mirror_step_on(self.facts, runner).map(|mirror| Step {
+                        gate: step.gate,
+                        ..mirror
+                    })
+                }
+                _ => Some(step),
+            })
+            .collect()
     }
 }
 

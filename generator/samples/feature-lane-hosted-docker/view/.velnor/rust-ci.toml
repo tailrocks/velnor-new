@@ -1,0 +1,12 @@
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["single-crate"]
+filter = "package(single-crate) and test(~local::)"
+exclusive = true
+lint = true
+doc = true
+job = "parallel"
+runner = "ubuntu-latest"
+hosted = true
+needs = ["docker"]

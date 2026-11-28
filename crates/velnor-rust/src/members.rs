@@ -7,7 +7,7 @@ use velnor_model::{
     CargoCommand, CustomHarness, FilterRef, PackageName, RepoFacts, RootSlug, RustRoot, TargetKind,
 };
 
-use crate::config_test_lane::ParallelLane;
+use crate::config_test_lane::LaneJobPlan;
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -70,11 +70,19 @@ impl Member {
 
     pub(crate) fn filter(&self, facts: &RepoFacts) -> FilterRef {
         let direct = self.direct_binaries(facts);
-        if direct.is_empty() {
+        let base = if direct.is_empty() {
             FilterRef::All
         } else {
             FilterRef::AllExcept(direct)
-        }
+        };
+        self.without_exclusive_lanes(facts, base)
+    }
+
+    pub(crate) fn without_exclusive_lanes(&self, facts: &RepoFacts, base: FilterRef) -> FilterRef {
+        base.excluding(crate::config_test_lane::exclusive(
+            &facts.config,
+            &self.root,
+        ))
     }
 
     pub(crate) fn tests(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
@@ -91,19 +99,12 @@ impl Member {
         })
     }
 
-    fn direct_filter(&self, facts: &RepoFacts) -> Vec<String> {
-        match self.filter(facts) {
-            FilterRef::AllExcept(binaries) => binaries,
-            _ => Vec::new(),
-        }
-    }
-
     pub(crate) fn feature_lanes(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
-        crate::config_test_lane::commands(&facts.config, &self.root, &self.direct_filter(facts))
+        crate::config_test_lane::commands(&facts.config, &self.root, &self.direct_binaries(facts))
     }
 
-    pub(crate) fn parallel_lanes(&self, facts: &RepoFacts) -> Vec<ParallelLane> {
-        crate::config_test_lane::parallel(&facts.config, &self.root, &self.direct_filter(facts))
+    pub(crate) fn parallel_lanes(&self, facts: &RepoFacts) -> Vec<LaneJobPlan> {
+        crate::config_test_lane::parallel(&facts.config, &self.root, &self.direct_binaries(facts))
     }
 
     pub(crate) fn built_without_nextest(&self, facts: &RepoFacts) -> Vec<CargoCommand> {

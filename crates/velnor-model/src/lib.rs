@@ -32,6 +32,7 @@ mod shape;
 mod step_setup;
 mod steps;
 mod test_group;
+mod test_lane;
 mod token_permission;
 mod trusted;
 mod verdict;
@@ -88,12 +89,12 @@ pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
     DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputKey, InputOwner,
-    InputRule, LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency,
-    OnMain, PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, RustCiConfig,
-    RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind,
-    TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
-    UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    InputRule, LaneFeatures, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources, PushAfterMergeGroup, RepoFacts,
+    RepoView, RepositoryIdentity, RequiredFeature, RustCiConfig, RustMember, RustMetadata,
+    RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestSetup, Timings,
+    TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage, Unread,
+    Weakening, WorkspaceGroup,
 };
 pub use runner_protocol::RUNNER_PROTOCOL_VERSION;
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
@@ -108,6 +109,7 @@ pub use test_group::{
     ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
     TestGroup, TestNeed,
 };
+pub use test_lane::{LaneJob, LaneKeysWritten, LaneRunner, LaneScope, ParallelLane, TestLane};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
