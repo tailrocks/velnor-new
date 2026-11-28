@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CiError;
 
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 pub const ARTIFACT_NAME: &str = "velnor-verdict";
 pub const FILE_NAME: &str = "verdict.json";
 
@@ -24,6 +24,7 @@ pub struct Runner {
 #[serde(deny_unknown_fields)]
 pub struct VerdictMatch {
     pub format: u32,
+    pub attempt: u32,
     pub tree: String,
     pub plan: BTreeMap<String, String>,
     pub runner: Runner,
@@ -31,9 +32,10 @@ pub struct VerdictMatch {
 
 impl VerdictMatch {
     #[must_use]
-    pub fn new(tree: String, plan: BTreeMap<String, String>, runner: Runner) -> Self {
+    pub fn new(attempt: u32, tree: String, plan: BTreeMap<String, String>, runner: Runner) -> Self {
         Self {
             format: FORMAT,
+            attempt,
             tree,
             plan,
             runner,
@@ -82,6 +84,8 @@ impl Reusable {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobEvidence {
     pub name: String,
+    pub attempt: u32,
+    pub labels: Vec<String>,
     pub conclusion: Option<String>,
     pub steps: Vec<(String, Option<String>)>,
 }
@@ -98,6 +102,7 @@ pub struct Evidence {
     pub same_repository: bool,
     pub head_tree: String,
     pub behind_by: u64,
+    pub target: String,
     pub forbids_force_push: bool,
     pub run: Option<RunEvidence>,
 }
@@ -109,9 +114,10 @@ pub enum Refusal {
     ForkPullRequest,
     BehindBase(u64),
     OtherTreeThanHead { head: String, own: String },
-    ForcePushAllowed,
+    ForcePushAllowed(String),
     NoPassedRun,
     NoVerdict(String),
+    OtherAttempt { recorded: u32, latest: u32 },
     OtherTree,
     OtherPlan,
     OtherRunner,
@@ -132,13 +138,17 @@ impl fmt::Display for Refusal {
                 f,
                 "the pull request head has tree {head}, this checkout has {own}"
             ),
-            Self::ForcePushAllowed => {
-                f.write_str("the default branch has no active non_fast_forward rule")
+            Self::ForcePushAllowed(branch) => {
+                write!(f, "{branch} has no active non_fast_forward rule")
             }
             Self::NoPassedRun => f.write_str(
                 "no pull_request run of this workflow on that head passed its Required check",
             ),
             Self::NoVerdict(reason) => write!(f, "the run has no usable velnor-verdict: {reason}"),
+            Self::OtherAttempt { recorded, latest } => write!(
+                f,
+                "the verdict is of attempt {recorded}, the run's latest attempt is {latest}"
+            ),
             Self::OtherTree => f.write_str("the verdict is for another tree"),
             Self::OtherPlan => f.write_str("the verdict is for another plan"),
             Self::OtherRunner => f.write_str("the verdict is for another runner"),
@@ -153,13 +163,30 @@ pub struct Reuse {
     pub reused: BTreeSet<String>,
 }
 
+const OS_LABELS: [&str; 3] = ["linux", "macos", "windows"];
+const ARCH_LABELS: [&str; 4] = ["x64", "x86", "arm", "arm64"];
+
 fn passed(conclusion: Option<&String>) -> bool {
     conclusion.map(String::as_str) == Some("success")
 }
 
-fn concluded_success(run: &RunEvidence, item: &Reusable) -> bool {
+fn on_runner(labels: &[String], runner: &Runner) -> bool {
+    let named = |label: &str| labels.iter().any(|name| name.eq_ignore_ascii_case(label));
+    named("self-hosted") == runner.environment.eq_ignore_ascii_case("self-hosted")
+        && OS_LABELS
+            .iter()
+            .filter(|label| named(label))
+            .all(|label| runner.os.eq_ignore_ascii_case(label))
+        && ARCH_LABELS
+            .iter()
+            .filter(|label| named(label))
+            .all(|label| runner.arch.eq_ignore_ascii_case(label))
+}
+
+fn concluded_success(run: &RunEvidence, item: &Reusable, runner: &Runner) -> bool {
     run.jobs.iter().any(|job| {
         job.name == item.job
+            && on_runner(&job.labels, runner)
             && match &item.step {
                 None => passed(job.conclusion.as_ref()),
                 Some(step) => {
@@ -191,13 +218,20 @@ pub fn decide(
         });
     }
     if !evidence.forbids_force_push {
-        return Err(Refusal::ForcePushAllowed);
+        return Err(Refusal::ForcePushAllowed(evidence.target.clone()));
     }
     let run = evidence.run.as_ref().ok_or(Refusal::NoPassedRun)?;
     let recorded = run
         .verdict
         .as_ref()
         .map_err(|reason| Refusal::NoVerdict(reason.clone()))?;
+    let latest = run.jobs.iter().map(|job| job.attempt).max().unwrap_or(0);
+    if recorded.attempt != latest {
+        return Err(Refusal::OtherAttempt {
+            recorded: recorded.attempt,
+            latest,
+        });
+    }
     if recorded.tree != own.tree {
         return Err(Refusal::OtherTree);
     }
@@ -209,7 +243,7 @@ pub fn decide(
     }
     let reused: BTreeSet<String> = reusable
         .iter()
-        .filter(|item| concluded_success(run, item))
+        .filter(|item| concluded_success(run, item, &recorded.runner))
         .map(|item| item.id.clone())
         .collect();
     if reused.is_empty() {

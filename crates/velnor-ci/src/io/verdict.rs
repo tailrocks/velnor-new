@@ -41,7 +41,11 @@ fn own() -> Result<VerdictMatch, CiError> {
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
+    let attempt = required("GITHUB_RUN_ATTEMPT")?
+        .parse()
+        .map_err(|e| CiError::new(format!("GITHUB_RUN_ATTEMPT is not a number: {e}")))?;
     Ok(VerdictMatch::new(
+        attempt,
         String::from_utf8_lossy(&output.stdout).trim().to_owned(),
         VerdictMatch::parse_plan(&required("PLAN_JSON")?)?,
         Runner {
@@ -122,7 +126,6 @@ fn decide() -> Result<(String, Vec<String>), String> {
         workflow_ref: required("GITHUB_WORKFLOW_REF").map_err(fail)?,
         head_ref: required("VELNOR_MERGE_GROUP_HEAD_REF").map_err(fail)?,
         base_sha: required("VELNOR_MERGE_GROUP_BASE_SHA").map_err(fail)?,
-        default_branch: required("VELNOR_DEFAULT_BRANCH").map_err(fail)?,
         required: required("VELNOR_REQUIRED_CHECK").map_err(fail)?,
         server_url: server,
     };

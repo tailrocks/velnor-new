@@ -95,10 +95,6 @@ fn decide_step(required: &str) -> RenderedStep {
                 "VELNOR_MERGE_GROUP_BASE_SHA",
                 "${{ github.event.merge_group.base_sha }}",
             ),
-            expression(
-                "VELNOR_DEFAULT_BRANCH",
-                "${{ github.event.repository.default_branch }}",
-            ),
             (
                 "VELNOR_REQUIRED_CHECK".to_owned(),
                 Value::Text(required.to_owned()),

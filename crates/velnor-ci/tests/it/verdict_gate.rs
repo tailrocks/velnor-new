@@ -13,7 +13,7 @@ struct Gate {
     reuse: &'static str,
     reused: &'static str,
     alint: &'static str,
-    counted: bool,
+    counted: Option<(&'static str, &'static str)>,
 }
 
 impl Gate {
@@ -23,16 +23,17 @@ impl Gate {
             reuse: "true",
             reused: " lint-alint rust.test rust.test-features-x ",
             alint: "skipped",
-            counted: false,
+            counted: None,
         }
     }
 
     fn run(&self) -> Output {
-        let rust_outputs = if self.counted {
-            json!({"tests_run": "3", "tests_listed": "3", "tests_by_package": "velnor-ci=3/3"})
-        } else {
-            json!({})
-        };
+        let rust_outputs = self.counted.map_or_else(
+            || json!({}),
+            |(run, by_package)| {
+                json!({"tests_run": run, "tests_listed": "3", "tests_by_package": by_package})
+            },
+        );
         let needs: Value = json!({
             "rust-plan": {"result": "success", "outputs": {
                 "rust_root_tests": "run",
@@ -104,6 +105,22 @@ fn a_skipped_job_or_absent_counts_fail_unless_the_verdict_covers_them() {
             event: "push",
             ..Gate::passing()
         },
+        Gate {
+            event: "Merge_Group",
+            ..Gate::passing()
+        },
+        Gate {
+            reused: " lint-alint-x rust.test rust.test-features-x ",
+            ..Gate::passing()
+        },
+        Gate {
+            alint: "failure",
+            ..Gate::passing()
+        },
+        Gate {
+            alint: "cancelled",
+            ..Gate::passing()
+        },
     ];
     for gate in &refused {
         assert!(
@@ -117,10 +134,40 @@ fn a_skipped_job_or_absent_counts_fail_unless_the_verdict_covers_them() {
 }
 
 #[test]
+fn reuse_counts_only_when_the_output_is_exactly_true() {
+    for reuse in ["True", "true ", " true", "TRUE", "1", "yes", ""] {
+        let gate = Gate {
+            reuse,
+            ..Gate::passing()
+        };
+        assert!(!gate.run().status.success(), "{reuse:?}");
+    }
+}
+
+#[test]
+fn counts_of_a_fully_reused_lane_are_judged_when_present() {
+    let zero = "velnor-ci=0/3";
+    for reuse in ["true", "false"] {
+        let gate = Gate {
+            alint: "success",
+            counted: Some(("0", zero)),
+            reuse,
+            ..Gate::passing()
+        };
+        assert!(!gate.run().status.success(), "{reuse}");
+    }
+    let sound = Gate {
+        counted: Some(("3", "velnor-ci=3/3")),
+        ..Gate::passing()
+    };
+    assert!(sound.run().status.success());
+}
+
+#[test]
 fn a_reused_job_that_ran_anyway_and_counted_tests_still_pass() {
     let gate = Gate {
         alint: "success",
-        counted: true,
+        counted: Some(("3", "velnor-ci=3/3")),
         reuse: "false",
         reused: "",
         ..Gate::passing()

@@ -21,6 +21,7 @@ pub struct Need {
 pub struct PlanOutput {
     pub planned: BTreeMap<JobId, bool>,
     pub test_lanes: BTreeMap<RootSlug, Vec<JobId>>,
+    pub reused_lanes: BTreeSet<(JobId, RootSlug)>,
     pub reused_jobs: BTreeSet<JobId>,
     pub reuse_notes: Vec<String>,
 }
@@ -66,6 +67,7 @@ impl PlanOutput {
         let mut reused_jobs = BTreeSet::new();
         let mut planned = BTreeMap::new();
         let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
+        let mut reused_lanes = BTreeSet::new();
         for job in &spec.jobs {
             let mut holds = true;
             for condition in &job.when {
@@ -117,8 +119,11 @@ impl PlanOutput {
                     .get(slug)
                     .is_some_and(|ids| ids.iter().all(|id| reused.contains(id.as_str())));
                 let jobs = test_lanes.entry(slug.clone()).or_default();
-                if expected && !lane_reused {
+                if expected {
                     jobs.push(job.id.clone());
+                    if lane_reused {
+                        reused_lanes.insert((job.id.clone(), slug.clone()));
+                    }
                 }
             }
         }
@@ -127,6 +132,7 @@ impl PlanOutput {
         Ok(Self {
             planned,
             test_lanes,
+            reused_lanes,
             reused_jobs,
             reuse_notes: reused
                 .iter()

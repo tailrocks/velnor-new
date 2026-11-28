@@ -225,11 +225,23 @@ pub fn verdict(
         );
     }
     for (slug, jobs) in &plan.test_lanes {
-        let counts: Vec<Option<TestCounts>> = jobs
+        let mut covered = false;
+        let mut counts: Vec<Option<TestCounts>> = Vec::new();
+        for job in jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(&(job.clone(), slug.clone())).cloned().flatten())
-            .collect();
+        {
+            let key = (job.clone(), slug.clone());
+            let found = tests.get(&key).cloned().flatten();
+            if found.is_none() && plan.reused_lanes.contains(&key) {
+                covered = true;
+            } else {
+                counts.push(found);
+            }
+        }
+        if counts.is_empty() && covered {
+            continue;
+        }
         if counts.is_empty() {
             out.problems.push(format!(
                 "no scheduled job reports {TESTS_BY_PACKAGE_OUTPUT} for {slug}, whose selected packages have tests"

@@ -24,7 +24,6 @@ pub struct Context {
     pub workflow_ref: String,
     pub head_ref: String,
     pub base_sha: String,
-    pub default_branch: String,
     pub required: String,
     pub server_url: String,
 }
@@ -130,6 +129,8 @@ fn jobs_of(github: &dyn GitHub, repo: &Repo, run: u64) -> Result<Vec<JobEvidence
         found.extend(jobs.jobs.into_iter().map(|job| {
             JobEvidence {
                 name: job.name,
+                attempt: job.run_attempt,
+                labels: job.labels,
                 conclusion: job.conclusion,
                 steps: job
                     .steps
@@ -209,7 +210,7 @@ pub fn gather(
         "the comparison",
     )?;
     let commit: Commit = read(github, &commit_path(&repo, &head), "the head commit")?;
-    let forbids = forbids_force_push(github, &repo, &context.default_branch)?;
+    let forbids = forbids_force_push(github, &repo, &entry.base)?;
     let run = passed_run(github, &repo, file, &head, entry.number, &context.required)?.map(
         |(id, jobs)| RunEvidence {
             url: format!("{}/{repo}/actions/runs/{id}", context.server_url),
@@ -227,6 +228,7 @@ pub fn gather(
             .is_some_and(|head_repo| head_repo.full_name == context.repository),
         head_tree: commit.tree.sha,
         behind_by: comparison.behind_by,
+        target: entry.base,
         forbids_force_push: forbids,
         run,
     })

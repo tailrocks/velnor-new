@@ -41,6 +41,7 @@ pub(crate) struct World {
     pub(crate) arch: String,
     pub(crate) event: String,
     pub(crate) routes: BTreeMap<String, Vec<u8>>,
+    pub(crate) overrides: Vec<(String, String)>,
 }
 
 pub(crate) fn path(tail: &str) -> String {
@@ -78,6 +79,7 @@ pub(crate) fn recorded(repo: &Repo, plan: &str, arch: &str) -> String {
         .env("RUNNER_ARCH", arch)
         .env("RUNNER_ENVIRONMENT", "self-hosted")
         .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_RUN_ATTEMPT", "1")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
@@ -87,7 +89,9 @@ pub(crate) fn recorded(repo: &Repo, plan: &str, arch: &str) -> String {
 
 type Job<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)]);
 
-pub(crate) fn jobs(entries: &[Job<'_>]) -> Vec<u8> {
+pub(crate) const LABELS: [&str; 3] = ["self-hosted", "macOS", "ARM64"];
+
+pub(crate) fn jobs_on(entries: &[Job<'_>], attempt: u32, labels: &[&str]) -> Vec<u8> {
     let jobs: Vec<Value> = entries
         .iter()
         .map(|(name, conclusion, steps)| {
@@ -95,11 +99,15 @@ pub(crate) fn jobs(entries: &[Job<'_>]) -> Vec<u8> {
                 .iter()
                 .map(|(step, outcome)| json!({"name": step, "conclusion": outcome}))
                 .collect();
-            json!({"id": 9, "name": name, "conclusion": conclusion,
-                "created_at": "2026-11-20T00:00:00Z", "steps": steps})
+            json!({"id": 9, "name": name, "conclusion": conclusion, "run_attempt": attempt,
+                "labels": labels, "created_at": "2026-11-20T00:00:00Z", "steps": steps})
         })
         .collect();
     json_body(&json!({"total_count": jobs.len(), "jobs": jobs}))
+}
+
+pub(crate) fn jobs(entries: &[Job<'_>]) -> Vec<u8> {
+    jobs_on(entries, 1, &LABELS)
 }
 
 impl World {
@@ -111,6 +119,7 @@ impl World {
             arch: "ARM64".to_owned(),
             event: "merge_group".to_owned(),
             routes: BTreeMap::new(),
+            overrides: Vec::new(),
         };
         world.serve_green_pull_request();
         world
@@ -227,7 +236,6 @@ impl World {
                 format!("gh-readonly-queue/main/pr-7-{HEAD}"),
             )
             .env("VELNOR_MERGE_GROUP_BASE_SHA", BASE)
-            .env("VELNOR_DEFAULT_BRANCH", "main")
             .env("VELNOR_REQUIRED_CHECK", "Required")
             .env("VELNOR_REUSABLE", reusable.to_string())
             .env("GITHUB_TOKEN", "token")
@@ -239,6 +247,8 @@ impl World {
             .env("RUNNER_ARCH", &self.arch)
             .env("RUNNER_ENVIRONMENT", "self-hosted")
             .env("RUNNER_TEMP", &temp)
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .envs(self.overrides.clone())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"));
         let written = fs::read_to_string(&outputs).unwrap_or_default();

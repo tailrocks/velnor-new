@@ -254,6 +254,7 @@ mod unit_test_targets;
 mod unowned;
 mod verdict;
 mod verdict_gate;
+mod verdict_hostile;
 mod verdict_world;
 mod version;
 mod write_request;
