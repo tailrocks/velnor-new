@@ -243,7 +243,12 @@ pub(super) fn restore_inputs_scoped(
     let units = scans
         .entry(physical_target)
         .or_insert_with(|| super::restored_units::scan(&units_target));
-    super::restored_units::record(&units_target, &prefix, units.as_ref())?;
+    super::restored_units::record(
+        &units_target,
+        &prefix,
+        super::restored_units::head(root),
+        units.as_ref(),
+    )?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }

@@ -226,3 +226,53 @@ fn a_base_gap_names_cargos_dirty_reason_and_stays_bare_without_one()
     assert!(gaps[0].ends_with(": serde v1.0.0"), "{gaps:?}");
     Ok(())
 }
+
+#[test]
+fn a_record_written_at_another_commit_or_at_none_reads_as_absent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let other = "0123456789abcdef0123456789abcdef01234567";
+    for (name, header) in [
+        ("other", Some(format!("velnor-restored-units 5 {other}"))),
+        ("none", Some("velnor-restored-units 5".to_owned())),
+        ("kept", None),
+    ] {
+        let repo = base(&format!("report-restored-units-bound-{name}"), "old")?;
+        let record = repo.root().join("target").join(restored_units_file(""));
+        if let Some(header) = header {
+            let text = fs::read_to_string(&record)?;
+            let body = text.split_once('\n').map_or("", |(_, body)| body);
+            fs::write(&record, format!("{header}\n{body}"))?;
+        }
+        let gap = registry_artifact(&repo, GAP)?;
+        let metrics = observation(&repo, &[], &[gap])?;
+        let (restored, manifest) = if name == "kept" {
+            (Some(false), Manifest::Present)
+        } else {
+            (None, Manifest::Absent)
+        };
+        assert_eq!(metrics.invocations[0].compilations[0].restored, restored);
+        assert_eq!(metrics.invocations[0].restored_manifest, Some(manifest));
+    }
+    Ok(())
+}
+
+#[test]
+fn a_record_written_before_the_first_commit_reads_as_absent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-unborn")?;
+    repo.write(
+        &format!("target/debug/.fingerprint/serde-{HELD}/lib-serde"),
+        "{}\n",
+    );
+    restore_unborn(&repo);
+    let record = fs::read_to_string(repo.root().join("target").join(restored_units_file("")))?;
+    assert_eq!(record.lines().next(), Some("velnor-restored-units 5"));
+    let gap = registry_artifact(&repo, GAP)?;
+    let metrics = observation(&repo, &[], &[gap])?;
+    assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Absent)
+    );
+    Ok(())
+}

@@ -67,7 +67,7 @@ fn group_units(repo: &Repo, package: &str, normal: &str, harness: &str) {
     placed(repo, target);
 }
 
-fn audit(repo: &Repo, args: &[&str]) -> Output {
+pub(super) fn audit(repo: &Repo, args: &[&str]) -> Output {
     let mut command = velnor_ci();
     command
         .current_dir(repo.root())
@@ -76,7 +76,7 @@ fn audit(repo: &Repo, args: &[&str]) -> Output {
     command.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn both_roots() -> Repo {
+pub(super) fn both_roots() -> Repo {
     let repo = grouped_tools();
     group_units(&repo, "a", "f000000000000001", "f000000000000002");
     group_units(&repo, "b", "f000000000000003", "f000000000000004");

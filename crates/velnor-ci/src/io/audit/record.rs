@@ -12,7 +12,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 use super::super::units::UnitFile;
 use super::freshness::Cause;
 use super::unhashed::Pending;
-use super::{Audit, REBUILD, UnitIdentity};
+use super::{Audit, REBUILD, Restored, UnitIdentity};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
@@ -141,6 +141,7 @@ impl Audit<'_> {
             budget,
             file,
             &package,
+            Restored { indices, hash },
             UnitIdentity::Fingerprint {
                 target: indices[0],
                 configuration,
@@ -160,6 +161,15 @@ impl Audit<'_> {
             });
         }
         Ok(())
+    }
+
+    pub(in crate::io) fn excused(&self, restored: Restored<'_>, dep_info: &str) -> bool {
+        let digest = crate::restored_units::digest(dep_info);
+        restored
+            .indices
+            .iter()
+            .filter_map(|index| self.restored[*index].get(restored.hash))
+            .any(|digests| digests.contains(&digest))
     }
 
     pub(super) fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
@@ -200,6 +210,15 @@ impl Audit<'_> {
                 .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
+            if known.is_empty()
+                && script
+                    .as_ref()
+                    .is_some_and(|script| self.excused.contains(&(index, script.clone())))
+            {
+                self.present
+                    .insert((index, configuration.to_owned(), hash.to_owned()));
+                continue;
+            }
             let mut gap = if known.is_empty() {
                 Some(RunGap::Uncompiled)
             } else {

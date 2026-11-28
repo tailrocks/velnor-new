@@ -43,7 +43,7 @@ const REBUILD: &str = "velnor-ci inputs build -- cargo clippy --workspace --all-
 
 mod dep_info;
 
-pub(super) use dep_info::UnitIdentity;
+pub(super) use dep_info::{Restored, UnitIdentity};
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
@@ -66,6 +66,8 @@ pub(super) struct Audit<'a> {
     found: CompileInputs,
     /// Bytes read from each Cargo root's target directory, bounded per root.
     target_bytes: Vec<u64>,
+    restored: Vec<BTreeMap<String, BTreeSet<String>>>,
+    excused: BTreeSet<(usize, String)>,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
@@ -96,6 +98,12 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &workspaces,
         &groups,
         options.max_directory_entries,
+    )?;
+    audit.restored = setup::restored_hashes(
+        &workspaces,
+        &shared,
+        &groups,
+        super::restored_units::head(directory).as_deref(),
     )?;
     let gathered = setup::gathered_files(&workspaces, &shared, &groups, &chosen)?;
     audit.note_build_outputs(&gathered)?;

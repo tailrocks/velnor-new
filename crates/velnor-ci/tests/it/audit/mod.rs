@@ -34,6 +34,8 @@ mod reads;
 mod real_cargo;
 mod real_includes;
 mod relative_build_dir;
+mod restored;
+mod restored_groups;
 mod script_dep_info;
 mod selection;
 mod separate_build;

@@ -71,6 +71,7 @@ fn run_lane(
             "{}\n",
         );
         repo.git(&["add", "."]);
+        repo.commit();
         assert!(super::cli(&repo, &["inputs", "save"]).status.success());
         assert!(super::cli(&repo, &["inputs", "restore"]).status.success());
     }

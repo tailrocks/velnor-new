@@ -294,3 +294,96 @@ fn a_dep_info_path_under_a_symlinked_spelling_of_the_target_is_inside_it_in_eith
     }
     Ok(())
 }
+
+#[test]
+fn a_unit_with_a_missing_input_is_recorded_as_restored_but_not_as_present()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-restored-set")?;
+    let root = fs::canonicalize(repo.root())?;
+    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", root.display());
+    dep_info_unit(&repo, MISSING_INPUT, &missing);
+    dep_info_unit(&repo, KEPT_INPUT, "src/lib.rs");
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    let lines: Vec<&str> = record.lines().collect();
+    for hash in [MISSING_INPUT, KEPT_INPUT] {
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.starts_with(&format!("restored {hash} "))),
+            "{hash}: {record}"
+        );
+    }
+    assert!(!lines.contains(&MISSING_INPUT), "{record}");
+    Ok(())
+}
+
+const BARE_DEP_INFO: &str = "00000000bad00004";
+const SCRIPT: &str = "00000000bad00005";
+const OUTPUT: &str = "00000000bad00006";
+
+#[test]
+fn a_dep_info_and_script_with_no_fingerprint_are_recorded_with_their_content_digest()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-bare")?;
+    repo.write(
+        &format!("target/debug/deps/serde-{BARE_DEP_INFO}.d"),
+        &format!("target/debug/deps/libserde-{BARE_DEP_INFO}.rmeta: src/lib.rs\n"),
+    );
+    repo.write(
+        &format!("target/debug/build/serde-{SCRIPT}/build_script_build-{SCRIPT}.d"),
+        "out.d: build.rs\n",
+    );
+    repo.write(
+        &format!("target/debug/build/serde-{OUTPUT}/output"),
+        "cargo:rerun-if-changed=build.rs\n",
+    );
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    for (hash, text) in [
+        (
+            BARE_DEP_INFO,
+            format!("target/debug/deps/libserde-{BARE_DEP_INFO}.rmeta: src/lib.rs\n"),
+        ),
+        (SCRIPT, "out.d: build.rs\n".to_owned()),
+    ] {
+        let line = format!(
+            "restored {hash} {}",
+            velnor_ci::restored_units::digest(&text)
+        );
+        assert!(
+            record.lines().any(|found| found == line),
+            "{hash}: {record}"
+        );
+        assert!(
+            !record.lines().any(|found| found == hash),
+            "{hash}: {record}"
+        );
+    }
+    assert!(!record.contains(OUTPUT), "{record}");
+    Ok(())
+}
+
+#[test]
+fn the_record_names_the_commit_the_restore_ran_at() -> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-head")?;
+    repo.write(
+        "target/debug/.fingerprint/serde-0123456789abcdef/lib-serde",
+        "{}\n",
+    );
+    repo.commit();
+    restore(&repo);
+    let head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo.root())
+        .args(["rev-parse", "HEAD"])
+        .output()?;
+    let head = String::from_utf8(head.stdout)?;
+    let record = restored_record(&repo)?;
+    assert_eq!(
+        record.lines().next(),
+        Some(format!("velnor-restored-units 5 {}", head.trim()).as_str()),
+        "{record}"
+    );
+    Ok(())
+}

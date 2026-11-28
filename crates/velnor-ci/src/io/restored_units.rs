@@ -36,9 +36,13 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
             }
             UnitFile::DepInfo {
                 hash: Some(hash), ..
-            } if names_missing_file(&path, &inside) => {
-                found.missing_input.insert(hash);
+            } => {
+                restore_dep_info(&mut found, &hash, &path);
+                if names_missing_file(&path, &inside) {
+                    found.missing_input.insert(hash);
+                }
             }
+            UnitFile::Script { hash, .. } => restore_dep_info(&mut found, &hash, &path),
             _ => {}
         }
     }
@@ -46,6 +50,16 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     found.present.retain(|hash| !missing.contains(hash));
     crate::restored_units::cascade(&mut found, &fingerprints);
     Some(found)
+}
+
+fn restore_dep_info(found: &mut RestoredUnits, hash: &str, path: &Path) {
+    if let Some(text) = read_small(path) {
+        found
+            .restored
+            .entry(hash.to_owned())
+            .or_default()
+            .insert(crate::restored_units::digest(&text));
+    }
 }
 
 fn dependency_crates(fingerprint: &Path) -> BTreeSet<String> {
@@ -115,23 +129,41 @@ fn cargo_unpacks(path: &Path) -> bool {
 pub(super) fn record(
     target: &Path,
     prefix: &str,
+    head: Option<String>,
     units: Option<&RestoredUnits>,
 ) -> Result<(), CiError> {
     let Some(units) = units else {
         return Ok(());
     };
     let file = target.join(restored_units_file(prefix));
-    fs::write(&file, crate::restored_units::encode(units))
+    let bound = RestoredUnits {
+        head,
+        ..units.clone()
+    };
+    fs::write(&file, crate::restored_units::encode(&bound))
         .map_err(|e| CiError::new(format!("cannot record restored units: {e}")))
 }
 
-pub(super) fn read(target: &Path, prefix: &str) -> (Manifest, Option<RestoredUnits>) {
+pub(super) fn read(
+    target: &Path,
+    prefix: &str,
+    head: Option<&str>,
+) -> (Manifest, Option<RestoredUnits>) {
     match fs::read_to_string(target.join(restored_units_file(prefix))) {
         Ok(text) => match crate::restored_units::decode(&text) {
-            Some(units) => (Manifest::Present, Some(units)),
+            Some(units) if head.is_some() && units.head.as_deref() == head => {
+                (Manifest::Present, Some(units))
+            }
+            Some(_) => (Manifest::Absent, None),
             None => (Manifest::Unreadable, None),
         },
         Err(error) if error.kind() == ErrorKind::NotFound => (Manifest::Absent, None),
         Err(_) => (Manifest::Unreadable, None),
     }
+}
+
+pub(super) fn head(root: &Path) -> Option<String> {
+    let output = super::inputs::git(root, &["rev-parse", "--verify", "HEAD"], None).ok()?;
+    let head = String::from_utf8(output).ok()?;
+    Some(head.trim().to_owned())
 }
