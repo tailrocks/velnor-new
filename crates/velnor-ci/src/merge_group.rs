@@ -14,6 +14,7 @@ pub struct Context {
     pub sha: String,
     pub workflow_ref: String,
     pub required: Option<String>,
+    pub lock_changed: Option<String>,
 }
 
 #[derive(Debug)]
@@ -40,6 +41,20 @@ fn workflow_file(context: &Context) -> Option<&str> {
     (!file.is_empty() && !file.contains('/')).then_some(file)
 }
 
+const LOCK_FILE: &str = "Cargo.lock";
+const DIFF_FAILED: &str = "<unknown: git diff failed>";
+
+#[must_use]
+pub fn changed_lock(diff: Option<&[u8]>) -> Option<String> {
+    let Some(diff) = diff else {
+        return Some(DIFF_FAILED.to_owned());
+    };
+    diff.split(|byte| *byte == 0)
+        .map(String::from_utf8_lossy)
+        .find(|path| path.rsplit('/').next() == Some(LOCK_FILE))
+        .map(std::borrow::Cow::into_owned)
+}
+
 fn commit(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -52,6 +67,11 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
     }
     if !commit(&context.sha) {
         return run_everything("GITHUB_SHA is not a commit id");
+    }
+    if let Some(path) = &context.lock_changed {
+        return run_everything(format!(
+            "{path} changed, so this push builds and saves the base for the new lock"
+        ));
     }
     let Ok(repo) = Repo::parse(&context.repository) else {
         return run_everything("GITHUB_REPOSITORY is not owner/name");

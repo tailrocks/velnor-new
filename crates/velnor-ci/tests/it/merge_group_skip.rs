@@ -3,7 +3,7 @@
 
 use serde_json::json;
 use velnor_ci::github::{merge_group_runs_path, run_jobs_path};
-use velnor_ci::merge_group::{Context, skip_push};
+use velnor_ci::merge_group::{Context, changed_lock, skip_push};
 
 use crate::support::{FakeGitHub, repo};
 
@@ -17,6 +17,7 @@ fn context() -> Context {
         sha: SHA.to_owned(),
         workflow_ref: WORKFLOW_REF.to_owned(),
         required: None,
+        lock_changed: None,
     }
 }
 
@@ -203,4 +204,48 @@ fn a_completed_run_with_a_failed_advisory_job_and_a_succeeded_required_job_skips
 fn a_completed_failed_run_whose_required_job_failed_does_not_skip() {
     let github = completed_failed_run(&jobs(&[("Required", "failure"), ("Cache", "success")]));
     assert!(!skip_push(&github, &with_required()).skip);
+}
+
+fn passed_queue_run() -> FakeGitHub {
+    fake(&runs(&[("merge_group", SHA, "completed", "success")]))
+}
+
+#[test]
+fn a_push_that_changes_a_cargo_lock_runs_everything_despite_a_passed_queue_run() {
+    for path in ["Cargo.lock", "tools/Cargo.lock"] {
+        let diff = format!("README.md\0{path}\0");
+        let context = Context {
+            lock_changed: changed_lock(Some(diff.as_bytes())),
+            ..context()
+        };
+        let result = skip_push(&passed_queue_run(), &context);
+        assert!(!result.skip, "{}", result.note);
+        assert!(
+            result.note.contains(&format!("{path} changed")),
+            "{}",
+            result.note
+        );
+    }
+}
+
+#[test]
+fn a_push_that_leaves_every_cargo_lock_unchanged_still_skips() {
+    for diff in ["README.md\0src/Cargo.lock.bak\0not-Cargo.lock\0", ""] {
+        let context = Context {
+            lock_changed: changed_lock(Some(diff.as_bytes())),
+            ..context()
+        };
+        let result = skip_push(&passed_queue_run(), &context);
+        assert!(result.skip, "{}", result.note);
+    }
+}
+
+#[test]
+fn a_failed_git_diff_runs_everything() {
+    let context = Context {
+        lock_changed: changed_lock(None),
+        ..context()
+    };
+    let result = skip_push(&passed_queue_run(), &context);
+    assert!(!result.skip, "{}", result.note);
 }
