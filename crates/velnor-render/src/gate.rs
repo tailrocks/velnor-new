@@ -7,7 +7,6 @@ use velnor_model::{
 };
 
 use crate::event_gate::event_gate;
-use crate::gate_packages::package_selection;
 use crate::rules::{RenderedStep, Value};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
@@ -346,11 +345,6 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 GateNeed::Doctests | GateNeed::Docs => {
                     parts.push(runs(gate.need));
                     parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
-                    parts.extend(package_selection(
-                        gate,
-                        &read(GateNeed::PackageArgs),
-                        replanned,
-                    ));
                 }
                 _ => {}
             }
@@ -372,14 +366,20 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
             runs(GateNeed::Machete)
         )),
         GateNeed::PackageArgs if !gate.packages.is_empty() => {
+            let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
+            let selected = gate
+                .packages
+                .iter()
+                .map(|package| format!("contains({args}, ' -p {package} ')"))
+                .chain([format!("contains({args}, ' --workspace ')")])
+                .collect::<Vec<_>>()
+                .join(" || ");
             if gate.unselected {
                 parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
+                parts.push(format!("!({selected})"));
+            } else {
+                parts.push(format!("({selected})"));
             }
-            parts.extend(package_selection(
-                gate,
-                &read(GateNeed::PackageArgs),
-                replanned,
-            ));
         }
         GateNeed::TestFilter
         | GateNeed::PackageArgs

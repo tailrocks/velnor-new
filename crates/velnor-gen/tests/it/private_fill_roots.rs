@@ -164,6 +164,7 @@ fn context(run: Run) -> impl Fn(&str) -> Result<Value, String> {
                 Ok(private.map_or(Value::Null, |value| Value::Str(value.to_owned())))
             }
             "steps.base.outputs.sources" => text("true"),
+            "steps.replan.outcome" => text("skipped"),
             _ if name.ends_with("_mode") => text(
                 if only.is_none_or(|slug| name.ends_with(&format!("rust_{slug}_mode"))) {
                     "all"

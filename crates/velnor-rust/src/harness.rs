@@ -211,20 +211,3 @@ fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
         .filter(|name| !explicit.contains(name.as_str()))
         .collect()
 }
-
-pub(crate) fn declared_features(view: &RepoView, package: &RustPackage) -> Vec<String> {
-    let Some(manifest) = view
-        .files
-        .get(&package.manifest)
-        .and_then(|bytes| table(bytes).ok())
-    else {
-        return Vec::new();
-    };
-    let declared = manifest
-        .get("features")
-        .and_then(toml::Value::as_table)
-        .into_iter()
-        .flat_map(toml::Table::keys)
-        .cloned();
-    declared.chain(implicit_features(&manifest)).collect()
-}

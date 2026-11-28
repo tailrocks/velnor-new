@@ -137,7 +137,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Clippy { extra } => clippy(cargo, extra, &path),
-        CargoCommand::ClippyFeatures { features, .. } => {
+        CargoCommand::ClippyFeatures { features } => {
             crate::cargo_features::clippy_features(cargo, features)
         }
         CargoCommand::NextestBuild => nextest_build(nextest, &path),
@@ -200,7 +200,7 @@ fn cargo_command(
             ),
             vec![],
         ),
-        CargoCommand::DocFeatures { features, .. } => {
+        CargoCommand::DocFeatures { features } => {
             crate::cargo_features::doc_features(cargo, features)
         }
         CargoCommand::CheckAlone { package } => (

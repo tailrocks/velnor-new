@@ -346,7 +346,6 @@ fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_tha
             required_features: Vec::new(),
         }],
         custom_harnesses: Vec::new(),
-        features: Vec::new(),
     };
     let facts = facts(vec![("Cargo.toml", vec![root_package])]);
     assert_selects(

@@ -197,10 +197,8 @@ pub(crate) fn commands(
 ) -> Vec<CargoCommand> {
     let mut linted = BTreeSet::new();
     let mut documented = BTreeSet::new();
-    let lanes: Vec<&TestLane> = lanes_of(config, root, LaneJob::Inline).collect();
-    lanes
-        .iter()
-        .flat_map(|lane| lane_commands(lane, &lanes, root, direct, &mut linted, &mut documented))
+    lanes_of(config, root, LaneJob::Inline)
+        .flat_map(|lane| lane_commands(lane, root, direct, &mut linted, &mut documented))
         .collect()
 }
 
@@ -221,7 +219,6 @@ pub(crate) fn parallel(
             timeout_minutes: lane.timeout_minutes,
             commands: lane_commands(
                 lane,
-                &[lane],
                 root,
                 direct,
                 &mut BTreeSet::new(),
@@ -251,7 +248,6 @@ fn lanes_of<'a>(
 
 fn lane_commands(
     lane: &TestLane,
-    peers: &[&TestLane],
     root: &RustRoot,
     direct: &[String],
     linted: &mut BTreeSet<LaneFeatures>,
@@ -283,59 +279,15 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
-            packages: gate_packages(peers, root, &normalized, |lane| lane.lint),
             features: features(),
         });
     }
-    if lane.doc && documented.insert(normalized.clone()) {
+    if lane.doc && documented.insert(normalized) {
         commands.push(CargoCommand::DocFeatures {
-            packages: gate_packages(peers, root, &normalized, |lane| lane.doc),
             features: features(),
         });
     }
     commands
-}
-
-fn gate_packages(
-    peers: &[&TestLane],
-    root: &RustRoot,
-    normalized: &LaneFeatures,
-    wants: fn(&TestLane) -> bool,
-) -> Vec<PackageName> {
-    if normalized.all || normalized.no_default {
-        return Vec::new();
-    }
-    let mut packages = BTreeSet::new();
-    for lane in peers
-        .iter()
-        .filter(|lane| wants(lane) && lane.features.normalized() == *normalized)
-    {
-        if lane.packages.is_empty() {
-            return Vec::new();
-        }
-        packages.extend(lane.packages.iter().cloned());
-    }
-    if !packages.is_empty() {
-        packages.extend(
-            root.members
-                .iter()
-                .filter(|member| {
-                    normalized
-                        .names
-                        .iter()
-                        .any(|feature| defines(&member.name, &member.features, feature))
-                })
-                .map(|member| member.name.clone()),
-        );
-    }
-    packages.into_iter().collect()
-}
-
-fn defines(package: &PackageName, features: &[String], feature: &str) -> bool {
-    match feature.split_once('/') {
-        Some((prefix, _)) => prefix == package.as_str(),
-        None => features.iter().any(|declared| declared == feature),
-    }
 }
 
 pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

@@ -138,11 +138,7 @@ impl Lane {
     ) -> Step {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
-            CargoCommand::DocFeatures { ref packages, .. } => Some(Gate {
-                packages: packages.clone(),
-                ..self.gate(GateNeed::Docs)
-            }),
+            CargoCommand::Doc | CargoCommand::DocFeatures { .. } => Some(self.gate(GateNeed::Docs)),
             CargoCommand::Deny { .. } => Some(self.gate(GateNeed::Deny)),
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
             CargoCommand::CheckAlone { ref package }
@@ -150,7 +146,6 @@ impl Lane {
                 Some(self.package_gate(vec![package.clone()]))
             }
             CargoCommand::NextestFeatures { ref packages, .. }
-            | CargoCommand::ClippyFeatures { ref packages, .. }
             | CargoCommand::LaneGuard { ref packages, .. }
                 if !packages.is_empty() =>
             {

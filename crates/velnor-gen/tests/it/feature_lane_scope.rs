@@ -5,11 +5,10 @@ use crate::facts::TestResult;
 use crate::pipeline::workflow;
 
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\n";
-const REPLANNED: &str = "steps.replan.outcome == 'success'";
 const LANE_STEP: &str = "Test (features: local-mode)";
 const NOTICE_STEP: &str = "Skip test lane (features: local-mode)";
 const NOTICE: &str = "echo 'skipped: no selected packages'";
-const WORKSPACE: &str = "contains(env.VELNOR_PACKAGE_ARGS_ROOT, ' --workspace ')";
+const WORKSPACE: &str = "contains(format(' {0} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' --workspace ')";
 
 fn lane_steps(config: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
     let repo = crate::feature_lanes::lane_view("0.1.93", config)?;
@@ -28,7 +27,9 @@ fn lane_steps(config: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error
 }
 
 fn package(name: &str) -> String {
-    format!("contains(env.VELNOR_PACKAGE_ARGS_ROOT, ' -p {name} ')")
+    format!(
+        "contains(format(' {{0}} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' -p {name} ')"
+    )
 }
 
 fn text<'a>(step: &'a serde_json::Value, key: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
@@ -57,11 +58,7 @@ fn a_narrowed_run_without_a_lane_package_skips_the_lane_and_says_so() -> TestRes
     assert_eq!(notice["name"], NOTICE_STEP);
     assert_eq!(text(notice, "run")?, NOTICE);
     let condition = text(notice, "if")?;
-    let wanted = [
-        REPLANNED.to_owned(),
-        package("package-0"),
-        WORKSPACE.to_owned(),
-    ];
+    let wanted = [package("package-0"), WORKSPACE.to_owned()];
     let inside = format!("!({})", wanted.join(" || "));
     assert!(condition.contains(&inside), "{condition}");
     assert!(condition.contains("!= 'none'"), "{condition}");

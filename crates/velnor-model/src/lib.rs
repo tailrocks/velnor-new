@@ -83,9 +83,7 @@ pub use plan::{
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
     TOOLS_ANCHOR_OUTPUT, Triggers, When, WorkflowPlan,
 };
-pub use plan_gate::{
-    FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name, package_args_env,
-};
+pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name, mode_env};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,

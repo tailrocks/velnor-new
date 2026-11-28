@@ -10,9 +10,9 @@
 //! not follow that. A build the plan left out (its gate does not hold) is the only
 //! build that may be missing, and one build must have finished.
 
-use velnor_model::{Gate, PrRun, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, PrRun, When, mode_env};
 
-use crate::gate::{Setup, gate_parts};
+use crate::gate::{REPLAN_STEP, Setup, gate_parts, output};
 
 /// How a job shows that a build finished.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,6 +52,19 @@ fn unwrapped(condition: &str) -> &str {
     condition.trim_start_matches("${{ ").trim_end_matches(" }}")
 }
 
+pub(crate) fn mode_read(gate: &Gate) -> Option<(String, String)> {
+    let (PlanFrom::Job(from) | PlanFrom::WorkJob(from)) = &gate.from else {
+        return None;
+    };
+    (gate.need == GateNeed::Selected && gate.also.is_empty()).then(|| {
+        let key = output(&gate.slug, GateNeed::Selected);
+        (
+            mode_env(&gate.slug),
+            format!("${{{{ needs.{from}.outputs.{key} }}}}"),
+        )
+    })
+}
+
 /// What a save, or the audit, waits for before the builds `compiled`.
 pub(crate) fn builds_finished(compiled: &[Compiled], saved_here: Option<&Gate>) -> Vec<String> {
     let mut required: Vec<String> = Vec::new();
@@ -60,8 +73,17 @@ pub(crate) fn builds_finished(compiled: &[Compiled], saved_here: Option<&Gate>) 
         let finished = build.built.finished();
         let term = match &build.gate {
             Some(gate) if Some(gate) != saved_here => {
-                let parts = gate_parts(gate, build.setup == Setup::Replanned).join(" && ");
-                format!("({finished} || !({parts}))")
+                let parts = match mode_read(gate) {
+                    Some((name, _)) => format!("env.{name} != 'none'"),
+                    None => gate_parts(gate, false).join(" && "),
+                };
+                if build.setup == Setup::Replanned {
+                    format!(
+                        "({finished} || !(steps.{REPLAN_STEP}.outcome == 'success' || ({parts})))"
+                    )
+                } else {
+                    format!("({finished} || !({parts}))")
+                }
             }
             _ => {
                 every_build_is_optional = false;

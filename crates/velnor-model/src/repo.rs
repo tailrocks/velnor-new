@@ -286,7 +286,6 @@ pub struct RustMember {
     pub dependencies: Vec<MemberDependency>,
     pub targets: Vec<Target>,
     pub custom_harnesses: Vec<CustomHarness>,
-    pub features: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
