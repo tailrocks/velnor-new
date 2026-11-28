@@ -234,14 +234,13 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
                             .iter()
                             .filter(|context| context.event == WorkflowEvent::PullRequest)
                             .any(|context| match &context.pull_request {
-                                Some(PullRequestAdmission::SameRepository { .. }) => true,
                                 Some(PullRequestAdmission::Rules(rules)) => {
                                     rules.iter().any(|rule| {
                                         rule.number.is_none()
                                             || rule.head_repository_id != scope.repository_id
                                     })
                                 }
-                                None => true,
+                                Some(PullRequestAdmission::SameRepository { .. }) | None => true,
                             })))
             {
                 return Err(HostError::Config);
