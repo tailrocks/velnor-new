@@ -55,12 +55,16 @@ pub(super) enum Phase {
         exit: JobExit,
         attempting: bool,
     },
+    Quarantined,
 }
 
 pub(super) struct Slot {
     pub(super) connection: usize,
     pub(super) phase: Phase,
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(super) struct Slots {
     capacity: u32,
@@ -80,8 +84,24 @@ impl Slots {
             .saturating_sub(u32::try_from(self.entries.len()).unwrap_or(u32::MAX))
     }
 
-    pub(super) fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+    pub(super) fn only_quarantined(&self) -> bool {
+        self.entries
+            .values()
+            .all(|slot| matches!(slot.phase, Phase::Quarantined))
+    }
+
+    pub(super) fn next_free(&self, from: u64) -> Option<ReservationId> {
+        let mut candidate = from.max(1);
+        while let Some(taken) =
+            ReservationId::new(candidate).filter(|id| self.entries.contains_key(id))
+        {
+            match taken.get().checked_add(1) {
+                Some(next) => candidate = next,
+                None if from > 1 => return self.next_free(1),
+                None => return None,
+            }
+        }
+        ReservationId::new(candidate)
     }
 
     pub(super) fn take(
@@ -101,6 +121,16 @@ impl Slots {
             },
         );
         true
+    }
+
+    pub(super) fn quarantine_at_startup(&mut self, reservation: ReservationId) {
+        self.entries.insert(
+            reservation,
+            Slot {
+                connection: 0,
+                phase: Phase::Quarantined,
+            },
+        );
     }
 
     pub(super) fn abandon_launch(&mut self, reservation: ReservationId) {
@@ -148,7 +178,7 @@ impl Slots {
         exit: JobExit,
     ) -> Option<LaunchGrant> {
         let slot = self.entries.get_mut(&reservation)?;
-        if matches!(slot.phase, Phase::Proving { .. }) {
+        if matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined) {
             return None;
         }
         let previous = std::mem::replace(
@@ -160,7 +190,7 @@ impl Slots {
         );
         match previous {
             Phase::Launching { grant } | Phase::Running { grant, .. } => Some(grant),
-            Phase::Proving { .. } => None,
+            Phase::Proving { .. } | Phase::Quarantined => None,
         }
     }
 
@@ -173,7 +203,7 @@ impl Slots {
     pub(super) fn prove_unsettled(&mut self) -> Vec<(ReservationId, usize)> {
         let mut moved = Vec::new();
         for (reservation, slot) in &mut self.entries {
-            if !matches!(slot.phase, Phase::Proving { .. }) {
+            if !matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined) {
                 slot.phase = Phase::Proving {
                     exit: JobExit::Stopped,
                     attempting: false,
@@ -203,7 +233,7 @@ impl Slots {
     pub(super) fn settled(&self) -> bool {
         self.entries
             .values()
-            .all(|slot| matches!(slot.phase, Phase::Proving { .. }))
+            .all(|slot| matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined))
     }
 
     pub(super) fn claim_due_proofs(&mut self) -> Vec<(ReservationId, usize)> {
@@ -229,10 +259,18 @@ impl Slots {
         }
     }
 
+    pub(super) fn quarantine(&mut self, reservation: ReservationId) {
+        if let Some(slot) = self.entries.get_mut(&reservation)
+            && matches!(slot.phase, Phase::Proving { .. })
+        {
+            slot.phase = Phase::Quarantined;
+        }
+    }
+
     pub(super) fn release(&mut self, proof: CleanupProof) -> Option<JobExit> {
         match self.entries.remove(&proof.into_reservation())?.phase {
             Phase::Proving { exit, .. } => Some(exit),
-            Phase::Launching { .. } | Phase::Running { .. } => None,
+            Phase::Launching { .. } | Phase::Running { .. } | Phase::Quarantined => None,
         }
     }
 }

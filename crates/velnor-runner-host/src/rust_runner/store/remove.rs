@@ -22,17 +22,22 @@ mod tests;
 pub(super) struct Bounds {
     pub(super) depth: usize,
     pub(super) entries: u64,
+    pub(super) device: i128,
 }
 
-pub(super) const BOUNDS: Bounds = Bounds {
-    depth: 10_000,
-    entries: 10_000_000,
-};
+pub(super) const fn bounds_on(device: i128) -> Bounds {
+    Bounds {
+        depth: 10_000,
+        entries: 10_000_000,
+        device,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Removal {
     Os(Errno),
     Moved,
+    Crossed,
     TooDeep,
     TooMany,
 }
@@ -46,10 +51,14 @@ impl From<Errno> for Removal {
 impl Removal {
     pub(super) const fn failure(self) -> RustRunnerFailure {
         match self {
-            Self::Os(_) | Self::Moved => RustRunnerFailure::HostStore,
+            Self::Os(_) | Self::Moved | Self::Crossed => RustRunnerFailure::HostStore,
             Self::TooDeep | Self::TooMany => RustRunnerFailure::WorkTreeBound,
         }
     }
+}
+
+pub(super) fn device_of(stat: &Stat) -> i128 {
+    i128::from(stat.st_dev)
 }
 
 struct Frame {
@@ -57,25 +66,11 @@ struct Frame {
     parent: Stat,
 }
 
-pub(super) fn tree(
-    directory: &impl AsFd,
-    name: impl Arg + Copy,
-    bounds: Bounds,
-) -> Result<(), Removal> {
-    let stat = match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(stat) => stat,
-        Err(Errno::NOENT) => return Ok(()),
-        Err(error) => return Err(error.into()),
-    };
-    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory {
-        return Ok(remove_entry(directory, name)?);
-    }
-    let child = open_directory(directory, name)?;
-    contents(&child, bounds)?;
-    Ok(unlinkat(directory, name, AtFlags::REMOVEDIR)?)
-}
-
 pub(super) fn contents(root: &impl AsFd, bounds: Bounds) -> Result<(), Removal> {
+    if device_of(&fstat(root)?) != bounds.device {
+        return Err(Removal::Crossed);
+    }
+    fchmod(root, Mode::RWXU)?;
     let mut path: Vec<Frame> = Vec::new();
     let mut current: Option<OwnedFd> = None;
     let mut seen = 0_u64;
@@ -86,7 +81,7 @@ pub(super) fn contents(root: &impl AsFd, bounds: Bounds) -> Result<(), Removal> 
                 return Err(Removal::TooDeep);
             }
             let parent = fstat(here)?;
-            let child = open_directory(&here, name.as_c_str())?;
+            let child = open_directory(&here, name.as_c_str(), bounds.device)?;
             path.push(Frame { name, parent });
             current = Some(child);
         } else {
@@ -140,7 +135,10 @@ fn drain(
 }
 
 #[cfg(target_os = "linux")]
-fn make_owner_accessible(parent: &impl AsFd, name: impl Arg + Copy) -> Result<(), Errno> {
+pub(super) fn make_owner_accessible(
+    parent: &impl AsFd,
+    name: impl Arg + Copy,
+) -> Result<(), Errno> {
     use std::os::fd::AsRawFd;
 
     let handle = openat(
@@ -158,18 +156,41 @@ fn make_owner_accessible(parent: &impl AsFd, name: impl Arg + Copy) -> Result<()
 }
 
 #[cfg(not(target_os = "linux"))]
-fn make_owner_accessible(parent: &impl AsFd, name: impl Arg + Copy) -> Result<(), Errno> {
+pub(super) fn make_owner_accessible(
+    parent: &impl AsFd,
+    name: impl Arg + Copy,
+) -> Result<(), Errno> {
     chmodat(parent, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)
 }
 
-fn open_directory(parent: &impl AsFd, name: impl Arg + Copy) -> Result<OwnedFd, Errno> {
+pub(super) fn require_device(
+    parent: &impl AsFd,
+    name: impl Arg + Copy,
+    device: i128,
+) -> Result<(), Removal> {
+    if device_of(&statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?) == device {
+        Ok(())
+    } else {
+        Err(Removal::Crossed)
+    }
+}
+
+fn open_directory(
+    parent: &impl AsFd,
+    name: impl Arg + Copy,
+    device: i128,
+) -> Result<OwnedFd, Removal> {
     let child = match openat(parent, name, directory_flags(), Mode::empty()) {
         Err(Errno::ACCESS) => {
+            require_device(parent, name, device)?;
             make_owner_accessible(parent, name)?;
             openat(parent, name, directory_flags(), Mode::empty())?
         }
         opened => opened?,
     };
+    if device_of(&fstat(&child)?) != device {
+        return Err(Removal::Crossed);
+    }
     fchmod(&child, Mode::RWXU)?;
     Ok(child)
 }

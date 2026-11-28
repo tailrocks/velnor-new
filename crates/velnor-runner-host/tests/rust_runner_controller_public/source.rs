@@ -154,9 +154,10 @@ fn assert_outcome(world: &World) {
     assert_eq!(runners.len(), 1);
     let sentinel = reservation(&jits[0]);
     assert!(
-        runners[0]
-            .text
-            .contains(&format!("/var/lib/velnor/jit/{sentinel}.jit")),
+        runners[0].text.contains("--jit @/dev/stdin")
+            && runners[0]
+                .text
+                .ends_with(&format!("--work-dir /srv/velnor/gen/work/{sentinel}")),
         "{}",
         runners[0].text
     );

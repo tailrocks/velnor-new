@@ -3,101 +3,45 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/hostile.rs"]
+mod hostile;
+#[path = "rust_runner_public/inside.rs"]
+mod inside;
+#[path = "rust_runner_public/launch.rs"]
+mod launch;
+#[path = "rust_runner_public/layout.rs"]
+mod layout;
+#[path = "rust_runner_public/machine.rs"]
+mod machine;
+#[path = "rust_runner_public/migration.rs"]
+mod migration;
 #[path = "rust_runner_public/orb_calls.rs"]
 mod orb_calls;
 #[path = "rust_runner_public/removal.rs"]
 mod removal;
+#[path = "rust_runner_public/runner_copy.rs"]
+mod runner_copy;
 #[path = "rust_runner_public/store.rs"]
 mod store;
 #[path = "rust_runner_public/support.rs"]
 mod support;
+#[path = "rust_runner_public/user.rs"]
+mod user;
 
 use std::error::Error;
 use std::time::{Duration, Instant};
 
 use velnor_runner_host::{HostConfig, HostError, LaunchMode, RunningJob, RustRunnerFailure};
 
-use support::{Fixture, SECRET_JIT, jit, process_exists, reservation, runner_lines, wait_for};
-
-#[test]
-fn rust_runner_creates_missing_machine() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"velnor-other"},{"name":"jackin"}]"#)?;
-    fixture.launcher().ensure_machine()?;
-    let log = fixture.log()?;
-    assert_eq!(log[0], "list -f json");
-    assert!(
-        log.contains(&"create -a arm64 ubuntu velnor".to_owned()),
-        "{log:?}"
-    );
-    fixture.launcher().ensure_machine()?;
-    let creates = fixture
-        .log()?
-        .iter()
-        .filter(|line| line.starts_with("create"))
-        .count();
-    assert_eq!(creates, 1);
-    Ok(())
-}
-
-#[test]
-fn rust_runner_skips_create_when_machine_exists() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(
-        r#"[{"name":"jackin"},{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#,
-    )?;
-    fixture.launcher().ensure_machine()?;
-    assert!(
-        fixture
-            .log()?
-            .iter()
-            .all(|line| !line.starts_with("create")),
-        "{:?}",
-        fixture.log()?
-    );
-    for listed in [
-        r#"[{"name":"velnor","image":{"distro":"debian","arch":"arm64"}}]"#,
-        r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"amd64"}}]"#,
-    ] {
-        let incompatible = Fixture::new(listed)?;
-        assert_eq!(
-            incompatible.launcher().ensure_machine().err(),
-            Some(HostError::RustRunner(
-                RustRunnerFailure::MachineIncompatible
-            )),
-            "{listed}"
-        );
-        assert!(
-            incompatible.log()?.iter().all(|line| {
-                !line.starts_with("create") && !line.contains(" ln ") && !line.contains(" test ")
-            }),
-            "{:?}",
-            incompatible.log()?
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new("[]")?;
-    fixture.launcher().ensure_machine()?;
-    let expected = format!(
-        "-m velnor -u root ln -sfnT /mnt/mac{} /var/lib/velnor",
-        fixture.store.display()
-    );
-    assert!(fixture.log()?.contains(&expected), "{:?}", fixture.log()?);
-    for name in [
-        "bin", "crates", "tools", "git", "gen", "cache", "records", "jit", "work",
-    ] {
-        assert!(fixture.store.join(name).is_dir(), "{name}");
-    }
-    Ok(())
-}
+use support::{
+    Fixture, GUEST, SECRET_JIT, jit, process_exists, reservation, runner_lines, wait_for,
+};
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+    let fixture = Fixture::ready()?;
     let launcher = fixture.launcher();
+    launcher.ensure_machine()?;
     let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"))?;
     let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"))?;
     assert!(first.wait().await?.success());
@@ -107,17 +51,15 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
     let lines = runner_lines(&log);
     assert_eq!(lines.len(), 2, "{log:?}");
     assert!(
-        lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/11.jit --work-dir /var/lib/velnor/work/11"
-                .to_owned()
-        ),
+        lines.contains(&&format!(
+            "{GUEST} unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/dev/stdin --work-dir /srv/velnor/gen/work/11"
+        )),
         "{lines:?}"
     );
     assert!(
-        lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/12.jit --work-dir /var/lib/velnor/work/12"
-                .to_owned()
-        ),
+        lines.contains(&&format!(
+            "{GUEST} unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/dev/stdin --work-dir /srv/velnor/gen/work/12"
+        )),
         "{lines:?}"
     );
     assert_eq!(
@@ -128,17 +70,14 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
         std::fs::read_to_string(fixture.seen("12.jit"))?,
         "second-jit"
     );
-    assert_eq!(
-        std::fs::read_to_string(fixture.seen("11.jit.mode"))?.trim(),
-        "600"
-    );
+    assert_eq!(std::fs::read_dir(&fixture.store)?.count(), 0);
     Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+    let fixture = Fixture::ready()?;
+    fixture.launcher().ensure_machine()?;
     let mut job = fixture
         .launcher()
         .start_job(reservation(21)?, &jit(SECRET_JIT))?;
@@ -155,16 +94,15 @@ async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+async fn rust_runner_ends_the_runner_and_its_child_with_the_job() -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::ready()?;
+    fixture.launcher().ensure_machine()?;
     fixture.configure("FAKE_RUNNER_EXIT=3\n")?;
     let mut job = fixture
         .launcher()
         .start_job(reservation(31)?, &jit(SECRET_JIT))?;
     let status = job.wait().await?;
     assert_eq!(status.code(), Some(3));
-    assert!(!fixture.jit_file(31).exists());
 
     fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
     let job: RunningJob = fixture
@@ -173,10 +111,8 @@ async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>>
     let child_file = fixture.seen("32.jit.child");
     wait_for(&child_file).await?;
     let child = std::fs::read_to_string(&child_file)?.trim().to_owned();
-    assert!(fixture.jit_file(32).exists());
     assert!(process_exists(&child));
     job.stop().await?;
-    assert!(!fixture.jit_file(32).exists());
     wait_until_dead(&child).await?;
 
     let job = fixture
@@ -186,10 +122,8 @@ async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>>
     wait_for(&pid_file).await?;
     wait_for(&fixture.seen("33.jit.child")).await?;
     let pid = std::fs::read_to_string(&pid_file)?.trim().to_owned();
-    assert!(fixture.jit_file(33).exists());
     drop(job);
     wait_until_dead(&pid).await?;
-    assert!(!fixture.jit_file(33).exists());
     let orphan = std::fs::read_to_string(fixture.seen("33.jit.child"))?
         .trim()
         .to_owned();
@@ -210,9 +144,8 @@ async fn wait_until_dead(pid: &str) -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rust_runner_fails_when_binary_missing() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    std::fs::remove_file(fixture.store.join("bin/velnor-runner"))?;
+    let fixture = Fixture::ready()?;
+    std::fs::remove_file(fixture.root.join("host-runner"))?;
     let error = fixture
         .launcher()
         .ensure_machine()
@@ -224,7 +157,7 @@ fn rust_runner_fails_when_binary_missing() -> Result<(), Box<dyn Error>> {
     );
     assert_eq!(
         error.to_string(),
-        "velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine"
+        "velnor-runner is missing from the host runner path"
     );
     Ok(())
 }
@@ -354,16 +287,6 @@ fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
 }
 
 #[test]
-fn rust_runner_removes_a_tree_deeper_than_its_descriptor_limit() -> Result<(), Box<dyn Error>> {
-    removal::deep_tree_under_a_small_descriptor_limit()
-}
-
-#[test]
-fn rust_runner_removes_directories_its_owner_cannot_open() -> Result<(), Box<dyn Error>> {
-    removal::directories_the_owner_cannot_open()
-}
-
-#[test]
 fn rust_runner_bounds_the_output_it_captures_from_orb() -> Result<(), Box<dyn Error>> {
     removal::orb_output_over_the_capture_bound()
 }
@@ -378,4 +301,97 @@ fn rust_runner_ignores_a_host_store_override_in_the_environment() -> Result<(), 
     removal::ignores_a_store_override_in_the_environment(
         "rust_runner_ignores_a_host_store_override_in_the_environment",
     )
+}
+
+fn with_machine_disk(lines: &str) -> String {
+    host_config(
+        Some("rust-runner"),
+        "linux/arm64",
+        "velnor-mac",
+        &MAC_LABELS,
+    )
+    .replace(
+        "[docker]",
+        &format!("[host.machine_disk]\n{lines}\n[docker]"),
+    )
+}
+
+#[test]
+fn rust_runner_machine_cap_is_the_store_budget_plus_the_job_allowance_per_job()
+-> Result<(), Box<dyn Error>> {
+    let default = HostConfig::parse_draft(&host_config(
+        Some("rust-runner"),
+        "linux/arm64",
+        "velnor-mac",
+        &MAC_LABELS,
+    ))?;
+    assert_eq!(default.host.machine_disk_cap_gib(), Some(172));
+    let sized = HostConfig::parse_draft(&with_machine_disk(
+        "store_budget_gib = 10\njob_limit_gib = 20\njob_slack_gib = 5",
+    ))?;
+    assert_eq!(sized.host.machine_disk_cap_gib(), Some(35));
+    for invalid in [
+        "job_limit_gib = 0",
+        "store_budget_gib = 18446744073709551615",
+        "job_slack_gib = 18446744073709551615",
+        "store_budget_gib = 20000",
+        "unknown_gib = 1",
+    ] {
+        assert_eq!(
+            HostConfig::parse_draft(&with_machine_disk(invalid)).err(),
+            Some(HostError::Config),
+            "{invalid}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_machine_disk_survives_a_host_toml_round_trip() -> Result<(), HostError> {
+    let official = host_config(
+        None,
+        "linux/amd64",
+        "ubuntu-26.04-scale-set",
+        &["velnor", "ubuntu-26.04-scale-set"],
+    );
+    let plain = HostConfig::parse(&official)?.to_toml()?;
+    assert!(!plain.contains("machine_disk"), "{plain}");
+    let sized = official.replace(
+        "[docker]",
+        "[host.machine_disk]\nstore_budget_gib = 10\njob_limit_gib = 20\njob_slack_gib = 5\n[docker]",
+    );
+    let written = HostConfig::parse(&sized)?.to_toml()?;
+    assert_eq!(
+        HostConfig::parse(&written)?.host.machine_disk_cap_gib(),
+        Some(35)
+    );
+    Ok(())
+}
+
+#[test]
+fn official_runner_mode_ignores_a_machine_disk_it_never_uses() -> Result<(), HostError> {
+    let official = host_config(
+        None,
+        "linux/amd64",
+        "ubuntu-26.04-scale-set",
+        &["velnor", "ubuntu-26.04-scale-set"],
+    );
+    for unused in [
+        "job_limit_gib = 0",
+        "store_budget_gib = 20000",
+        "job_slack_gib = 18446744073709551615",
+    ] {
+        let text = official.replace(
+            "[docker]",
+            &format!("[host.machine_disk]\n{unused}\n[docker]"),
+        );
+        HostConfig::parse(&text)?;
+        let rust = text.replace("[host]\n", "[host]\nlaunch_mode = \"rust-runner\"\n");
+        assert_eq!(
+            HostConfig::parse_draft(&rust).err(),
+            Some(HostError::Config),
+            "{unused}"
+        );
+    }
+    Ok(())
 }

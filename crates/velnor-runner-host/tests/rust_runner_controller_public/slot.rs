@@ -57,17 +57,15 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let acquire = acquire_with_ids(&events, "4").ok_or("no acquire for D")?;
     let state = snapshot(&world, &acquire);
     assert!(
-        !state.runners.contains(&runner_name(3))
-            && !state.work.contains(&"3".to_owned())
-            && !state.jit.contains(&"3.jit".to_owned()),
+        !state.runners.contains(&runner_name(3)) && !state.work.contains(&"3".to_owned()),
         "{state:?}"
     );
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_eq!(acquire_ids(&world), ["1", "2", "3", "4"]);
-    assert_eq!(std::fs::read_dir(world.store.join("jit"))?.count(), 0);
-    assert_eq!(std::fs::read_dir(world.store.join("work"))?.count(), 0);
+    assert_eq!(std::fs::read_dir(world.work())?.count(), 0);
+    assert_eq!(std::fs::read_dir(world.stage())?.count(), 0);
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
     assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));
@@ -165,7 +163,7 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
         "{:?}",
         state.runners
     );
-    assert!(!state.jit.contains(&"1.jit".to_owned()) && !state.work.contains(&"1".to_owned()));
+    assert!(!state.work.contains(&"1".to_owned()));
     let last_ps = events
         .iter()
         .rfind(|event| event.seq < acquire.seq && event.is_orb("ps -eo"))

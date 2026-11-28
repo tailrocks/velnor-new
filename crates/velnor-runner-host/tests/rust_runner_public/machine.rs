@@ -1,0 +1,310 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::error::Error;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+
+use serde_json::json;
+use velnor_runner_host::{HostError, RustRunnerFailure};
+
+use super::support::Fixture;
+
+type Check = Result<(), Box<dyn Error>>;
+type Mutation = fn(&mut serde_json::Value);
+
+const CAP_BYTES: u64 = 172 << 30;
+const OPEN: [&str; 10] = [
+    "var/lib/velnor",
+    "var/lib/velnor/bin",
+    "var/lib/velnor/tools",
+    "var/lib/velnor/crates",
+    "var/lib/velnor/cache",
+    "var/lib/velnor/git",
+    "srv/velnor",
+    "srv/velnor/gen",
+    "srv/velnor/gen/work",
+    "srv/velnor/gen/stage",
+];
+const CLOSED: [&str; 4] = [
+    "var/lib/velnor/locks",
+    "var/lib/velnor/aside",
+    "var/lib/velnor/incoming",
+    "var/lib/velnor/live",
+];
+
+const fn refused(failure: RustRunnerFailure) -> HostError {
+    HostError::RustRunner(failure)
+}
+
+fn mode(path: &PathBuf) -> Result<u32, Box<dyn Error>> {
+    Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
+}
+
+#[test]
+fn rust_runner_creates_the_isolated_machine_with_the_disk_cap_and_no_mounts() -> Check {
+    let fixture = Fixture::new("[]")?;
+    fixture.launcher().ensure_machine()?;
+    let log = fixture.log()?;
+    assert_eq!(log[0], "list -f json");
+    let create = "create --isolated --isolate-network --disk 172G -a arm64 ubuntu velnor";
+    assert!(log.contains(&create.to_owned()), "{log:?}");
+    fixture.launcher().ensure_machine()?;
+    let creates = fixture
+        .log()?
+        .iter()
+        .filter(|line| line.starts_with("create"))
+        .count();
+    assert_eq!(creates, 1);
+    assert!(fixture.store.is_dir());
+    assert_eq!(std::fs::read_dir(&fixture.store)?.count(), 0);
+    let small = Fixture::new("[]")?;
+    small.configure(&format!("FAKE_GUEST_CAP_BYTES={}\n", 8u64 << 30))?;
+    small.launcher().with_machine_disk(8, 64).ensure_machine()?;
+    assert!(
+        small
+            .log()?
+            .iter()
+            .any(|line| line
+                == "create --isolated --isolate-network --disk 8G -a arm64 ubuntu velnor"),
+        "{:?}",
+        small.log()?
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_runner_keeps_a_machine_of_the_required_shape() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.launcher().ensure_machine()?;
+    assert!(
+        fixture
+            .log()?
+            .iter()
+            .all(|line| !line.starts_with("create"))
+    );
+    for image in [
+        json!({"distro": "debian", "arch": "arm64"}),
+        json!({"distro": "ubuntu", "arch": "amd64"}),
+    ] {
+        let listed = Fixture::ready()?;
+        let text = std::fs::read_to_string(listed.root.join("list.json"))?;
+        let mut machines: serde_json::Value = serde_json::from_str(&text)?;
+        machines[0]["image"] = image;
+        std::fs::write(listed.root.join("list.json"), machines.to_string())?;
+        assert_eq!(
+            listed.launcher().ensure_machine().err(),
+            Some(refused(RustRunnerFailure::MachineIncompatible))
+        );
+        assert!(listed.log()?.iter().all(|line| !line.contains(" -u root ")));
+    }
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_a_machine_that_is_not_confined() -> Check {
+    let breaks: [(&str, Mutation); 6] = [
+        ("not isolated", |c| {
+            c["isolated"] = json!(false);
+        }),
+        ("network not isolated", |c| {
+            c["isolate_network"] = json!(false);
+        }),
+        ("ssh agent forwarded", |c| {
+            c["forward_ssh_agent"] = json!(true);
+        }),
+        ("another cap", |c| {
+            c["disk_limit_bytes"] = json!(8u64 << 30);
+        }),
+        ("no cap", |c| {
+            if let Some(object) = c.as_object_mut() {
+                object.remove("disk_limit_bytes");
+            }
+        }),
+        ("a mount", |c| {
+            c["mounts"] = json!([{"source": "/opt/share", "destination": "/var/lib/velnor-host"}]);
+        }),
+    ];
+    for (name, mutate) in breaks {
+        let fixture = Fixture::shaped(mutate)?;
+        assert_eq!(
+            fixture.launcher().ensure_machine().err(),
+            Some(refused(RustRunnerFailure::MachineShape)),
+            "{name}"
+        );
+        let log = fixture.log()?;
+        assert!(
+            log.iter()
+                .all(|line| !line.starts_with("create") && !line.contains(" -u root ")),
+            "{name}: {log:?}"
+        );
+    }
+    let today = Fixture::new(
+        r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"},"config":{"isolated":false,"forward_ssh_agent":true,"isolate_network":false}}]"#,
+    )?;
+    let error = today.launcher().ensure_machine().err().ok_or("accepted")?;
+    assert_eq!(error, refused(RustRunnerFailure::MachineShape));
+    assert!(error.to_string().contains("orb delete velnor"));
+    let resized = Fixture::ready()?;
+    assert_eq!(
+        resized
+            .launcher()
+            .with_machine_disk(8, 64)
+            .ensure_machine()
+            .err(),
+        Some(refused(RustRunnerFailure::MachineShape))
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_a_store_directory_owned_by_another_user_and_leaves_it() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.launcher().ensure_machine()?;
+    let installs = fixture.commands("install")?;
+    fixture.configure("FAKE_GUEST_OWNERS=/var/lib/velnor/cache=1000\n")?;
+    let error = fixture
+        .launcher()
+        .ensure_machine()
+        .err()
+        .ok_or("accepted")?;
+    assert!(
+        matches!(
+            error,
+            HostError::RustRunner(RustRunnerFailure::StoreOwner(_))
+        ),
+        "{error:?}"
+    );
+    assert!(
+        error.to_string().contains("/var/lib/velnor/cache"),
+        "{error}"
+    );
+    assert_eq!(
+        fixture.commands("install")?,
+        installs,
+        "the directory was re-owned"
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_runner_provisions_the_vm_local_store_layout() -> Check {
+    let fixture = Fixture::ready()?;
+    std::fs::write(fixture.root.join("host-runner"), "runner-build")?;
+    fixture.launcher().ensure_machine()?;
+    fixture.launcher().ensure_machine()?;
+    for path in OPEN {
+        assert!(fixture.guest(path).is_dir(), "{path}");
+        assert_eq!(mode(&fixture.guest(path))?, 0o755, "{path}");
+    }
+    for path in CLOSED {
+        assert_eq!(mode(&fixture.guest(path))?, 0o700, "{path}");
+    }
+    let copy = fixture.guest("var/lib/velnor/bin/velnor-runner");
+    assert_eq!(std::fs::read_to_string(&copy)?, "runner-build");
+    assert_eq!(mode(&copy)?, 0o755);
+    assert_eq!(fixture.commands("ln")?, 0);
+    assert!(!fixture.guest("var/lib/velnor/bin/.stage").exists());
+    assert!(!fixture.store.join("bin").exists());
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_an_ancestor_that_the_sandbox_user_could_own() -> Check {
+    for owned in ["/var/lib", "/srv"] {
+        let fixture = Fixture::ready()?;
+        fixture.configure(&format!("FAKE_GUEST_OWNERS={owned}=1000\n"))?;
+        fixture.ensure_refused(RustRunnerFailure::MachineLayout);
+    }
+    let writable = Fixture::ready()?;
+    writable.configure("FAKE_GUEST_MODES=/var=777\n")?;
+    writable.ensure_refused(RustRunnerFailure::MachineLayout);
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_stores_that_are_not_on_btrfs() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.configure("FAKE_GUEST_FS=xfs\n")?;
+    fixture.ensure_refused(RustRunnerFailure::MachineFilesystem);
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_a_machine_without_protected_links() -> Check {
+    for values in ["1,0", "0,1", "0,0"] {
+        let fixture = Fixture::ready()?;
+        fixture.configure(&format!("FAKE_GUEST_SYSCTL={values}\n"))?;
+        fixture.ensure_refused(RustRunnerFailure::MachineShape);
+    }
+    Ok(())
+}
+
+#[test]
+fn rust_runner_probes_the_disk_cap_once_per_orbstack_version() -> Check {
+    let fixture = Fixture::ready()?;
+    let record = fixture.guest("var/lib/velnor/cap-probe");
+    fixture.launcher().ensure_machine()?;
+    fixture.launcher().ensure_machine()?;
+    assert_eq!(fixture.commands("fallocate")?, 1);
+    assert_eq!(
+        std::fs::read_to_string(&record)?.trim(),
+        format!("orbstack=2.2.5-2020500 cap={CAP_BYTES}")
+    );
+    fixture.configure("FAKE_ORB_VERSION=2.3.0 (2030000)\n")?;
+    fixture.launcher().ensure_machine()?;
+    assert_eq!(fixture.commands("fallocate")?, 2);
+    assert_eq!(
+        std::fs::read_to_string(&record)?.trim(),
+        format!("orbstack=2.3.0-2030000 cap={CAP_BYTES}")
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_a_machine_that_does_not_enforce_its_disk_cap() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.configure("FAKE_GUEST_NO_CAP=1\n")?;
+    fixture.ensure_refused(RustRunnerFailure::CapProbe);
+    assert!(!fixture.guest("var/lib/velnor/cap-probe").exists());
+    assert!(!fixture.guest("var/lib/velnor/.cap-probe").exists());
+    Ok(())
+}
+
+#[test]
+fn rust_runner_takes_only_a_quota_error_as_proof_of_the_disk_cap() -> Check {
+    for error in ["Operation not supported", "Input/output error"] {
+        let fixture = Fixture::ready()?;
+        fixture.configure(&format!("FAKE_GUEST_CAP_ERROR={error}\n"))?;
+        fixture.ensure_refused(RustRunnerFailure::CapProbe);
+        assert!(
+            !fixture.guest("var/lib/velnor/cap-probe").exists(),
+            "{error}"
+        );
+        assert!(
+            !fixture.guest("var/lib/velnor/.cap-probe").exists(),
+            "{error}"
+        );
+    }
+    for error in ["No space left on device", "Disk quota exceeded"] {
+        let fixture = Fixture::ready()?;
+        fixture.configure(&format!("FAKE_GUEST_CAP_ERROR={error}\n"))?;
+        fixture.launcher().ensure_machine()?;
+        assert!(
+            fixture.guest("var/lib/velnor/cap-probe").exists(),
+            "{error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn rust_runner_job_limit_follows_the_configured_machine_disk() -> Check {
+    let fixture = Fixture::ready()?;
+    assert_eq!(fixture.launcher().job_limit_gib(), 64);
+    assert_eq!(
+        fixture.launcher().with_machine_disk(8, 9).job_limit_gib(),
+        9
+    );
+    Ok(())
+}

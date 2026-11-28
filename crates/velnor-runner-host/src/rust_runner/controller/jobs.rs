@@ -7,6 +7,7 @@ use velnor_runner_github::EncodedJit;
 use super::admission::JobExit;
 use super::cleanup::{CleanupProof, ProofInputs, prove};
 use super::{Event, MACHINE_PROBE, Run, blocking};
+use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
 use crate::rust_runner::{ReservationId, RunningJob};
 
@@ -36,12 +37,6 @@ async fn supervise(
 }
 
 impl Run<'_> {
-    pub(super) fn allocate_reservation(&mut self) -> Option<ReservationId> {
-        let reservation = ReservationId::new(self.next_reservation)?;
-        self.next_reservation = self.next_reservation.checked_add(1)?;
-        Some(reservation)
-    }
-
     pub(super) fn runner_name(&self, connection: usize, reservation: ReservationId) -> String {
         let scale_set = self
             .connections
@@ -127,8 +122,18 @@ impl Run<'_> {
                 }
             }
             Err(error) => {
-                eprintln!("rust-runner cleanup held for reservation {reservation}: {error}");
-                self.slots.proof_failed(reservation);
+                if matches!(
+                    error,
+                    ListenFault::Host(HostError::RustRunner(RustRunnerFailure::JobDirsWedged))
+                ) {
+                    eprintln!(
+                        "rust-runner quarantined reservation {reservation}: {error}; remove its work and stage directories in the velnor machine by hand, then restart the daemon"
+                    );
+                    self.slots.quarantine(reservation);
+                } else {
+                    eprintln!("rust-runner cleanup held for reservation {reservation}: {error}");
+                    self.slots.proof_failed(reservation);
+                }
             }
         }
     }
@@ -139,7 +144,8 @@ impl Run<'_> {
         }
         let launcher = self.cx.launcher.clone();
         self.tasks.spawn(async move {
-            let result = blocking(move || launcher.runner_digest().map_err(Into::into)).await;
+            let result =
+                blocking(move || launcher.installed_runner_digest().map_err(Into::into)).await;
             Event::RunnerBinary(result)
         });
     }
@@ -153,7 +159,8 @@ impl Run<'_> {
         self.machine_checking = true;
         let launcher = self.cx.launcher.clone();
         self.tasks.spawn(async move {
-            let result = blocking(move || launcher.ensure_machine().map_err(Into::into)).await;
+            let result =
+                blocking(move || launcher.ensure_machine().map(drop).map_err(Into::into)).await;
             Event::Machine(result)
         });
     }

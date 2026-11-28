@@ -61,7 +61,7 @@ pub(crate) fn names_work_dir(args: &str, work_dir: &str) -> bool {
 
 impl RustRunnerLauncher {
     pub fn list_processes(&self) -> Result<Vec<MachineProcess>, HostError> {
-        let mut command = self.as_root();
+        let mut command = self.guest();
         command.args(["ps", "-eo", "pid=,args="]);
         let output = orb::run(command, self.deadline, true).map_err(HostError::RustRunner)?;
         if !output.status.success() {
@@ -81,7 +81,7 @@ impl RustRunnerLauncher {
         if pids.is_empty() {
             return Ok(());
         }
-        let mut command = self.as_root();
+        let mut command = self.guest();
         command
             .args(["kill", "-9"])
             .args(pids.iter().map(u32::to_string));
