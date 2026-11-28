@@ -5,6 +5,8 @@
 mod acquire_shape;
 #[path = "rust_runner_controller_public/admission.rs"]
 mod admission;
+#[path = "rust_runner_controller_public/assigned.rs"]
+mod assigned;
 #[path = "rust_runner_controller_public/checks.rs"]
 mod checks;
 #[path = "rust_runner_controller_public/child.rs"]
@@ -71,6 +73,14 @@ macro_rules! public_test {
 }
 
 public_test!(rust_runner_controller_runs_authorized_job_once, once::run);
+public_test!(
+    rust_runner_controller_goes_to_jit_for_an_assigned_offer,
+    assigned::goes_to_jit
+);
+public_test!(
+    rust_runner_controller_goes_to_jit_for_an_assigned_offer_that_supersedes_an_available_one,
+    assigned::goes_to_jit_after_an_available_one
+);
 public_test!(
     rust_runner_controller_never_acquires_unapproved_source,
     source::run

@@ -26,6 +26,7 @@ export interface Offer {
   sha: string;
   workflow_content: string;
   pr?: Pull;
+  kind?: "JobAssigned";
   acquire_returns?: "none" | "duplicate" | "extra";
   jit_failures?: number;
   jit_identity?: "id" | "scale_set" | "name";
