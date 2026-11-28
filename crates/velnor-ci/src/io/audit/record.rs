@@ -11,6 +11,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
 use super::super::units::UnitFile;
 use super::freshness::Cause;
+use super::unhashed::Pending;
 use super::{Audit, REBUILD, UnitIdentity};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
@@ -41,10 +42,12 @@ impl Audit<'_> {
             } => {
                 let owners = self.member_owners(&package, indices);
                 for index in indices.iter().filter(|index| !owners.contains(index)) {
-                    self.foreign.insert(
-                        (*index, configuration.clone(), hash.clone()),
-                        package.clone(),
-                    );
+                    if let Some(fingerprint) = Fingerprint::parse(&name) {
+                        self.foreign.insert(
+                            (*index, configuration.clone(), hash.clone()),
+                            (package.clone(), fingerprint),
+                        );
+                    }
                 }
                 for index in owners {
                     self.fingerprint(
@@ -58,9 +61,19 @@ impl Audit<'_> {
             }
             UnitFile::DepInfo {
                 configuration,
-                hash,
+                hash: Some(hash),
                 ..
-            } => self.record_dep_info(indices, file, &configuration, hash.as_deref())?,
+            } => self.record_dep_info(indices, file, &configuration, &hash)?,
+            UnitFile::DepInfo {
+                configuration,
+                hash: None,
+                stem,
+            } => self.unhashed.push(Pending {
+                indices: indices.to_vec(),
+                file: file.to_path_buf(),
+                configuration,
+                stem,
+            }),
             UnitFile::Script {
                 profile,
                 package,
@@ -92,19 +105,13 @@ impl Audit<'_> {
         Ok(())
     }
 
-    fn record_dep_info(
+    pub(super) fn record_dep_info(
         &mut self,
         indices: &[usize],
         file: &Path,
         configuration: &str,
-        hash: Option<&str>,
+        hash: &str,
     ) -> Result<(), CiError> {
-        let Some(hash) = hash else {
-            return Err(CiError::new(format!(
-                "{} carries no unit hash, so no fingerprint can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
-                file.display()
-            )));
-        };
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
         for index in indices {
             let key = (*index, configuration.to_owned(), hash.to_owned());
@@ -118,7 +125,7 @@ impl Audit<'_> {
             None => indices.iter().find_map(|index| {
                 self.foreign
                     .get(&(*index, configuration.to_owned(), hash.to_owned()))
-                    .cloned()
+                    .map(|(package, _)| package.clone())
             }),
         };
         let Some(package) = found else {

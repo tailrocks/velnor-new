@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use super::oracle::{Layout, Share, build_in};
 use super::two_roots::{audit_after, remove_named, repo, with_script};
@@ -55,4 +56,58 @@ fn a_dep_info_file_without_a_unit_hash_refuses_the_audit_in_the_legacy_layout() 
 #[test]
 fn a_dep_info_file_without_a_unit_hash_refuses_the_audit_in_the_new_layout() {
     without_hash(Layout::New);
+}
+
+fn corrupted_fingerprint(layout: Layout) {
+    let repo = built(layout);
+    let mut files = Vec::new();
+    named(&repo.root().join("a/target"), "lib-x.json", &mut files);
+    assert_ne!(files.len(), 0);
+    for file in files {
+        fs::write(file, "{").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    refused(&repo, "lib-x.json is not valid JSON");
+}
+
+fn named(directory: &Path, name: &str, found: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            named(&path, name, found);
+        } else if path.file_name().is_some_and(|file| file == name) {
+            found.push(path);
+        }
+    }
+}
+
+#[test]
+fn a_fingerprint_that_is_not_json_refuses_the_audit_in_the_legacy_layout() {
+    corrupted_fingerprint(Layout::Legacy);
+}
+
+#[test]
+fn a_fingerprint_that_is_not_json_refuses_the_audit_in_the_new_layout() {
+    corrupted_fingerprint(Layout::New);
+}
+
+#[test]
+fn an_unhashed_dep_info_file_beside_several_units_without_dep_info_refuses_the_audit() {
+    let repo = built(Layout::Legacy);
+    let deps = repo.root().join("a/target/debug/deps");
+    let mut hashed = Vec::new();
+    for entry in fs::read_dir(&deps).into_iter().flatten().flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("x-") && Path::new(&name).extension().is_some_and(|e| e == "d") {
+            hashed.push(entry.path());
+        }
+    }
+    assert_ne!(hashed.len(), 0);
+    for file in hashed {
+        fs::remove_file(file).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    fs::write(deps.join("x.d"), "x: a/x/src/lib.rs\n").unwrap_or_else(|e| unreachable!("{e}"));
+    refused(
+        &repo,
+        "2 fingerprint units of target x have no hashed dep-info",
+    );
 }

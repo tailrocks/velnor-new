@@ -12,6 +12,7 @@ mod record;
 mod selection;
 mod setup;
 mod timing;
+mod unhashed;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
@@ -51,7 +52,8 @@ pub(super) struct Audit<'a> {
     freshness: freshness::Freshness,
     diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
-    pub(super) foreign: BTreeMap<(usize, String, String), String>,
+    pub(super) foreign: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) unhashed: Vec<unhashed::Pending>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
     pub(super) placed: BTreeSet<(usize, String)>,
     pub(super) rooted: BTreeSet<(usize, String)>,
@@ -100,6 +102,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
     for (unit, file, indices) in gathered {
         audit.record(&indices, &file, unit)?;
     }
+    audit.record_unhashed()?;
     audit.orphans();
     let gated = gated(&facts);
     let platforms = workspaces

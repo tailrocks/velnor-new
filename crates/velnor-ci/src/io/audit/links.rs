@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde_json::Value;
 
@@ -51,11 +52,12 @@ impl Links {
     pub(super) fn note(
         &mut self,
         kind: Kind,
+        file: &Path,
         text: &str,
         target: usize,
         configuration: &str,
         hash: &str,
-    ) {
+    ) -> Result<(), CiError> {
         let unit = (target, configuration.to_owned(), hash.to_owned());
         match kind {
             Kind::Run => self
@@ -69,12 +71,13 @@ impl Links {
                 .or_default()
                 .push(hash.to_owned()),
             Kind::Unit => {
-                self.wanted.insert(unit, digests(text));
+                self.wanted.insert(unit, digests(file, text)?);
             }
             Kind::RunUnit => {
-                self.run_wanted.insert(unit, digests(text));
+                self.run_wanted.insert(unit, digests(file, text)?);
             }
         }
+        Ok(())
     }
 
     pub(super) fn resolve(self) -> Result<Resolved, CiError> {
@@ -128,16 +131,19 @@ fn one<'a>(
     Ok(Some(first.clone()))
 }
 
-fn digests(text: &str) -> Vec<String> {
-    let Ok(value) = serde_json::from_str::<Value>(text) else {
-        return Vec::new();
-    };
-    value
+fn digests(file: &Path, text: &str) -> Result<Vec<String>, CiError> {
+    let value = serde_json::from_str::<Value>(text).map_err(|e| {
+        CiError::new(format!(
+            "{} is not valid JSON ({e}), so the build-script runs it depends on cannot be matched; rebuild every observed target in this checkout through {REBUILD}",
+            file.display()
+        ))
+    })?;
+    Ok(value
         .get("deps")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|entry| entry.as_array()?.get(3)?.as_u64())
         .map(|digest| format!("{:016x}", digest.swap_bytes()))
-        .collect()
+        .collect())
 }

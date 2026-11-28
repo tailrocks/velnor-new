@@ -238,6 +238,12 @@ fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_targe
     ]);
     let target = "rust/target/x86_64-unknown-linux-gnu/debug";
     own_units_in(&repo, "rust/target/debug", target, &[]);
+    fs::rename(
+        repo.root()
+            .join(format!("{target}/deps/lib-f000000000000005.d")),
+        repo.root().join(format!("{target}/deps/lib.d")),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     let recompiled =
         "rust/target/debug/build/lib-f00000000000001a/build_script_build-f00000000000001a.d";
     unit(&repo, recompiled, "out.d: lib/build.rs\n");

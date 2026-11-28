@@ -130,7 +130,7 @@ impl Audit<'_> {
                             FINGERPRINT_LIMIT,
                             "fingerprint file",
                         )?;
-                        links.note(kind, &text, budget, configuration, hash);
+                        links.note(kind, output, &text, budget, configuration, hash)?;
                     }
                 }
                 _ => {}
