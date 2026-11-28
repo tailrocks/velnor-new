@@ -324,6 +324,13 @@ fn a_step_condition_over_github_s_limit_is_refused() {
 }
 
 #[test]
+fn a_step_condition_is_measured_in_utf16_units_like_github() {
+    let mut step = run("echo");
+    step.condition = Some(format!("${{{{ {} }}}}", "\u{1F600}".repeat(10_501)));
+    assert_eq!(violations(step), [Rule::ConditionTooLong(21_002)]);
+}
+
+#[test]
 fn a_compliant_workflow_is_accepted() {
     let mut accepted = workflow(uses(PINNED));
     accepted.jobs[0].steps.extend([

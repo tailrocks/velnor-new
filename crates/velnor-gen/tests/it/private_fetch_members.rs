@@ -3,6 +3,9 @@
 
 use std::collections::BTreeSet;
 
+use velnor_gen::GenerateError;
+use velnor_render::Rule;
+
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use crate::private_fill_roots::{
@@ -116,12 +119,18 @@ fn many_long_members() -> Layout {
 }
 
 #[test]
-fn a_member_list_too_long_for_a_github_expression_is_refused_for_its_step_condition() {
-    let refused = lanes(&many_long_members())
-        .err()
-        .map(|error| format!("{error:?}"));
+fn a_member_list_too_long_for_a_github_expression_is_refused_for_its_step_condition_3097() {
+    let refused = lanes(&many_long_members()).err();
+    let Some(GenerateError::Rules(violations)) = refused
+        .as_ref()
+        .and_then(|error| error.downcast_ref::<GenerateError>())
+    else {
+        panic!("generation must refuse a step condition over the limit: {refused:?}");
+    };
     assert!(
-        refused.is_some_and(|error| error.contains("ConditionTooLong")),
-        "generation must refuse a step condition over the limit"
+        violations.iter().any(
+            |violation| matches!(violation.rule, Rule::ConditionTooLong(length) if length > 21_000)
+        ),
+        "{violations:?}"
     );
 }

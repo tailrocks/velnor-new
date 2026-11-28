@@ -188,18 +188,16 @@ fn lanes_sharing_features_with_different_packages_gate_on_the_union() -> TestRes
 }
 
 #[test]
-fn a_lane_whose_feature_is_defined_by_140_members_keeps_its_gate_under_the_limit() -> TestResult {
+fn a_lane_whose_feature_is_defined_by_60_long_named_members_keeps_its_gate_under_the_limit()
+-> TestResult {
+    let definer = |index: usize| format!("definer-{}{index}", "x".repeat(230));
     let mut repo = lane_view(HELPER, NAMED)?;
-    for index in 0..140 {
-        with_member(
-            &mut repo,
-            &format!("definer-{index}"),
-            "[features]\nlocal-mode = []\n",
-        )?;
+    for index in 0..60 {
+        with_member(&mut repo, &definer(index), "[features]\nlocal-mode = []\n")?;
     }
     for name in [LINT, DOC] {
         let (condition, _) = step_in(&repo, name)?;
-        assert!(gated_on(&condition, "definer-139"), "{name}");
+        assert!(gated_on(&condition, &definer(59)), "{name}");
         assert!(
             condition.chars().count() <= 21_000,
             "{name}: {}",

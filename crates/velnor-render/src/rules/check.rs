@@ -128,7 +128,7 @@ fn condition_length(condition: &str) -> usize {
     text.strip_prefix("${{")
         .and_then(|inner| inner.strip_suffix("}}"))
         .map_or(text, str::trim)
-        .chars()
+        .encode_utf16()
         .count()
 }
 
