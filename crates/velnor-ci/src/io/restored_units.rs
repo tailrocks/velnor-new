@@ -32,12 +32,16 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
                     unit: name,
                     dependencies: dependency_crates(&path),
                 });
+                found.restored.insert(hash.clone());
                 found.present.insert(hash);
             }
             UnitFile::DepInfo {
                 hash: Some(hash), ..
-            } if names_missing_file(&path, &inside) => {
-                found.missing_input.insert(hash);
+            } => {
+                found.restored.insert(hash.clone());
+                if names_missing_file(&path, &inside) {
+                    found.missing_input.insert(hash);
+                }
             }
             _ => {}
         }

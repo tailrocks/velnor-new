@@ -66,6 +66,7 @@ pub(super) struct Audit<'a> {
     found: CompileInputs,
     /// Bytes read from each Cargo root's target directory, bounded per root.
     target_bytes: Vec<u64>,
+    restored: Vec<BTreeSet<String>>,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
@@ -97,6 +98,12 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &groups,
         options.max_directory_entries,
     )?;
+    audit.restored = setup::restored_hashes(
+        &workspaces,
+        &shared,
+        &groups,
+        &super::input_scopes::git_prefix(directory)?,
+    );
     let gathered = setup::gathered_files(&workspaces, &shared, &groups, &chosen)?;
     audit.note_build_outputs(&gathered)?;
     for (unit, file, indices) in gathered {

@@ -58,6 +58,7 @@ impl Audit<'_> {
             indices[0],
             file,
             package,
+            false,
             UnitIdentity::BuildScript,
         )?
         else {

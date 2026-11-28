@@ -294,3 +294,24 @@ fn a_dep_info_path_under_a_symlinked_spelling_of_the_target_is_inside_it_in_eith
     }
     Ok(())
 }
+
+#[test]
+fn a_unit_with_a_missing_input_is_recorded_as_restored_but_not_as_present()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-restored-set")?;
+    let root = fs::canonicalize(repo.root())?;
+    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", root.display());
+    dep_info_unit(&repo, MISSING_INPUT, &missing);
+    dep_info_unit(&repo, KEPT_INPUT, "src/lib.rs");
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    let lines: Vec<&str> = record.lines().collect();
+    for hash in [MISSING_INPUT, KEPT_INPUT] {
+        assert!(
+            lines.contains(&format!("restored {hash}").as_str()),
+            "{hash}: {record}"
+        );
+    }
+    assert!(!lines.contains(&MISSING_INPUT), "{record}");
+    Ok(())
+}

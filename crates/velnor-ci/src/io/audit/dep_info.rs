@@ -50,6 +50,7 @@ impl Audit<'_> {
         index: usize,
         file: &Path,
         package: &str,
+        restored: bool,
         unit: UnitIdentity<'_>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
         let text = read(
@@ -67,7 +68,7 @@ impl Audit<'_> {
             .changed_inputs(workspace, &paths, built, file, false, 1)?
             .is_empty()
         {
-            if !self.owners.of(Some(package), &source).is_empty() {
+            if !restored && !self.owners.of(Some(package), &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
             return Ok(None);

@@ -9,13 +9,15 @@ use crate::cargo_package::PackageIdentity;
 use crate::report::LaneMetrics;
 use crate::telemetry::{Compilation, Invocation};
 
-const HEADER: &str = "velnor-restored-units 2";
+const HEADER: &str = "velnor-restored-units 3";
 const MISSING_INPUT: &str = "missing-input ";
+const RESTORED: &str = "restored ";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RestoredUnits {
     pub present: BTreeSet<String>,
     pub missing_input: BTreeSet<String>,
+    pub restored: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -38,6 +40,11 @@ pub fn encode(units: &RestoredUnits) -> String {
         text.push_str(hash);
         text.push('\n');
     }
+    for hash in &units.restored {
+        text.push_str(RESTORED);
+        text.push_str(hash);
+        text.push('\n');
+    }
     text
 }
 
@@ -49,9 +56,13 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     }
     let mut units = RestoredUnits::default();
     for line in lines {
-        match line.strip_prefix(MISSING_INPUT) {
-            Some(hash) if is_hash(hash) => units.missing_input.insert(hash.to_owned()),
-            None if is_hash(line) => units.present.insert(line.to_owned()),
+        match (
+            line.strip_prefix(MISSING_INPUT),
+            line.strip_prefix(RESTORED),
+        ) {
+            (Some(hash), _) if is_hash(hash) => units.missing_input.insert(hash.to_owned()),
+            (_, Some(hash)) if is_hash(hash) => units.restored.insert(hash.to_owned()),
+            (None, None) if is_hash(line) => units.present.insert(line.to_owned()),
             _ => return None,
         };
     }

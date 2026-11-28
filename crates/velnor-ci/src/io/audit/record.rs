@@ -134,6 +134,11 @@ impl Audit<'_> {
                 file.display()
             )));
         };
+        let restored = hash.is_some_and(|hash| {
+            indices
+                .iter()
+                .any(|index| self.restored[*index].contains(hash))
+        });
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
         let Some((source, _)) = self.dep_info(
@@ -141,6 +146,7 @@ impl Audit<'_> {
             budget,
             file,
             &package,
+            restored,
             UnitIdentity::Fingerprint {
                 target: indices[0],
                 configuration,

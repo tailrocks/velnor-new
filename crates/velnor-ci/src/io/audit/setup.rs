@@ -72,10 +72,39 @@ pub(super) fn begin<'a>(
         outputs: BuildOutputs::default(),
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
+        restored: vec![BTreeSet::new(); workspaces.len()],
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
     })
+}
+
+pub(super) fn restored_hashes(
+    workspaces: &[Workspace],
+    shared: &[Vec<usize>],
+    groups: &[PathBuf],
+    prefix: &str,
+) -> Vec<BTreeSet<String>> {
+    let hashes = |target: &Path| {
+        crate::io::restored_units::read(target, prefix)
+            .1
+            .map(|units| units.restored)
+            .unwrap_or_default()
+    };
+    let mut restored: Vec<BTreeSet<String>> = workspaces
+        .iter()
+        .map(|workspace| hashes(&workspace.target_directory))
+        .collect();
+    for (indices, directory) in shared.iter().zip(groups) {
+        if indices.len() < 2 {
+            continue;
+        }
+        let held = hashes(directory);
+        for index in indices {
+            restored[*index].extend(held.iter().cloned());
+        }
+    }
+    restored
 }
 
 pub(super) fn gathered_files(
