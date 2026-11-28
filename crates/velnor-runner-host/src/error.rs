@@ -69,7 +69,9 @@ pub enum RustRunnerFailure {
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,
 
-    #[error("velnor-runner in the host store is not an owned, executable file closed to others")]
+    #[error(
+        "velnor-runner in the host store is not an owned, executable regular file, or group or others can write it"
+    )]
     BinaryUnsafe,
 
     #[error("the processes of the velnor machine could not be listed")]
@@ -101,11 +103,26 @@ pub enum RustRunnerFailure {
     #[error("another controller holds the host store")]
     HostStoreHeld,
 
-    #[error("this command is not available in rust-runner launch mode yet")]
-    CommandUnavailable,
+    #[error("the velnor machine does not exist")]
+    MachineMissing,
+
+    #[error("the controller heartbeat is missing, stale or for another config")]
+    HeartbeatNotFresh,
+
+    #[error("GitHub did not complete the scale set teardown")]
+    GitHubRefused,
+
+    #[error("the controller did not admit the reconnected connection")]
+    ReconnectNotAdmitted,
+
+    #[error("GitHub did not confirm the close of the session")]
+    SessionNotClosed,
 
     #[error("a blocking task of the rust-runner controller did not finish")]
     TaskFailed,
+
+    #[error("the runtime that loads the credential could not be built")]
+    RuntimeUnavailable,
 }
 
 const ERROR_DETAIL_BYTES: u8 = 64;

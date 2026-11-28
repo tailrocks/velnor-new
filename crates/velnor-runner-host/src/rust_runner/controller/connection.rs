@@ -9,6 +9,7 @@ use zeroize::Zeroizing;
 use super::batch::Batch;
 use super::cursor::Cursor;
 use super::github::{Admin, QueueAccess};
+use super::sessions::CloseHistory;
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::launch_blocking::ListenFault;
 
@@ -40,7 +41,15 @@ pub(super) struct Pending {
     pub(super) cleared: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Service {
+    Serving,
+    Retired,
+    Closed,
+}
+
 pub(super) struct Live {
+    pub(super) service: Service,
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
     pub(super) policy: ApprovedJobAuthorityPolicy,
@@ -55,6 +64,8 @@ pub(super) struct Live {
     pub(super) batch: Option<Batch>,
     pub(super) refreshing: bool,
     refresh_failures: u32,
+    pub(super) closing: bool,
+    pub(super) close_history: CloseHistory,
     pub(super) admin_due: Instant,
 }
 
@@ -68,6 +79,7 @@ impl Pending {
         };
         let queue = QueueAccess::of(&session, &admin)?;
         Ok(Live {
+            service: Service::Serving,
             binding: self.binding,
             pat: self.pat,
             policy: self.policy,
@@ -82,6 +94,8 @@ impl Pending {
             batch: None,
             refreshing: false,
             refresh_failures: 0,
+            closing: false,
+            close_history: CloseHistory::Untried,
             admin_due: self.admin_at + ADMIN_RENEWAL,
         })
     }

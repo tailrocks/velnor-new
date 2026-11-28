@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use super::events::{Event, parse_events, wait_for, wait_unless};
-use super::fixtures::{TestResult, bun, curl_wrapper, host_toml, organization_host_toml};
+use super::fixtures::{Spec, TestResult, bun, curl_wrapper, host_toml, organization_host_toml};
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 const FAKE_GITHUB: [&str; 6] = [
@@ -38,6 +38,15 @@ impl World {
         tag: &'static str,
         max_jobs: u32,
         scale_set_exists: bool,
+    ) -> TestResult<Self> {
+        Self::with_extra(tag, max_jobs, scale_set_exists, &[])
+    }
+
+    pub(super) fn with_extra(
+        tag: &'static str,
+        max_jobs: u32,
+        scale_set_exists: bool,
+        extra: &[Spec<'_>],
     ) -> TestResult<Self> {
         let directory = tempfile::tempdir()?;
         let root = directory.path().canonicalize()?;
@@ -84,29 +93,11 @@ impl World {
         let pat = world.root.join("pat");
         std::fs::write(&pat, format!("PAT-CANARY-{tag}"))?;
         std::fs::set_permissions(&pat, std::fs::Permissions::from_mode(0o600))?;
-        world.write_config("main")?;
+        world.write_config("main", extra)?;
         world.write_state(scale_set_exists, &[])?;
         world.write_host_toml(max_jobs)?;
         world.configure_orb("")?;
         Ok(world)
-    }
-
-    pub(super) fn write_config(&self, default_branch: &str) -> TestResult<()> {
-        let config = json!({
-            "owner": "tailrocks",
-            "repo": "velnor-lab",
-            "repository_id": 42,
-            "scale_set": "velnor-mac",
-            "labels": ["velnor", "velnor-mac"],
-            "canary_tag": self.tag,
-            "queue_url": "https://queue.example.com/messages",
-            "admin_url": "https://pipelines.example.com/",
-            "store": self.store,
-            "ps_table": self.root.join("ps.table"),
-            "default_branch": default_branch,
-        });
-        std::fs::write(self.github.join("config.json"), config.to_string())?;
-        Ok(())
     }
 
     pub(super) fn use_organization(&self) -> TestResult<()> {
@@ -127,7 +118,7 @@ impl World {
             .map(|(name, id)| json!({"id": id, "name": name, "runnerScaleSetId": 7}))
             .collect();
         let state = json!({
-            "scale_set_id": scale_set_exists.then_some(7),
+            "scale_sets": if scale_set_exists { json!({"velnor-lab": 7}) } else { json!({}) },
             "sessions": [],
             "runners": planted,
             "deleted": [],

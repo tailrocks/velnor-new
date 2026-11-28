@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_github::{ParsedBatch, Poll, SourceMetadata};
 
-use super::admission::{Admission, JobExit};
+use super::admission::JobExit;
+use super::connection::Service;
 use super::github::{self, Acquisition};
 use super::source::{LaunchGrant, Refusal};
 use super::{Event, Run, blocking};
@@ -46,7 +47,8 @@ impl Run<'_> {
         let now = Instant::now();
         let capacity = self.config.host.max_jobs;
         for (index, connection) in self.connections.iter_mut().enumerate() {
-            if connection.polling
+            if connection.service != Service::Serving
+                || connection.polling
                 || connection.refreshing
                 || connection.poll_retry_at.is_some_and(|at| now < at)
             {
@@ -75,6 +77,10 @@ impl Run<'_> {
         let Some(live) = self.connections.get_mut(connection) else {
             return;
         };
+        if live.service != Service::Serving {
+            live.polling = false;
+            return;
+        }
         if matches!(result, Ok(PollPathResult::Response(_))) {
             live.session_healthy();
         }
@@ -119,7 +125,7 @@ impl Run<'_> {
             if self.taken.contains(&(connection, request_id)) {
                 continue;
             }
-            if !matches!(self.admission(), Admission::Open { free } if free > 0) {
+            if !self.admits(connection) {
                 self.defer(connection);
                 continue;
             }
@@ -192,7 +198,7 @@ impl Run<'_> {
         {
             live.remember_default_branch(grant.default_branch(), Instant::now());
         }
-        if !matches!(self.admission(), Admission::Open { free } if free > 0) {
+        if !self.admits(connection) {
             self.defer(connection);
             self.advance(connection);
             return;

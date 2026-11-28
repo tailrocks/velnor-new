@@ -1,27 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use velnor_runner_github::QueueSession;
 
+use super::connection::Service;
 use super::{Event, Run, blocking, github};
 use crate::launch_blocking::ListenFault;
 
-const CLOSE_WAIT: Duration = Duration::from_secs(10);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum CloseHistory {
+    Untried,
+    MaybeApplied,
+}
 
-pub(super) async fn close_all(sessions: Vec<(github::Admin, i64, String)>) {
-    let closes = sessions.into_iter().map(|(admin, id, session_id)| {
-        blocking(move || github::close_session(&admin, id, &session_id))
-    });
-    match tokio::time::timeout(CLOSE_WAIT, futures_util::future::join_all(closes)).await {
-        Ok(results) => {
-            for error in results.into_iter().filter_map(Result::err) {
+pub(super) enum Close {
+    Closed,
+    Held {
+        history: CloseHistory,
+        fault: ListenFault,
+    },
+}
+
+pub(super) type OpenSession = (github::Admin, i64, String, CloseHistory);
+
+pub(super) async fn close_all(sessions: Vec<OpenSession>) -> Vec<OpenSession> {
+    let closes = sessions.into_iter().map(|session| async move {
+        let (admin, id, session_id, history) = session.clone();
+        match blocking(move || Ok(github::close_session(&admin, id, &session_id, history))).await {
+            Ok(Close::Closed) => None,
+            Ok(Close::Held { history, fault }) => {
+                eprintln!("rust-runner session close held: {fault}");
+                Some((session.0, session.1, session.2, history))
+            }
+            Err(error) => {
                 eprintln!("rust-runner session close held: {error}");
+                Some(session)
             }
         }
-        Err(_) => eprintln!("rust-runner session close held: not finished within {CLOSE_WAIT:?}"),
-    }
+    });
+    futures_util::future::join_all(closes)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 impl Run<'_> {
@@ -29,11 +52,13 @@ impl Run<'_> {
         let sessions = self
             .connections
             .iter()
+            .filter(|live| live.service != Service::Closed)
             .map(|live| {
                 (
                     live.admin.clone(),
                     live.scale_set_id,
                     live.session.session_id.clone(),
+                    live.close_history,
                 )
             })
             .collect();
@@ -43,7 +68,7 @@ impl Run<'_> {
     pub(super) fn spawn_due_renewals(&mut self) {
         let now = Instant::now();
         for (index, live) in self.connections.iter_mut().enumerate() {
-            if live.refreshing || now < live.admin_due {
+            if live.service == Service::Closed || live.refreshing || now < live.admin_due {
                 continue;
             }
             live.refreshing = true;

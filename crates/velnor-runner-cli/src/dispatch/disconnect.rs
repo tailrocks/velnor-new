@@ -29,11 +29,25 @@ pub(super) fn disconnect(state: &Path, raw_connection_id: &str, wait: bool) -> E
         },
         move |state, binding, _| {
             crate::readiness_probe::wait_for_connection_detached_until(state, binding, deadline)
+                .map(|detached| {
+                    if detached {
+                        Detach::Detached
+                    } else {
+                        Detach::TimedOut
+                    }
+                })
         },
         move |state, binding, _| {
             crate::readiness_probe::delete_created_scale_set_until(state, binding, deadline)
+                .map(Some)
         },
     )
+}
+
+pub(super) enum Detach {
+    TimedOut,
+    Detached,
+    Set(CreatedSetDeletion),
 }
 
 pub(super) fn disconnect_with_detach<F, G, H>(
@@ -46,8 +60,12 @@ pub(super) fn disconnect_with_detach<F, G, H>(
 ) -> ExitCode
 where
     F: FnOnce(&Path, &ConnectionId, Duration) -> Result<bool, HostError>,
-    G: FnOnce(&Path, &RepositoryConnection, Duration) -> Result<bool, HostError>,
-    H: FnOnce(&Path, &RepositoryConnection, Duration) -> Result<CreatedSetDeletion, HostError>,
+    G: FnOnce(&Path, &RepositoryConnection, Duration) -> Result<Detach, HostError>,
+    H: FnOnce(
+        &Path,
+        &RepositoryConnection,
+        Duration,
+    ) -> Result<Option<CreatedSetDeletion>, HostError>,
 {
     let Ok(connection_id) = ConnectionId::parse(raw_connection_id) else {
         eprintln!("Connection ID is invalid.");
@@ -97,11 +115,12 @@ where
         "Connection detached."
     } else {
         match delete_set(state, &original_connection, DRAIN_WAIT_BUDGET) {
-            Ok(CreatedSetDeletion::Deleted) => "Connection detached. Scale Set deleted.",
-            Ok(CreatedSetDeletion::NotOwned) => {
+            Ok(None) => "Connection detached.",
+            Ok(Some(CreatedSetDeletion::Deleted)) => "Connection detached. Scale Set deleted.",
+            Ok(Some(CreatedSetDeletion::NotOwned)) => {
                 "Connection detached. The existing Scale Set stays."
             }
-            Ok(other) => {
+            Ok(Some(other)) => {
                 report_delete_failure(other);
                 return ExitCode::from(1);
             }
@@ -137,6 +156,19 @@ fn report_delete_failure(deletion: CreatedSetDeletion) {
         | CreatedSetDeletion::NotOwned => {
             eprintln!("Scale Set delete is uncertain. Connection stays configured; retry.");
         }
+    }
+}
+
+fn report_late_delete_failure(deletion: CreatedSetDeletion) {
+    match deletion {
+        CreatedSetDeletion::Refused(status) => {
+            eprintln!(
+                "Scale Set delete refused (HTTP {status}). The connection is detached; run disconnect again to retry."
+            );
+        }
+        _ => eprintln!(
+            "Scale Set delete is uncertain. The connection is detached; run disconnect again to retry."
+        ),
     }
 }
 
@@ -212,7 +244,7 @@ fn finish_disconnect(
     original_connection: &RepositoryConnection,
     token: &MarkerToken,
     detached: &str,
-    wait_for_detach: impl FnOnce(&Path, &RepositoryConnection, Duration) -> Result<bool, HostError>,
+    wait_for_detach: impl FnOnce(&Path, &RepositoryConnection, Duration) -> Result<Detach, HostError>,
 ) -> ExitCode {
     if let Err(message) = remove_connection_config(state, connection_id, original_connection, token)
     {
@@ -220,21 +252,31 @@ fn finish_disconnect(
         return ExitCode::from(1);
     }
     match wait_for_detach(state, original_connection, DRAIN_WAIT_BUDGET) {
-        Ok(true) => {
-            match verify_detached_disconnect(state, connection_id, original_connection, token) {
-                Ok(()) => {
-                    println!("{detached}");
-                    ExitCode::SUCCESS
-                }
-                Err(message) => {
-                    eprintln!("{message}");
-                    ExitCode::from(1)
-                }
-            }
-        }
-        Ok(false) => {
+        Ok(Detach::TimedOut) => {
             report_detach_timeout(state, connection_id, token);
             ExitCode::from(1)
+        }
+        Ok(detach) => {
+            if let Err(message) =
+                verify_detached_disconnect(state, connection_id, original_connection, token)
+            {
+                eprintln!("{message}");
+                return ExitCode::from(1);
+            }
+            match detach {
+                Detach::Set(CreatedSetDeletion::Deleted) => {
+                    println!("Connection detached. Scale Set deleted.");
+                }
+                Detach::Set(CreatedSetDeletion::NotOwned) => {
+                    println!("Connection detached. The existing Scale Set stays.");
+                }
+                Detach::Set(other) => {
+                    report_late_delete_failure(other);
+                    return ExitCode::from(1);
+                }
+                Detach::Detached | Detach::TimedOut => println!("{detached}"),
+            }
+            ExitCode::SUCCESS
         }
         Err(error) => {
             eprintln!("{error}");

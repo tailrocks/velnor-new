@@ -28,7 +28,7 @@ fn feed(world: &World, phase: &str, message: u64, offer: serde_json::Value) -> T
 
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T2", 1, true)?;
-    world.write_config("trunk")?;
+    world.write_config("trunk", &[])?;
     world.script_refusals(&json!({
         "repo.get@m19": {"after_session": true, "replies": [{}, {"patch": {"id": 43}}]},
         "repo.get@m20": {"after_session": true, "replies": [{}, {"patch": {"default_branch": null}}]}

@@ -15,7 +15,7 @@ use crate::daemon_lock::DaemonLock;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
 use crate::listen::PollPathResult;
-use crate::rust_runner::{ReservationId, RustRunnerLauncher};
+use crate::rust_runner::{ReservationId, RustRunnerLauncher, census};
 
 mod admission;
 mod batch;
@@ -24,9 +24,11 @@ mod connection;
 mod cursor;
 mod github;
 mod jobs;
-mod owned;
+pub(in crate::rust_runner) mod owned;
 mod pats;
+mod publish;
 mod readiness;
+mod retire;
 mod run_blocking;
 mod runner;
 mod sessions;
@@ -43,9 +45,11 @@ use runner::RunnerHealth;
 use source::{LaunchGrant, Refusal};
 use startup::Started;
 
-pub use pats::ConnectionPats;
+pub use pats::{ConnectionPats, PatSource, load_connection_pat};
 pub(crate) use readiness::assess as heartbeat_readiness;
-pub(crate) use run_blocking::{Handover, run_blocking};
+pub(in crate::rust_runner) use readiness::{fresh, now_unix_ms};
+pub(crate) use run_blocking::run_blocking;
+pub use run_blocking::{Handover, ShutdownSignal, supervise_rust_runner_host};
 
 const TICK: Duration = Duration::from_secs(2);
 const POLL_WAKE: Duration = Duration::from_millis(500);
@@ -75,6 +79,13 @@ impl Context {
     fn beat(&self, phase: Phase) {
         if let Err(error) = readiness::write(&self.state, &self.config_sha256, phase) {
             eprintln!("rust-runner heartbeat held: {error}");
+        }
+    }
+
+    fn beat_idle(&self, phase: Phase) {
+        self.beat(phase);
+        if let Err(error) = census::publish_idle(&self.state, &self.config_sha256) {
+            eprintln!("rust-runner census held: {error}");
         }
     }
 }
@@ -116,6 +127,10 @@ enum Event {
         reservation: ReservationId,
         result: Result<CleanupProof, ListenFault>,
     },
+    Closed {
+        connection: usize,
+        result: Result<sessions::Close, ListenFault>,
+    },
     Machine(Result<(), ListenFault>),
     RunnerBinary(Result<String, ListenFault>),
 }
@@ -130,7 +145,8 @@ where
         .unwrap_or_else(|_| Err(HostError::RustRunner(RustRunnerFailure::TaskFailed).into()))
 }
 
-pub(crate) fn host_toml_sha256(state: &Path) -> Option<String> {
+#[must_use]
+pub fn host_toml_sha256(state: &Path) -> Option<String> {
     crate::readiness_scan::controller_config(state).map(|(_, sha256)| sha256)
 }
 
@@ -244,8 +260,10 @@ impl Run<'_> {
                 Some(joined) = self.tasks.join_next() => self.handle(joined)?,
                 _ = polls.tick() => {}
                 _ = tick.tick() => {
+                    self.retire_removed();
                     self.on_tick()?;
-                    if self.config_changed() && self.slots.is_empty() && self.idle() {
+                    self.close_retired();
+                    if self.restart_due() && self.slots.is_empty() && self.idle() {
                         self.close_sessions().await;
                         return Ok(RustRunnerExit::ConfigChanged);
                     }
@@ -296,6 +314,7 @@ impl Run<'_> {
                     eprintln!("rust-runner runner binary changed; admission reopens");
                 }
             }
+            Event::Closed { connection, result } => self.on_closed(connection, result),
             Event::Machine(result) => {
                 self.machine_checking = false;
                 self.machine_probed = Instant::now();
@@ -327,6 +346,7 @@ impl Run<'_> {
         } else {
             Phase::Ready
         });
+        self.publish_census();
         self.spawn_due_proofs();
         self.spawn_due_renewals();
         self.check_machine();
@@ -345,7 +365,7 @@ impl Run<'_> {
             Admission::Closed(Closed::MachineUnavailable)
         } else if self.runner.is_failing() {
             Admission::Closed(Closed::RunnerFailing)
-        } else if std::fs::symlink_metadata(self.cx.state.join("drain")).is_ok() {
+        } else if !census::marker_absent(&self.cx.state.join("drain")) {
             Admission::Closed(Closed::Draining)
         } else if self.config_changed() {
             Admission::Closed(Closed::ConfigChanged)

@@ -6,16 +6,17 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_github::{
     AckScope, AcquireOutcome, EncodedJit, JitResult, ParsedBatch, QueueSession, RefreshGate,
-    RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, WireError, ack,
-    acquire, create_runner_scale_set, create_session, delete_session, get_runner_scale_set,
-    get_runner_scale_set_by_id, jit, jit_request, list_runner_groups, list_scale_set_runners,
-    refresh_session, remove_runner, sole_grant,
+    RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionClose,
+    SessionError, WireError, ack, acquire, create_runner_scale_set, create_session, delete_session,
+    get_runner_scale_set, get_runner_scale_set_by_id, jit, jit_request, list_runner_groups,
+    list_scale_set_runners, refresh_session, remove_runner, sole_grant,
 };
 
 use zeroize::Zeroizing;
 
 use super::owned;
-use crate::config::{ConnectionId, RepositoryConnection};
+use super::sessions::{Close, CloseHistory};
+use crate::config::RepositoryConnection;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::https::HttpsTransport;
 use crate::launch_blocking::ListenFault;
@@ -25,6 +26,7 @@ use crate::listen::{
 use crate::scale_set::{EnsureError, create_labels, map_session, open_binding_admin};
 
 pub(super) const ACQUIRE_BUDGET: Duration = Duration::from_secs(30);
+const CLOSE_WAIT: Duration = Duration::from_secs(10);
 const JIT_ATTEMPTS: u32 = 3;
 const JIT_GAP: Duration = Duration::from_secs(1);
 
@@ -92,18 +94,17 @@ pub(super) fn open_scale_set(
         },
     )
     .map_err(|error| map_session(error, &transport))?;
-    let shared = binding.organization.is_some();
+    let intent = owned::Owned::intent(binding, group, &admin.base);
     let id = match found {
         ScaleSetFound::Found(view) => {
-            if shared {
-                adopt_shared(state, &binding.connection_id, view.id)?;
-            }
+            adopt(state, binding, &intent, view.id)?;
             view.id
         }
         ScaleSetFound::NotFound => {
-            if shared {
-                owned::record_intent(state, &binding.connection_id)?;
+            if let Some(recorded) = owned::bound(state, &binding.connection_id)? {
+                return Err(recorded_set_held(recorded));
             }
+            owned::write(state, &binding.connection_id, &intent)?;
             let created = match create_runner_scale_set(
                 &mut transport,
                 &ScaleSetCreate {
@@ -116,7 +117,7 @@ pub(super) fn open_scale_set(
                 Ok(view) => view.id,
                 Err(error) => {
                     let error = map_session(error, &transport);
-                    if shared && refused(&error) {
+                    if refused(&error) {
                         owned::drop_intent(state, &binding.connection_id)?;
                     }
                     return Err(error.into());
@@ -135,31 +136,52 @@ pub(super) fn open_scale_set(
             if reread.id != created || !reread.runner_setting.disable_update {
                 return Err(EnsureError::Uncertain.into());
             }
-            if shared {
-                owned::record_created(state, &binding.connection_id, created)?;
-            }
+            owned::bind(state, &binding.connection_id, &intent, created)?;
             created
         }
     };
     Ok((admin, id))
 }
 
+fn recorded_set_held(recorded: i64) -> ListenFault {
+    eprintln!(
+        "rust-runner startup held: the ownership record holds scale set {recorded}, which GitHub does not list under this name; run `velnor-host disconnect`, then connect again"
+    );
+    EnsureError::Uncertain.into()
+}
+
+fn other_set_listed(recorded: i64, listed: i64) -> ListenFault {
+    eprintln!(
+        "rust-runner startup held: the ownership record holds scale set {recorded}, but GitHub lists this name under scale set {listed}; delete scale set {listed} by its id in the runner settings of the repository or organization, run `velnor-host disconnect`, then connect again"
+    );
+    EnsureError::Uncertain.into()
+}
+
 fn refused(error: &EnsureError) -> bool {
     matches!(error, EnsureError::Unexpected { status, .. } if (400..500).contains(status))
 }
 
-fn adopt_shared(
+fn adopt(
     state: &Path,
-    connection: &ConnectionId,
+    binding: &RepositoryConnection,
+    intent: &owned::Owned,
     scale_set_id: i64,
 ) -> Result<(), ListenFault> {
-    match owned::created(state, connection)? {
-        Some(recorded) if recorded == scale_set_id => Ok(()),
-        None if owned::intended(state, connection)? => {
-            Ok(owned::record_created(state, connection, scale_set_id)?)
-        }
-        _ => Err(EnsureError::Uncertain.into()),
+    let connection = &binding.connection_id;
+    let recorded = owned::bound(state, connection)?;
+    if recorded == Some(scale_set_id) {
+        return Ok(());
     }
+    if let Some(recorded) = recorded {
+        return Err(other_set_listed(recorded, scale_set_id));
+    }
+    if owned::adoptable(state, connection, intent)? {
+        return Ok(owned::bind(state, connection, intent, scale_set_id)?);
+    }
+    if binding.organization.is_some() {
+        return Err(EnsureError::Uncertain.into());
+    }
+    Ok(())
 }
 
 pub(super) fn renew_admin(pat: &str, binding: &RepositoryConnection) -> Result<Admin, ListenFault> {
@@ -200,11 +222,27 @@ pub(super) fn close_session(
     admin: &Admin,
     scale_set_id: i64,
     session_id: &str,
-) -> Result<(), ListenFault> {
-    let mut transport = HttpsTransport::new(&admin.base)?;
-    delete_session(&mut transport, scale_set_id, session_id, &admin.token)
-        .map(drop)
-        .map_err(|error| map_listen(error).into())
+    history: CloseHistory,
+) -> Close {
+    let held = |history, fault| Close::Held { history, fault };
+    let mut transport =
+        match HttpsTransport::with_deadline(&admin.base, Instant::now() + CLOSE_WAIT) {
+            Ok(transport) => transport,
+            Err(error) => return held(history, error.into()),
+        };
+    match delete_session(&mut transport, scale_set_id, session_id, &admin.token) {
+        Ok(SessionClose::Closed) => Close::Closed,
+        Ok(SessionClose::Gone) if history == CloseHistory::MaybeApplied => Close::Closed,
+        Ok(SessionClose::Gone) => held(
+            history,
+            HostError::RustRunner(RustRunnerFailure::SessionNotClosed).into(),
+        ),
+        Err(SessionError::Uncertain) => held(
+            CloseHistory::MaybeApplied,
+            map_listen(SessionError::Uncertain).into(),
+        ),
+        Err(error) => held(history, map_listen(error).into()),
+    }
 }
 
 pub(super) fn clear_runners(admin: &Admin, scale_set_id: i64) -> Result<(), ListenFault> {

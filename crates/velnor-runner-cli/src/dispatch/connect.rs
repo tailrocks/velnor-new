@@ -4,7 +4,6 @@
 use std::io::Read;
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Instant;
 
 use velnor_runner_host::{
     ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, LaunchMode,
@@ -113,13 +112,10 @@ where
     R: Read,
     F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
 {
-    connect_with_store_and_reactivate(input, service, request, store, |state, binding| {
-        crate::readiness_probe::reactivate_connection_until(
-            state,
-            binding,
-            Instant::now() + super::DRAIN_WAIT_BUDGET,
-        )
-    })
+    use super::rust_mode::{Reconnect, reactivate};
+    let reconnect = Reconnect::begin(request);
+    connect_with_store_and_reactivate(input, service, request, store, reactivate)?;
+    reconnect.map_or(Ok(()), |reconnect| reconnect.admitted(request.state))
 }
 
 pub(super) fn connect_with_store_and_reactivate<R, F, G>(

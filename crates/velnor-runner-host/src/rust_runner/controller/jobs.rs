@@ -124,6 +124,7 @@ impl Run<'_> {
                         "rust_runner_job=cleaned reservation={reservation} exit={}",
                         exit.describe()
                     );
+                    self.publish_census();
                 }
             }
             Err(error) => {

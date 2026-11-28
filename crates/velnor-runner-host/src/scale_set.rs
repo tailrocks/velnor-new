@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use velnor_runner_github::{
     RunnerGroup, ScaleSetById, ScaleSetByName, ScaleSetFound, Transport, get_runner_scale_set,
     get_runner_scale_set_by_id, list_runner_groups, list_scale_set_runners,
@@ -29,7 +31,7 @@ use support::{
     revalidate_repository_scope, selected_group_id, selector_valid,
 };
 
-pub(crate) use support::{create_labels, map_session};
+pub(crate) use support::{Recording, create_labels, map_session};
 
 const GITHUB_API: &str = "https://api.github.com";
 
@@ -118,7 +120,7 @@ pub(crate) async fn ensure_connection_scale_set(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
+    let (mut transport, admin) = open_admin(pat, &scope, binding, None)?;
     let groups = list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|error| map_session(error, &transport))?;
     let group_id = selected_group_id(binding, &groups)?;
@@ -263,11 +265,19 @@ pub(crate) fn open_binding_admin(
     pat: &str,
     binding: &RepositoryConnection,
 ) -> Result<(support::Recording, velnor_runner_github::AdminConnection), EnsureError> {
+    open_binding_admin_until(pat, binding, None)
+}
+
+pub(crate) fn open_binding_admin_until(
+    pat: &str,
+    binding: &RepositoryConnection,
+    deadline: Option<Instant>,
+) -> Result<(support::Recording, velnor_runner_github::AdminConnection), EnsureError> {
     let (repo_owner, repo_name) = repository_parts(&binding.repository)?;
     if pat.is_empty() || !selector_valid(&binding.scale_set) {
         return Err(EnsureError::Rejected);
     }
-    let mut identity_transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
+    let mut identity_transport = HttpsTransport::until(GITHUB_API, deadline).map_err(map_host)?;
     let scope = get_repository_scope(
         &mut identity_transport,
         RepositoryTarget {
@@ -278,7 +288,7 @@ pub(crate) fn open_binding_admin(
         pat,
     )
     .map_err(map_repository)?;
-    open_admin(pat, &scope, binding)
+    open_admin(pat, &scope, binding, deadline)
 }
 
 /// Whether `binding`'s selector owns `scale_set_id`.
@@ -337,7 +347,7 @@ pub fn product_runner_groups(
         return Err(EnsureError::Rejected);
     }
     revalidate_repository_scope(pat, scope)?;
-    let (mut transport, admin) = open_admin(pat, scope, binding)?;
+    let (mut transport, admin) = open_admin(pat, scope, binding, None)?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }

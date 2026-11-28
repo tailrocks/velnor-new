@@ -40,6 +40,14 @@ impl HttpsTransport {
         Ok(transport.bounded_by_deadline(deadline))
     }
 
+    pub(crate) fn until(base: &str, deadline: Option<Instant>) -> Result<Self, HostError> {
+        let transport = Self::new(base)?;
+        Ok(match deadline {
+            Some(limit) => transport.bounded_by_deadline(limit),
+            None => transport,
+        })
+    }
+
     #[must_use]
     pub(crate) fn bounded_by_deadline(&self, deadline: Instant) -> Self {
         Self {

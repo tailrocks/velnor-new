@@ -4,8 +4,6 @@
 use std::error::Error;
 use std::process::{Command, Output};
 
-const UNAVAILABLE: &str = "this command is not available in rust-runner launch mode yet";
-
 fn disconnect(state: &std::path::Path) -> std::io::Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_velnor-host"))
         .arg("--state")
@@ -15,27 +13,33 @@ fn disconnect(state: &std::path::Path) -> std::io::Result<Output> {
         .output()
 }
 
+fn doctor_probe(state: &std::path::Path) -> std::io::Result<Output> {
+    Command::new(env!("CARGO_BIN_EXE_velnor-host"))
+        .arg("--state")
+        .arg(state)
+        .args(["doctor", "--probe"])
+        .env_remove("HOME")
+        .env("VELNOR_ORB", "/nonexistent/orb")
+        .output()
+}
+
 #[test]
-fn a_host_toml_that_cannot_be_read_keeps_rust_runner_only_commands_unavailable()
+fn an_absent_host_toml_keeps_the_official_mode_and_an_unreadable_one_fails_closed()
 -> Result<(), Box<dyn Error>> {
     let state = tempfile::tempdir()?;
-    let absent = disconnect(state.path())?;
+    let absent = doctor_probe(state.path())?;
+    let absent_stderr = String::from_utf8_lossy(&absent.stderr);
     assert!(
-        !String::from_utf8_lossy(&absent.stderr).contains(UNAVAILABLE),
-        "a state directory without host.toml is not in rust-runner mode: {}",
-        String::from_utf8_lossy(&absent.stderr)
+        !absent_stderr.contains("(rust_runner)"),
+        "a state directory without host.toml is not in rust-runner mode: {absent_stderr}"
     );
     std::fs::write(state.path().join("host.toml"), "schema = 2\n[[connections")?;
     let malformed = disconnect(state.path())?;
-    assert_eq!(
-        malformed.status.code(),
-        Some(1),
-        "a malformed host.toml must keep rust-runner-only commands unavailable"
-    );
+    assert_eq!(malformed.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&malformed.stderr);
     assert!(
-        String::from_utf8_lossy(&malformed.stderr).contains(UNAVAILABLE),
-        "a malformed host.toml must keep rust-runner-only commands unavailable: {}",
-        String::from_utf8_lossy(&malformed.stderr)
+        stderr.contains("Config cannot be read"),
+        "a malformed host.toml must fail closed: {stderr}"
     );
     Ok(())
 }

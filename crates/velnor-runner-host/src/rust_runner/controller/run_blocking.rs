@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future::Future;
 use std::path::Path;
 use std::time::Duration;
 
 use tokio::runtime::Runtime;
 
-use super::pats::ConnectionPats;
+use super::pats::{ConnectionPats, PatSource};
 use super::readiness::Phase;
 use super::runner::RunnerHealth;
 use super::startup::guarded;
@@ -23,7 +24,8 @@ const CREDENTIAL_RETRY: Duration = Duration::from_secs(30);
 const CREDENTIAL_BUDGET: Duration = Duration::from_secs(30);
 const CONFIG_RETRY: Duration = Duration::from_secs(5);
 
-pub(crate) enum Handover {
+#[derive(Debug)]
+pub enum Handover {
     Stopped,
     OfficialRunner(Box<HostConfig>),
     RustRunner,
@@ -40,13 +42,31 @@ pub(crate) fn run_blocking(
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
         return Err(HostError::Lock.into());
     }
-    runtime.block_on(supervise(&state, daemon_lock, signals))
+    runtime.block_on(supervise_rust_runner_host(
+        &state,
+        daemon_lock,
+        RustRunnerLauncher::from_environment(),
+        &PatSource::Keychain,
+        signals,
+    ))
 }
 
-async fn supervise(
+pub trait ShutdownSignal {
+    fn requested(&mut self) -> impl Future<Output = ()>;
+}
+
+impl ShutdownSignal for Signals {
+    async fn requested(&mut self) {
+        self.received().await;
+    }
+}
+
+pub async fn supervise_rust_runner_host(
     state: &Path,
     daemon_lock: &DaemonLock,
-    signals: &mut Signals,
+    launcher: RustRunnerLauncher,
+    source: &PatSource,
+    signals: &mut impl ShutdownSignal,
 ) -> Result<Handover, ListenFault> {
     let mut health = RunnerHealth::new();
     let mut snapshot = Some(controller_config(state).ok_or(HostError::Config)?);
@@ -67,10 +87,10 @@ async fn supervise(
         let cx = Context {
             state: state.to_path_buf(),
             config_sha256,
-            launcher: RustRunnerLauncher::from_environment(),
+            launcher: launcher.clone(),
         };
-        let mut shutdown = Shutdown(Box::pin(signals.received()));
-        let pats = match load_pats(&cx, &config, &mut shutdown).await {
+        let mut shutdown = Shutdown(Box::pin(signals.requested()));
+        let pats = match load_pats(&cx, &config, source, &mut shutdown).await {
             Credentials::Loaded(pats) => pats,
             Credentials::ConfigChanged => continue,
             Credentials::Stopped => return Ok(Handover::Stopped),
@@ -98,7 +118,12 @@ enum Credentials {
     Stopped,
 }
 
-async fn load_pats(cx: &Context, config: &HostConfig, shutdown: &mut Shutdown<'_>) -> Credentials {
+async fn load_pats(
+    cx: &Context,
+    config: &HostConfig,
+    source: &PatSource,
+    shutdown: &mut Shutdown<'_>,
+) -> Credentials {
     loop {
         if host_toml_sha256(&cx.state).as_deref() != Some(cx.config_sha256.as_str()) {
             return Credentials::ConfigChanged;
@@ -108,7 +133,7 @@ async fn load_pats(cx: &Context, config: &HostConfig, shutdown: &mut Shutdown<'_
             cx,
             shutdown,
             Phase::WaitingForCredentials,
-            ConnectionPats::load(config, deadline),
+            source.load(config, deadline),
             false,
         )
         .await;
@@ -131,14 +156,14 @@ async fn load_pats(cx: &Context, config: &HostConfig, shutdown: &mut Shutdown<'_
     }
 }
 
-async fn reread(state: &Path, signals: &mut Signals) -> Option<(HostConfig, String)> {
+async fn reread(state: &Path, signals: &mut impl ShutdownSignal) -> Option<(HostConfig, String)> {
     loop {
         if let Some(current) = controller_config(state) {
             return Some(current);
         }
         eprintln!("rust-runner config reload held");
         tokio::select! {
-            () = signals.received() => return None,
+            () = signals.requested() => return None,
             () = tokio::time::sleep(CONFIG_RETRY) => {}
         }
     }

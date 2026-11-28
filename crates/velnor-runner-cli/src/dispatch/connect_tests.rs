@@ -14,12 +14,12 @@ use super::connect::{ConnectError, ConnectRequest, connect_with_store, persist_r
 use super::connection_state::{connection_absence_record, connection_drain_marker};
 use super::marker::write_marker;
 
-const SERVICE: &str = "com.tailrocks.velnor.test";
-const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const INVENTORY: &str = r#"{"schema_version":1,"generator_source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","inventory_sha256":"874cb3ddb3852071a5d20fa24e750e88cd21050a0206fbd9b30dd35fad143b32","workflows":[{"path":".github/workflows/ci.yml","content_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","calls":[],"jobs":[{"root_path":".github/workflows/ci.yml","workflow_path":".github/workflows/ci.yml","job_key":"build","role":"verification","contexts":[{"event":"push","branch_filters":["main"],"tag_filters":[],"pull_request_base_branches":[]}],"permissions_declared":true,"permissions":{"contents":"read"},"secrets":[],"environments":[],"condition_sha256":null,"concurrency":null,"needs":[]}]}]}"#;
+pub(super) const SERVICE: &str = "com.tailrocks.velnor.test";
+pub(super) const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub(super) const INVENTORY: &str = r#"{"schema_version":1,"generator_source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","inventory_sha256":"874cb3ddb3852071a5d20fa24e750e88cd21050a0206fbd9b30dd35fad143b32","workflows":[{"path":".github/workflows/ci.yml","content_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","calls":[],"jobs":[{"root_path":".github/workflows/ci.yml","workflow_path":".github/workflows/ci.yml","job_key":"build","role":"verification","contexts":[{"event":"push","branch_filters":["main"],"tag_filters":[],"pull_request_base_branches":[]}],"permissions_declared":true,"permissions":{"contents":"read"},"secrets":[],"environments":[],"condition_sha256":null,"concurrency":null,"needs":[]}]}]}"#;
 
 #[derive(Default)]
-struct FakeKeychain(RefCell<HashMap<(String, String), Vec<u8>>>);
+pub(super) struct FakeKeychain(RefCell<HashMap<(String, String), Vec<u8>>>);
 
 impl SecretStore for FakeKeychain {
     fn store(&self, service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
@@ -36,7 +36,7 @@ impl FakeKeychain {
     }
 }
 
-fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> {
+pub(super) fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> {
     ConnectRequest {
         state,
         connection_id: "conn-test-1",
@@ -69,7 +69,7 @@ fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> 
     }
 }
 
-fn connect(
+pub(super) fn connect(
     keychain: &FakeKeychain,
     request: &ConnectRequest<'_>,
     token: &str,

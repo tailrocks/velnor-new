@@ -4,25 +4,56 @@
 use serde_json::{Value, json};
 
 use super::checks::{assert_clean, heartbeat_advances};
+use super::child::SUPERVISED;
 use super::events::wait_for;
-use super::fixtures::TestResult;
+use super::fixtures::{TestResult, host_toml_of};
 use super::harness::World;
+use super::world_files::TOKEN_A;
 
-const RECORDS: &str = "rust-runner-scale-sets.json";
+const RECORD: &str = "rust-runner-scale-sets/lab";
 
 fn recorded(world: &World) -> TestResult<Value> {
     Ok(serde_json::from_str(&std::fs::read_to_string(
-        world.state.join(RECORDS),
+        world.state.join(RECORD),
     )?)?)
 }
 
-fn plant_records(world: &World, records: &Value) -> TestResult<()> {
-    std::fs::write(world.state.join(RECORDS), records.to_string())?;
+fn plant_record(world: &World, scale_set_id: Option<i64>) -> TestResult<()> {
+    plant_scoped(
+        world,
+        scale_set_id,
+        &json!({"kind": "organization", "organization": "tailrocks", "runner_group": null}),
+    )
+}
+
+fn plant_scoped(world: &World, scale_set_id: Option<i64>, scope: &Value) -> TestResult<()> {
+    let record = json!({
+        "name": "velnor-mac",
+        "runner_group_id": 1,
+        "scope": scope,
+        "server": "https://pipelines.example.com/",
+        "scale_set_id": scale_set_id,
+    });
+    std::fs::create_dir_all(world.state.join("rust-runner-scale-sets"))?;
+    std::fs::write(world.state.join(RECORD), record.to_string())?;
     Ok(())
 }
 
 fn started(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> TestResult<()> {
     world.use_organization()?;
+    launched(world, test, existing_labels)
+}
+
+fn launched(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> TestResult<()> {
+    launched_with(world, test, existing_labels, &[])
+}
+
+fn launched_with(
+    world: &mut World,
+    test: &str,
+    existing_labels: Option<&[&str]>,
+    environment: &[(&str, &str)],
+) -> TestResult<()> {
     let path = world.github.join("config.json");
     let mut config: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
     config["state"] = json!(world.state);
@@ -30,7 +61,7 @@ fn started(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> T
         config["existing_labels"] = json!(labels);
     }
     std::fs::write(path, config.to_string())?;
-    world.spawn_controller(test, &[])?;
+    world.spawn_controller(test, environment)?;
     Ok(())
 }
 
@@ -69,21 +100,16 @@ pub(super) fn holds_a_matching_set_nobody_recorded(test: &str) -> TestResult<()>
 
 pub(super) fn adopts_a_set_after_a_recorded_intent(test: &str) -> TestResult<()> {
     let mut world = World::new("T12b", 1, true)?;
-    plant_records(&world, &json!({"intended": ["lab"]}))?;
+    plant_record(&world, None)?;
     started(&mut world, test, None)?;
     world.wait_for_event("the session of the set the intent covers", 60, |events| {
         events.iter().any(|event| event.label == "session.create")
     });
     assert!(world.gh("scaleset.create").is_empty());
-    let records = recorded(&world)?;
     assert_eq!(
-        records["created"]["lab"], 7,
+        recorded(&world)?["scale_set_id"],
+        7,
         "the adopted set must be recorded"
-    );
-    assert_eq!(
-        records["intended"],
-        json!([]),
-        "the intent must end with the record"
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -104,15 +130,10 @@ pub(super) fn records_the_intent_before_it_creates_a_set(test: &str) -> TestResu
         "true",
         "the create-intent must be on disk before the create request"
     );
-    let records = recorded(&world)?;
     assert_eq!(
-        records["created"]["lab"], 7,
+        recorded(&world)?["scale_set_id"],
+        7,
         "the created set must be recorded"
-    );
-    assert_eq!(
-        records["intended"],
-        json!([]),
-        "the intent must end with the record"
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -121,10 +142,10 @@ pub(super) fn records_the_intent_before_it_creates_a_set(test: &str) -> TestResu
 
 pub(super) fn refuses_a_set_the_record_assigns_to_another_id(test: &str) -> TestResult<()> {
     let mut world = World::new("T12d", 1, true)?;
-    plant_records(&world, &json!({"created": {"lab": 9}}))?;
+    plant_record(&world, Some(9))?;
     started(&mut world, test, None)?;
     held(&world, "a set the record assigns to id 9");
-    assert_eq!(recorded(&world)?["created"]["lab"], 9);
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())
@@ -132,7 +153,7 @@ pub(super) fn refuses_a_set_the_record_assigns_to_another_id(test: &str) -> Test
 
 pub(super) fn refuses_a_set_with_other_labels(test: &str) -> TestResult<()> {
     let mut world = World::new("T12e", 1, true)?;
-    plant_records(&world, &json!({"created": {"lab": 7}}))?;
+    plant_record(&world, Some(7))?;
     started(&mut world, test, Some(&["velnor", "another-label"]))?;
     held(&world, "a recorded set that carries other labels");
     world.stop()?;
@@ -152,7 +173,7 @@ pub(super) fn forgets_its_intent_after_a_refused_create(test: &str) -> TestResul
     wait_for(
         "the create-intent to be forgotten after a definite refusal",
         20,
-        || recorded(&world).is_ok_and(|records| records["intended"] == json!([])),
+        || !world.state.join(RECORD).exists(),
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -191,10 +212,84 @@ pub(super) fn refuses_a_created_set_that_keeps_other_labels(test: &str) -> TestR
         "a created set that persisted other labels was used"
     );
     assert!(
-        recorded(&world)?["created"]["lab"].is_null(),
+        recorded(&world)?["scale_set_id"].is_null(),
         "a created set that persisted other labels was recorded"
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn holds_a_recorded_set_the_listing_does_not_show(test: &str) -> TestResult<()> {
+    let mut world = World::new("T12h", 1, false)?;
+    plant_record(&world, Some(9))?;
+    started(&mut world, test, None)?;
+    held(&world, "a recorded set that the listing does not show");
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
+    assert!(
+        world
+            .child_stderr()
+            .contains("run `velnor-host disconnect`, then connect again")
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn holds_a_repository_set_listed_under_another_id_than_its_record(
+    test: &str,
+) -> TestResult<()> {
+    let mut world = World::new("T12i", 1, true)?;
+    plant_scoped(
+        &world,
+        Some(9),
+        &json!({"kind": "repository", "repository_id": 42}),
+    )?;
+    launched(&mut world, test, None)?;
+    held(&world, "a set listed under another id than its record");
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
+    assert!(
+        world
+            .child_stderr()
+            .contains("holds scale set 9, but GitHub lists this name under scale set 7; delete scale set 7 by its id in the runner settings of the repository or organization, run `velnor-host disconnect`, then connect again")
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn serves_again_after_the_full_recovery_of_a_set_listed_under_another_id(
+    test: &str,
+) -> TestResult<()> {
+    let mut world = World::new("T12j", 1, true)?;
+    let with_lab = std::fs::read_to_string(world.state.join("host.toml"))?;
+    let without = host_toml_of(&world.root, 1, &[])?;
+    plant_scoped(
+        &world,
+        Some(9),
+        &json!({"kind": "repository", "repository_id": 42}),
+    )?;
+    world.write_marker("connection-drain/lab", TOKEN_A)?;
+    launched_with(&mut world, test, None, &[(SUPERVISED, "1")])?;
+    held(&world, "a set listed under another id than its record");
+
+    world.unlist_set("velnor-lab")?;
+    world.write_host_toml_text(&without)?;
+    world.wait_census("the config without lab", &without, &[]);
+    assert_eq!(world.detach(test, "lab", &with_lab)?, "Ok(Deleted)");
+    assert!(
+        !world.state.join(RECORD).exists(),
+        "the disconnect left the record that holds the connection"
+    );
+
+    world.write_host_toml_text(&with_lab)?;
+    world.wait_census("lab serving again", &with_lab, &["lab"]);
+    assert!(
+        !world.gh("session.create").is_empty(),
+        "the connection never opened a session after the recovery"
+    );
+    assert_eq!(recorded(&world)?["scale_set_id"], 7);
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Stopped)");
     Ok(())
 }

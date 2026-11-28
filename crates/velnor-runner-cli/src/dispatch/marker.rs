@@ -20,14 +20,7 @@ pub(super) struct MarkerToken(pub(super) String);
 
 impl MarkerToken {
     pub(super) fn parse(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != 32 || !bytes.iter().all(u8::is_ascii_hexdigit) {
-            return None;
-        }
-        let token = std::str::from_utf8(bytes).ok()?;
-        if token.bytes().any(|byte| byte.is_ascii_uppercase()) {
-            return None;
-        }
-        Some(Self(token.to_owned()))
+        velnor_runner_host::parse_marker_token(bytes).map(|token| Self(token.to_owned()))
     }
 
     fn generate() -> Result<Self, StateWriteError> {
