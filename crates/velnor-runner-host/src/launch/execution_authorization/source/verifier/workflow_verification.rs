@@ -10,16 +10,16 @@ use velnor_runner_github::workflow_run::{
 use crate::config::{ApprovedJobAuthorityPolicy, ApprovedWorkflowSource, RepositoryConnection};
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::execution_authorization::NativeStartedSourceContext;
 
-use super::super::{ExecutionSourceRequest, VerifiedWorkflowIdentity};
+use super::super::VerifiedWorkflowIdentity;
+use super::claim::SourceClaim;
+use super::fault::SourceFault;
 
 #[derive(Clone, Copy)]
 pub(super) struct WorkflowVerification<'a> {
     pub(super) connection: &'a RepositoryConnection,
     pub(super) policy: &'a ApprovedJobAuthorityPolicy,
-    pub(super) request: &'a ExecutionSourceRequest,
-    pub(super) native: &'a NativeStartedSourceContext,
+    pub(super) claim: &'a SourceClaim,
     pub(super) owner: &'a str,
     pub(super) repository: &'a str,
     pub(super) target: RepositoryTarget<'a>,
@@ -27,22 +27,21 @@ pub(super) struct WorkflowVerification<'a> {
     pub(super) compared: &'a ComparedHookSourceFacts,
 }
 
-pub(super) struct VerifiedWorkflowClosure {
+pub(crate) struct VerifiedWorkflowClosure {
     pub(super) root_path: String,
     pub(super) leaf_path: String,
-    pub(super) identities: Vec<VerifiedWorkflowIdentity>,
+    pub(crate) identities: Vec<VerifiedWorkflowIdentity>,
 }
 
 pub(super) fn verify_workflow_closure(
     input: WorkflowVerification<'_>,
     transport: &mut HttpsTransport,
     token: &str,
-) -> Result<VerifiedWorkflowClosure, HostError> {
+) -> Result<VerifiedWorkflowClosure, SourceFault> {
     let WorkflowVerification {
         connection,
         policy,
-        request,
-        native,
+        claim,
         owner,
         repository,
         target,
@@ -53,32 +52,33 @@ pub(super) fn verify_workflow_closure(
         .workflow_sources()
         .map(|workflow| (workflow.path(), workflow))
         .collect::<BTreeMap<_, _>>();
-    let root_path = workflow_path(request.workflow_ref(), owner, repository)?;
+    let root_path = workflow_path(&claim.workflow_ref, owner, repository)?;
     let (leaf_ref, leaf_source_sha) = compared.job_workflow();
-    if native.job_workflow_ref() != leaf_ref {
-        return Err(HostError::Identity);
+    if claim.job_workflow_ref != leaf_ref {
+        return Err(HostError::Identity.into());
     }
     let leaf_path = workflow_path(leaf_ref, owner, repository)?;
-    let root_sha = request.workflow_sha();
+    let root_sha = claim.workflow_sha.as_str();
     let leaf_sha = if leaf_path == root_path {
-        if native
-            .workflow_source_sha()
+        if claim
+            .workflow_source_sha
+            .as_deref()
             .is_some_and(|sha| sha != root_sha)
             || leaf_source_sha.is_some()
         {
-            return Err(HostError::Identity);
+            return Err(HostError::Identity.into());
         }
         root_sha
     } else {
         let source_sha = leaf_source_sha.ok_or(HostError::Identity)?;
-        if native.workflow_source_sha() != Some(source_sha) {
-            return Err(HostError::Identity);
+        if claim.workflow_source_sha.as_deref() != Some(source_sha) {
+            return Err(HostError::Identity.into());
         }
         source_sha
     };
     let source_refs = workflow_sources(run, owner, repository, &root_path, root_sha)?;
     if source_refs.get(&leaf_path).map(String::as_str) != Some(leaf_sha) {
-        return Err(HostError::Identity);
+        return Err(HostError::Identity.into());
     }
     ensure_approved_closure(&workflow_inventory, &root_path, &source_refs, connection)?;
     let identities = fetch_workflow_identities(
@@ -103,18 +103,18 @@ fn fetch_workflow_identities(
     target: RepositoryTarget<'_>,
     transport: &mut HttpsTransport,
     token: &str,
-) -> Result<Vec<VerifiedWorkflowIdentity>, HostError> {
+) -> Result<Vec<VerifiedWorkflowIdentity>, SourceFault> {
     let mut identities = Vec::with_capacity(source_refs.len());
     for (path, commit_sha) in source_refs {
         let approved = inventory.get(path.as_str()).ok_or(HostError::Identity)?;
         let content = get_workflow_content(transport, target, commit_sha, path, token)
-            .map_err(|_| HostError::Identity)?;
+            .map_err(SourceFault::lookup)?;
         if content.repository_id() != connection.repository_id
             || content.path() != path
             || content.commit_sha() != commit_sha
             || content.content_sha256() != approved.content_sha256()
         {
-            return Err(HostError::Identity);
+            return Err(HostError::Identity.into());
         }
         identities.push(VerifiedWorkflowIdentity {
             repository_id: u64::try_from(connection.repository_id)
@@ -157,8 +157,8 @@ pub(super) fn insert_source_ref(
     }
 }
 
-pub(super) fn root_source_commit_matches(request: &ExecutionSourceRequest) -> bool {
-    request.workflow_sha() == request.tested_sha()
+pub(super) fn root_source_commit_matches(claim: &SourceClaim) -> bool {
+    claim.workflow_sha == claim.tested_sha
 }
 
 fn workflow_path(value: &str, owner: &str, repository: &str) -> Result<String, HostError> {

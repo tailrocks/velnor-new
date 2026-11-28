@@ -7,13 +7,14 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use velnor_runner_host::{
-    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, PullRequestRule,
-    RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent, connect_plan,
-    import_secret,
+    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, LaunchMode,
+    PullRequestRule, RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent,
+    connect_plan, import_secret,
 };
 
 use super::connect_authority as authority;
 use super::connect_config::sample_config;
+pub(super) use super::connect_error::ConnectError;
 use super::connection_state::{
     admission_lock, config_lock, connect_write_error, connection_absence_record,
     connection_binding_snapshot, connection_drain_marker, connection_drain_proof,
@@ -45,6 +46,7 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) organization: Option<&'a str>,
     pub(super) runner_group: Option<&'a str>,
     pub(super) platform: &'a str,
+    pub(super) launch_mode: LaunchMode,
     pub(super) max_jobs: Option<u32>,
     pub(super) docker_context: Option<&'a str>,
     pub(super) endpoint: &'a str,
@@ -53,32 +55,6 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) dind_cpu_millicores: u64,
     pub(super) dind_memory_bytes: u64,
     pub(super) operational_memory_reserve_bytes: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ConnectError {
-    Config,
-    Lock,
-    Rejected,
-    Secret(HostError),
-    Lifecycle(HostError),
-    Write,
-    WriteUncertain,
-}
-
-impl std::fmt::Display for ConnectError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Config => formatter.write_str("invalid config"),
-            Self::Lock => formatter.write_str("config is locked"),
-            Self::Rejected => formatter.write_str("rejected connection"),
-            Self::Secret(error) | Self::Lifecycle(error) => {
-                std::fmt::Display::fmt(error, formatter)
-            }
-            Self::Write => formatter.write_str("write failed"),
-            Self::WriteUncertain => formatter.write_str("write state uncertain"),
-        }
-    }
 }
 
 pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
@@ -92,7 +68,7 @@ pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
             eprintln!("Connection rejected.");
             ExitCode::from(1)
         }
-        Err(ConnectError::Secret(error)) => {
+        Err(ConnectError::Secret(error) | ConnectError::Policy(error)) => {
             eprintln!("{error}");
             ExitCode::from(1)
         }
@@ -233,8 +209,8 @@ fn candidate_config(
     request: &ConnectRequest<'_>,
     connection: &RepositoryConnection,
 ) -> Result<String, ConnectError> {
-    let requested =
-        HostConfig::parse(&sample_config(request, connection)).map_err(|_| ConnectError::Config)?;
+    let requested = HostConfig::parse_draft(&sample_config(request, connection))
+        .map_err(ConnectError::from_config)?;
     let candidate = match existing {
         None => requested,
         Some(current) => {
@@ -393,6 +369,7 @@ pub(super) fn same_shared_settings(
         .resource_budget()
         .map_err(|_| ConnectError::Config)?;
     Ok(current.host.max_jobs == requested.host.max_jobs
+        && current.host.launch_mode == requested.host.launch_mode
         && current_resources == requested_resources
         && current.docker == requested.docker)
 }

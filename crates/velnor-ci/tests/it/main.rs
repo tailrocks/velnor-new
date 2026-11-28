@@ -134,6 +134,7 @@ mod logscan;
 mod mbx_out_dirs;
 mod mbx_store;
 mod mbx_store_env;
+mod merge_group_http;
 mod merge_group_skip;
 mod merge_queue;
 mod mise_pin;

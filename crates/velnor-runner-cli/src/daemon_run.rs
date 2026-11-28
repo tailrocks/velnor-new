@@ -6,10 +6,11 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, ListenFault, run_host_blocking};
+use velnor_runner_host::{
+    DaemonLock, HostConfig, ListenFault, MAX_HOST_TOML_BYTES, run_host_blocking,
+};
 
 const RETRY: Duration = Duration::from_secs(5);
-const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(crate) fn run_daemon(state: &Path) -> ExitCode {
     let Ok(lock) = DaemonLock::try_acquire_daemon(state) else {
@@ -36,10 +37,13 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
                 continue;
             }
         };
-        let Ok(config) = HostConfig::parse(&text) else {
-            eprintln!("invalid config");
-            pause();
-            continue;
+        let config = match HostConfig::parse(&text) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("{error}");
+                pause();
+                continue;
+            }
         };
         return drive(state, &config, lock);
     }
@@ -50,7 +54,7 @@ fn read_config_file(path: &Path) -> std::io::Result<Option<String>> {
         Ok(metadata)
             if metadata.is_file()
                 && !metadata.file_type().is_symlink()
-                && metadata.len() <= MAX_CONFIG_BYTES =>
+                && metadata.len() <= MAX_HOST_TOML_BYTES =>
         {
             metadata
         }
@@ -60,7 +64,7 @@ fn read_config_file(path: &Path) -> std::io::Result<Option<String>> {
     };
     let text = std::fs::read_to_string(path)?;
     let length = u64::try_from(text.len()).map_err(|_| std::io::ErrorKind::InvalidData)?;
-    if length > MAX_CONFIG_BYTES || length > metadata.len() {
+    if length > MAX_HOST_TOML_BYTES || length > metadata.len() {
         return Err(std::io::ErrorKind::InvalidData.into());
     }
     Ok(Some(text))

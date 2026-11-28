@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use velnor_runner_host::{
-    ConnectionId, HostConfig, HostError, SecretStore, build_job_authority_policy_json, store_secret,
+    ConnectionId, HostConfig, HostError, LaunchMode, SecretStore, build_job_authority_policy_json,
+    store_secret,
 };
 
 use super::connect::{ConnectError, ConnectRequest, connect_with_store, persist_reconnected};
@@ -56,6 +57,7 @@ fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> 
         organization: None,
         runner_group: None,
         platform: "linux/amd64",
+        launch_mode: LaunchMode::OfficialRunner,
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
         endpoint: "unix:///var/run/docker.sock",
@@ -182,6 +184,110 @@ fn p5_request(state: &Path) -> ConnectRequest<'_> {
         max_jobs: Some(2),
         ..request(state, None)
     }
+}
+
+#[test]
+fn connect_writes_launch_mode_rust_runner() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let inventory = state.join("inventory.json");
+    std::fs::write(&inventory, INVENTORY)?;
+    let artifact = "b".repeat(64);
+    let request = ConnectRequest {
+        scale_set: "velnor-mac",
+        scale_set_labels: vec!["velnor".to_owned(), "velnor-mac".to_owned()],
+        platform: "linux/arm64",
+        launch_mode: LaunchMode::RustRunner,
+        job_authority_inventory: Some(&inventory),
+        job_authority_generator_source_sha: Some(SOURCE_SHA),
+        job_authority_generator_artifact_sha256: Some(&artifact),
+        job_authority_generation: Some(1),
+        ..request(&state, None)
+    };
+    assert_eq!(connect(&keychain, &request, "token-0"), Ok(()));
+
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    assert!(text.contains("launch_mode = \"rust-runner\""), "{text}");
+    let config = HostConfig::parse(&text)?;
+    assert_eq!(config.host.launch_mode, LaunchMode::RustRunner);
+    switching_the_launch_mode_is_rejected(&inventory, &artifact)
+}
+
+fn arm_request<'a>(
+    state: &'a Path,
+    launch_mode: LaunchMode,
+    inventory: &'a Path,
+    artifact: &'a str,
+) -> ConnectRequest<'a> {
+    ConnectRequest {
+        scale_set: "ubuntu-26.04-arm-scale-set",
+        scale_set_labels: vec!["velnor".to_owned(), "ubuntu-26.04-arm-scale-set".to_owned()],
+        platform: "linux/arm64",
+        launch_mode,
+        job_authority_inventory: Some(inventory),
+        job_authority_generator_source_sha: Some(SOURCE_SHA),
+        job_authority_generator_artifact_sha256: Some(artifact),
+        job_authority_generation: Some(1),
+        ..request(state, None)
+    }
+}
+
+fn switching_the_launch_mode_is_rejected(
+    inventory: &Path,
+    artifact: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for mode in [LaunchMode::RustRunner, LaunchMode::OfficialRunner] {
+        let temp = tempfile::tempdir()?;
+        let state = temp.path().canonicalize()?;
+        let keychain = FakeKeychain::default();
+        let request = arm_request(&state, mode, inventory, artifact);
+        assert_eq!(connect(&keychain, &request, "token-0"), Ok(()), "{mode:?}");
+    }
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let first = arm_request(&state, LaunchMode::RustRunner, inventory, artifact);
+    assert_eq!(
+        connect(&keychain, &first, "token-1"),
+        Ok(()),
+        "the first connect in rust-runner mode must succeed"
+    );
+    let configured = std::fs::read(state.join("host.toml"))?;
+    let second = arm_request(&state, LaunchMode::OfficialRunner, inventory, artifact);
+    assert_eq!(
+        connect(&keychain, &second, "token-2"),
+        Err(ConnectError::Rejected),
+        "a connect that switches the launch mode must be rejected"
+    );
+    assert_eq!(
+        std::fs::read(state.join("host.toml"))?,
+        configured,
+        "a rejected connect must leave host.toml byte-identical"
+    );
+    assert_eq!(
+        keychain.stored(),
+        vec![b"token-1".to_vec()],
+        "a rejected connect must not store its token"
+    );
+    Ok(())
+}
+
+#[test]
+fn connect_defaults_launch_mode_to_official_runner() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    assert_eq!(
+        connect(&keychain, &request(&state, None), "token-0"),
+        Ok(())
+    );
+
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    assert!(text.contains("launch_mode = \"official-runner\""), "{text}");
+    let config = HostConfig::parse(&text)?;
+    assert_eq!(config.host.launch_mode, LaunchMode::OfficialRunner);
+    Ok(())
 }
 
 #[test]

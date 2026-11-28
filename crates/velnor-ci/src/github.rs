@@ -105,6 +105,18 @@ pub struct ApiCompare {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ApiCompareFiles {
+    pub status: String,
+    pub files: Vec<ApiCompareFile>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCompareFile {
+    pub filename: String,
+    pub previous_filename: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiRule {
     #[serde(rename = "type")]
     pub kind: String,

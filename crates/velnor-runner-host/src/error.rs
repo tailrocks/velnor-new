@@ -28,6 +28,86 @@ impl PreparationCause {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum RustRunnerFailure {
+    #[error("orb could not be run")]
+    OrbUnavailable,
+
+    #[error("an orb call did not finish before its deadline")]
+    OrbTimeout,
+
+    #[error("orb list did not return machine names")]
+    MachineList,
+
+    #[error("the existing velnor machine is not an arm64 Ubuntu machine")]
+    MachineIncompatible,
+
+    #[error("orb could not create the velnor machine")]
+    MachineCreate,
+
+    #[error("the host store directories could not be created")]
+    HostStore,
+
+    #[error("/var/lib/velnor could not be linked to the host store in the velnor machine")]
+    MachineLink,
+
+    #[error("velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine")]
+    BinaryMissing,
+
+    #[error("the JIT file could not be written")]
+    JitFile,
+
+    #[error("velnor-runner could not be started in the velnor machine")]
+    Spawn,
+
+    #[error("velnor-runner could not be waited for or stopped")]
+    Wait,
+
+    #[error("the jit directory of the host store is readable by other users")]
+    JitDirectoryAccessible,
+
+    #[error("the host store is not owned by this user, is writable by others or has an ACL")]
+    StoreUnsafe,
+
+    #[error("velnor-runner in the host store is not an owned, executable file closed to others")]
+    BinaryUnsafe,
+
+    #[error("the processes of the velnor machine could not be listed")]
+    ProcessList,
+
+    #[error("processes of the velnor machine could not be killed")]
+    ProcessKill,
+
+    #[error("runner processes of the velnor machine survived a kill")]
+    ProcessesSurvive,
+
+    #[error("GitHub refused to remove a runner of the scale set")]
+    RunnerRemovalRefused,
+
+    #[error("a runner is still registered after its removal")]
+    RunnerStillRegistered,
+
+    #[error("the job directory is still on the host store after its removal")]
+    JobFilesLeft,
+
+    #[error(
+        "the job work tree is deeper or larger than the cleanup bound; the slot stays closed until it is removed by hand"
+    )]
+    WorkTreeBound,
+
+    #[error("an orb call wrote more output than the capture bound")]
+    OrbOutputTooLarge,
+
+    #[error("another controller holds the host store")]
+    HostStoreHeld,
+
+    #[error("this command is not available in rust-runner launch mode yet")]
+    CommandUnavailable,
+
+    #[error("a blocking task of the rust-runner controller did not finish")]
+    TaskFailed,
+}
+
 const ERROR_DETAIL_BYTES: u8 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +170,16 @@ impl std::fmt::Display for ErrorDetail {
 pub enum HostError {
     #[error("invalid config")]
     Config,
+
+    #[error(
+        "the job-authority policy is schema {found}, expected {expected}; regenerate the job-authority policy"
+    )]
+    JobAuthorityPolicySchema { found: u32, expected: u32 },
+
+    #[error(
+        "the journal launch.db holds a job-authority policy of schema {found}, expected {expected}; remove launch.db from the state directory, then reconnect"
+    )]
+    JournalPolicySchema { found: u32, expected: u32 },
 
     #[error("scale set selector does not match the runner platform")]
     PlatformSelector,
@@ -195,6 +285,9 @@ pub enum HostError {
 
     #[error("empty secret")]
     EmptySecret,
+
+    #[error("{0}")]
+    RustRunner(RustRunnerFailure),
 }
 
 impl HostError {
@@ -207,6 +300,8 @@ impl HostError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
+            Self::JobAuthorityPolicySchema { .. } => "job_authority_policy_schema",
+            Self::JournalPolicySchema { .. } => "journal_policy_schema",
             Self::PlatformSelector => "platform_selector",
             Self::DeveloperImages => "developer_images",
             Self::Path => "path",
@@ -239,6 +334,7 @@ impl HostError {
             Self::Keychain => "keychain",
             Self::EmptySecret => "empty_secret",
             Self::RunnerExited => "runner_exited",
+            Self::RustRunner(_) => "rust_runner",
         }
     }
 }

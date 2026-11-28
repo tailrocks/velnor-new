@@ -6,21 +6,20 @@ use std::path::{Path, PathBuf};
 use std::io::Read;
 
 use velnor_runner_host::{
-    ConnectionId, DaemonLock, HostConfig, HostError, KeychainReference, RepositoryConnection,
-    read_secret,
+    ConnectionId, DaemonLock, HostConfig, HostError, KeychainReference, MAX_HOST_TOML_BYTES,
+    RepositoryConnection, read_secret,
 };
 
 use super::connect::ConnectError;
 use super::marker::{MarkerToken, StateWriteError, atomic_write};
 
 pub(super) fn read_host(state: &Path) -> Result<Option<HostConfig>, ConnectError> {
-    const MAX_BYTES: u64 = 1_048_576;
     let path = state.join("host.toml");
     let metadata = match std::fs::symlink_metadata(&path) {
         Ok(metadata)
             if metadata.is_file()
                 && !metadata.file_type().is_symlink()
-                && metadata.len() <= MAX_BYTES =>
+                && metadata.len() <= MAX_HOST_TOML_BYTES =>
         {
             metadata
         }
@@ -31,12 +30,12 @@ pub(super) fn read_host(state: &Path) -> Result<Option<HostConfig>, ConnectError
     let Ok(length) = u64::try_from(raw.len()) else {
         return Err(ConnectError::Config);
     };
-    if length > MAX_BYTES || length > metadata.len() {
+    if length > MAX_HOST_TOML_BYTES || length > metadata.len() {
         return Err(ConnectError::Config);
     }
     HostConfig::parse(&raw)
         .map(Some)
-        .map_err(|_| ConnectError::Config)
+        .map_err(ConnectError::from_config)
 }
 
 pub(super) fn store_token<R, F>(
@@ -56,8 +55,7 @@ where
 }
 
 pub(super) fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {
-    const MAX_BYTES: usize = 1_048_576;
-    if text.len() > MAX_BYTES {
+    if u64::try_from(text.len()).map_or(true, |size| size > MAX_HOST_TOML_BYTES) {
         return Err(ConnectError::Write);
     }
     atomic_write(&state.join("host.toml"), text.as_bytes()).map_err(connect_write_error)
@@ -190,12 +188,12 @@ fn has_binding_proof(
     connection: &RepositoryConnection,
     expected_token: &MarkerToken,
 ) -> Result<bool, ConnectError> {
-    const MAX_BYTES: u64 = 1_048_609;
+    const MAX_BINDING_PROOF_BYTES: u64 = 1_048_609;
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(metadata)
             if metadata.is_file()
                 && !metadata.file_type().is_symlink()
-                && metadata.len() <= MAX_BYTES =>
+                && metadata.len() <= MAX_BINDING_PROOF_BYTES =>
         {
             metadata
         }
@@ -206,7 +204,11 @@ fn has_binding_proof(
     let Ok(length) = u64::try_from(bytes.len()) else {
         return Err(ConnectError::Rejected);
     };
-    if length > MAX_BYTES || length > metadata.len() || bytes.len() <= 33 || bytes[32] != b'\n' {
+    if length > MAX_BINDING_PROOF_BYTES
+        || length > metadata.len()
+        || bytes.len() <= 33
+        || bytes[32] != b'\n'
+    {
         return Err(ConnectError::Rejected);
     }
     let Some(token) = MarkerToken::parse(&bytes[..32]) else {
@@ -249,13 +251,13 @@ pub(super) fn read_connection_snapshot(
     state: &Path,
     connection_id: &ConnectionId,
 ) -> Result<Option<RepositoryConnection>, ConnectError> {
-    const MAX_BYTES: u64 = 1_048_576;
+    const MAX_CONNECTION_SNAPSHOT_BYTES: u64 = 1_048_576;
     let path = connection_binding_snapshot(state, connection_id);
     let metadata = match std::fs::symlink_metadata(&path) {
         Ok(metadata)
             if metadata.is_file()
                 && !metadata.file_type().is_symlink()
-                && metadata.len() <= MAX_BYTES =>
+                && metadata.len() <= MAX_CONNECTION_SNAPSHOT_BYTES =>
         {
             metadata
         }
@@ -266,7 +268,7 @@ pub(super) fn read_connection_snapshot(
     let Ok(length) = u64::try_from(bytes.len()) else {
         return Err(ConnectError::Rejected);
     };
-    if length > MAX_BYTES || length > metadata.len() {
+    if length > MAX_CONNECTION_SNAPSHOT_BYTES || length > metadata.len() {
         return Err(ConnectError::Rejected);
     }
     let connection: RepositoryConnection =

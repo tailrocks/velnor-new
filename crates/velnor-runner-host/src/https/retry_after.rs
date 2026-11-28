@@ -4,13 +4,15 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::Url;
 
 use super::CurlFail;
 
 const WAIT_SLICE: Duration = Duration::from_millis(50);
+const MAX_RESET_HOLD: Duration = Duration::from_hours(1);
+const SECONDARY_LIMIT_FLOOR: Duration = Duration::from_mins(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct OriginKey(String);
@@ -31,12 +33,30 @@ impl Hold {
 type Registry = BTreeMap<OriginKey, Hold>;
 
 static HOLDS: OnceLock<Mutex<Registry>> = OnceLock::new();
+static STRIKES: OnceLock<Mutex<BTreeMap<OriginKey, u32>>> = OnceLock::new();
+
+fn strikes() -> MutexGuard<'static, BTreeMap<OriginKey, u32>> {
+    match STRIKES.get_or_init(|| Mutex::new(BTreeMap::new())).lock() {
+        Ok(strikes) => strikes,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 fn registry_lock() -> MutexGuard<'static, Registry> {
     match HOLDS.get_or_init(|| Mutex::new(BTreeMap::new())).lock() {
         Ok(registry) => registry,
         Err(poisoned) => poisoned.into_inner(),
     }
+}
+
+fn next_floor(key: &OriginKey) -> Duration {
+    let mut strikes = strikes();
+    let count = strikes.entry(key.clone()).or_insert(0);
+    let floor = SECONDARY_LIMIT_FLOOR
+        .saturating_mul(1_u32 << (*count).min(6))
+        .min(MAX_RESET_HOLD);
+    *count = count.saturating_add(1);
+    floor
 }
 
 fn origin_key(base: &str) -> Option<OriginKey> {
@@ -72,17 +92,25 @@ pub(super) fn wait_for_base(base: &str, deadline: Instant) -> Result<(), CurlFai
     }
 }
 
-pub(super) fn record_response(base: &str, status: u16, header: Option<&[u8]>) {
-    if !matches!(status, 429 | 503) {
-        return;
-    }
-    let (Some(key), Some(header)) = (origin_key(base), header) else {
+pub(super) fn record_response(
+    base: &str,
+    status: u16,
+    header: Option<&[u8]>,
+    reset: Option<&[u8]>,
+) {
+    let Some(key) = origin_key(base) else {
         return;
     };
+    if !matches!(status, 429 | 503) {
+        strikes().remove(&key);
+        return;
+    }
 
-    let mut registry = registry_lock();
     let wall_now = SystemTime::now();
-    let Some(duration) = parse_retry_after(header, wall_now) else {
+    let explicit = header
+        .and_then(|value| parse_retry_after(value, wall_now))
+        .or_else(|| reset.and_then(|value| parse_reset(value, wall_now)));
+    let Some(duration) = explicit.or_else(|| (status == 429).then(|| next_floor(&key))) else {
         return;
     };
     if duration.is_zero() {
@@ -90,7 +118,22 @@ pub(super) fn record_response(base: &str, status: u16, header: Option<&[u8]>) {
     }
 
     let now = Instant::now();
-    record_at(&mut registry, key, duration, now);
+    record_at(&mut registry_lock(), key, duration, now);
+}
+
+fn parse_reset(header: &[u8], wall_now: SystemTime) -> Option<Duration> {
+    let seconds = std::str::from_utf8(header)
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()?;
+    let reset_at = UNIX_EPOCH.checked_add(Duration::from_secs(seconds))?;
+    Some(
+        reset_at
+            .duration_since(wall_now)
+            .unwrap_or(Duration::ZERO)
+            .min(MAX_RESET_HOLD),
+    )
 }
 
 fn parse_retry_after(header: &[u8], wall_now: SystemTime) -> Option<Duration> {
@@ -145,3 +188,6 @@ fn record_at(registry: &mut Registry, key: OriginKey, duration: Duration, now: I
         },
     );
 }
+
+#[cfg(test)]
+mod tests;

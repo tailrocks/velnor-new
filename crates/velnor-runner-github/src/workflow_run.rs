@@ -95,6 +95,9 @@ pub struct GitHubRepository {
 
     #[serde(default)]
     pub private: bool,
+
+    #[serde(default)]
+    pub default_branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -208,6 +211,19 @@ where
         repository,
         &format!("actions/runs/{workflow_run_id}"),
     )?;
+    get_json(transport, path, token)
+}
+
+pub fn get_repository<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    token: &str,
+) -> Result<GitHubRepository, WorkflowRunError>
+where
+    T: Transport + ?Sized,
+{
+    let path = repository_path(owner, repository, "")?;
     get_json(transport, path, token)
 }
 

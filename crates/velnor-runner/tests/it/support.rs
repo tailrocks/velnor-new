@@ -12,6 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 
+mod closed_port;
 mod jit;
 mod mock_broker;
 pub(crate) mod mock_feed;
@@ -21,6 +22,7 @@ mod scripted;
 
 mod reply;
 
+pub(crate) use closed_port::ClosedPort;
 pub(crate) use reply::Reply;
 
 pub(crate) const TOKEN: &str = "test-token";

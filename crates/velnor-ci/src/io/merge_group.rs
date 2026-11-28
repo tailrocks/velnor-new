@@ -12,6 +12,14 @@ fn variable(name: &str) -> String {
     std::env::var(name).unwrap_or_default()
 }
 
+fn before() -> String {
+    std::env::var_os("GITHUB_EVENT_PATH")
+        .and_then(|path| std::fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|payload| payload["before"].as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
 pub(super) fn run() -> String {
     let context = Context {
         event: variable(EVENT_VARIABLE),
@@ -19,6 +27,7 @@ pub(super) fn run() -> String {
         sha: variable("GITHUB_SHA"),
         workflow_ref: variable("GITHUB_WORKFLOW_REF"),
         required: Some(variable("VELNOR_REQUIRED_CHECK")).filter(|name| !name.is_empty()),
+        before: before(),
     };
     let github = http::HttpGitHub::new(api_url(), variable("GITHUB_TOKEN"), LOOKUP_TIMEOUT);
     let result = skip_push(&github, &context);

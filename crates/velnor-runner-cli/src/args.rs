@@ -149,7 +149,7 @@ pub struct ConnectArgs {
     /// Exact registered label. Repeat for every label.
     #[arg(long = "scale-set-label", required = true)]
     pub scale_set_labels: Vec<String>,
-    /// Source authorization policy: `repository` or `branch-restricted`.
+    /// Source authorization policy: `repository` or `branch-restricted`. With `repository`, `--event pull_request` admits only same-repository pull requests.
     #[arg(
         long = "source-policy-mode",
         required = true,
@@ -178,6 +178,13 @@ pub struct ConnectArgs {
     /// Organization runner group, by name. Requires `--org`. Defaults to the Default group.
     #[arg(long = "runner-group", requires = "organization")]
     pub runner_group: Option<String>,
+    /// How the host starts a runner for each job: `official-runner` creates the runner container pair, `rust-runner` starts `velnor-runner` in the `OrbStack` machine `velnor`; `drain --wait`, `disconnect` and `doctor --probe` do not support `rust-runner` yet.
+    #[arg(
+        long,
+        value_parser = ["official-runner", "rust-runner"],
+        default_value = "official-runner"
+    )]
+    pub launch_mode: String,
     /// Container platform.
     #[arg(long)]
     pub platform: String,

@@ -3,31 +3,27 @@
 
 use std::time::Instant;
 
-use serde_json::json;
-use velnor_runner_github::workflow_run::{
-    ComparedHookPullRequestFacts, ComparedHookSourceFacts, RepositoryTarget,
-    UntrustedHookSourceInput, WorkflowRun, compare_hook_source, get_workflow_run_attempt,
-};
+use velnor_runner_github::workflow_run::{ComparedHookPullRequestFacts, ComparedHookSourceFacts};
 
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::error::HostError;
-use crate::https::HttpsTransport;
 use crate::journal::execution_authorization::NativeStartedSourceContext;
 use crate::worker::execution_authorization::VerifiedProofChannelBinding;
 
+#[path = "verifier/claim.rs"]
+mod claim;
+#[path = "verifier/fault.rs"]
+mod fault;
 #[path = "verifier/workflow_verification.rs"]
 mod workflow_verification;
-use workflow_verification::{
-    VerifiedWorkflowClosure, WorkflowVerification, root_source_commit_matches,
-    verify_workflow_closure,
-};
+pub(crate) use claim::{PullClaim, SourceClaim, verify_source_claim};
+pub(crate) use fault::SourceFault;
+use workflow_verification::VerifiedWorkflowClosure;
 
 use super::{
     AuthorizedExecutionSource, ExecutionSourceRequest, PersistedExecutionSource,
     PersistedPullRequestSource,
 };
-
-const GITHUB_API: &str = "https://api.github.com";
 
 pub(crate) fn verify_live_source(
     connection: &RepositoryConnection,
@@ -52,47 +48,46 @@ pub(crate) fn verify_live_source(
     {
         return Err(HostError::Identity);
     }
-    let (owner, repository) = split_repository(&connection.repository)?;
-    let target = RepositoryTarget {
-        id: connection.repository_id,
-        owner,
-        name: repository,
-    };
-    let mut transport = HttpsTransport::with_deadline(GITHUB_API, deadline)?;
-    let run = get_workflow_run_attempt(
-        &mut transport,
-        owner,
-        repository,
-        i64::try_from(request.run_id()).map_err(|_| HostError::Identity)?,
-        i64::from(request.run_attempt()),
-        token,
-    )
-    .map_err(|_| HostError::Identity)?;
-    let hook_input = hook_input(request, native, &run)?;
-    let compared = compare_hook_source(&mut transport, &hook_input, target, token)
-        .map_err(|_| HostError::Identity)?;
-    verify_compared_request(request, &compared)?;
-
-    let workflow_closure = verify_workflow_closure(
-        WorkflowVerification {
-            connection,
-            policy,
-            request,
-            native,
-            owner,
-            repository,
-            target,
-            run: &run,
-            compared: &compared,
-        },
-        &mut transport,
-        token,
-    )?;
-    let source = persist_verified_source(request, channel, &compared, workflow_closure)?;
+    let claim = claim_of(request, native)?;
+    let verified = verify_source_claim(connection, policy, &claim, token, deadline)
+        .map_err(SourceFault::into_host)?;
+    let source = persist_verified_source(request, channel, &verified.compared, verified.closure)?;
     if Instant::now() >= deadline {
         return Err(HostError::Identity);
     }
     Ok(source)
+}
+
+fn claim_of(
+    request: &ExecutionSourceRequest,
+    native: &NativeStartedSourceContext,
+) -> Result<SourceClaim, HostError> {
+    let pull_request = request
+        .pull_request_number()
+        .map(|number| -> Result<PullClaim, HostError> {
+            Ok(PullClaim {
+                number,
+                base_ref: request.base_ref().ok_or(HostError::Identity)?.to_owned(),
+                base_sha: request.base_sha().ok_or(HostError::Identity)?.to_owned(),
+                head_ref: request.head_ref().ok_or(HostError::Identity)?.to_owned(),
+                head_sha: request.head_sha().ok_or(HostError::Identity)?.to_owned(),
+            })
+        })
+        .transpose()?;
+    Ok(SourceClaim {
+        repository_id: request.repository_id(),
+        repository_name: request.repository_name().to_owned(),
+        run_id: request.run_id(),
+        run_attempt: request.run_attempt(),
+        event_name: request.event_name().to_owned(),
+        event_ref: request.event_ref().to_owned(),
+        tested_sha: request.tested_sha().to_owned(),
+        workflow_ref: request.workflow_ref().to_owned(),
+        workflow_sha: request.workflow_sha().to_owned(),
+        job_workflow_ref: native.job_workflow_ref().to_owned(),
+        workflow_source_sha: native.workflow_source_sha().map(str::to_owned),
+        pull_request,
+    })
 }
 
 fn persist_verified_source(
@@ -143,101 +138,6 @@ fn persist_verified_source(
         return Err(HostError::Identity);
     }
     Ok(source)
-}
-
-fn split_repository(repository: &str) -> Result<(&str, &str), HostError> {
-    let Some((owner, name)) = repository.split_once('/') else {
-        return Err(HostError::Identity);
-    };
-    if owner.is_empty() || name.is_empty() || name.contains('/') {
-        return Err(HostError::Identity);
-    }
-    Ok((owner, name))
-}
-
-fn hook_input(
-    request: &ExecutionSourceRequest,
-    native: &NativeStartedSourceContext,
-    run: &WorkflowRun,
-) -> Result<UntrustedHookSourceInput, HostError> {
-    let pull_request = if let Some(number) = request.pull_request_number() {
-        let number = i64::try_from(number).map_err(|_| HostError::Identity)?;
-        let mut matches = run
-            .pull_requests
-            .iter()
-            .filter(|pull_request| pull_request.number == number);
-        let pull = matches.next().ok_or(HostError::Identity)?;
-        if matches.next().is_some() {
-            return Err(HostError::Identity);
-        }
-        let base = pull.base.repository.as_ref().ok_or(HostError::Identity)?;
-        let head = pull.head.repository.as_ref().ok_or(HostError::Identity)?;
-        let head_repository = run
-            .head_repository
-            .as_ref()
-            .filter(|repository| repository.id == head.id)
-            .ok_or(HostError::Identity)?;
-        Some(json!({
-            "number": number,
-            "base": {
-                "repository": {
-                    "id": base.id,
-                    "name": base.name,
-                    "full_name": format!("{}/{}", run.repository.owner.login, run.repository.name)
-                },
-                "ref": request.base_ref().ok_or(HostError::Identity)?,
-                "sha": request.base_sha().ok_or(HostError::Identity)?
-            },
-            "head": {
-                "repository": {
-                    "id": head.id,
-                    "name": head.name,
-                    "full_name": head_repository.full_name
-                },
-                "ref": request.head_ref().ok_or(HostError::Identity)?,
-                "sha": request.head_sha().ok_or(HostError::Identity)?
-            }
-        }))
-    } else {
-        None
-    };
-    let value = json!({
-        "repository_id": request.repository_id(),
-        "repository": request.repository_name(),
-        "run_id": request.run_id(),
-        "run_attempt": request.run_attempt(),
-        "event_name": request.event_name(),
-        "event_ref": request.event_ref(),
-        "workflow_ref": request.workflow_ref(),
-        "workflow_sha": request.workflow_sha(),
-        "tested_sha": request.tested_sha(),
-        "job_workflow_ref": native.job_workflow_ref(),
-        "workflow_job_id": request.job_key(),
-        "pull_request": pull_request
-    });
-    serde_json::from_value(value).map_err(|_| HostError::Identity)
-}
-
-fn verify_compared_request(
-    request: &ExecutionSourceRequest,
-    compared: &ComparedHookSourceFacts,
-) -> Result<(), HostError> {
-    let (run_id, attempt) = compared.run_identity();
-    let (event, event_ref, tested_sha) = compared.event_source();
-    let (workflow_ref, workflow_sha) = compared.workflow_source();
-    if u64::try_from(run_id).ok() != Some(request.run_id())
-        || u32::try_from(attempt).ok() != Some(request.run_attempt())
-        || event != request.event_name()
-        || event_ref != request.event_ref()
-        || tested_sha != request.tested_sha()
-        || workflow_ref != request.workflow_ref()
-        || workflow_sha != request.workflow_sha()
-        || !root_source_commit_matches(request)
-        || compared.workflow_job_id() != request.job_key()
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(())
 }
 
 fn make_pull_request_source(

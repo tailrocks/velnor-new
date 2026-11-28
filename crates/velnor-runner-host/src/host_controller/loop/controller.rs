@@ -23,8 +23,9 @@ use super::{
     connection_poll::{ConnectionPollContext, poll_active_connections},
     setup,
     state::setup_receipt_inputs,
-    transitions::{JournalEffects, apply_config, retire_pending},
+    transitions::{JournalEffects, apply_config, handover_to, retire_pending},
 };
+use crate::rust_runner::Handover;
 #[path = "controller/doctor.rs"]
 mod doctor;
 #[path = "controller/profile.rs"]
@@ -113,6 +114,7 @@ struct ControllerLoop<'a> {
     rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
     hold_log: startup::HoldLog,
+    handing_over: bool,
 }
 
 impl<'a> ControllerLoop<'a> {
@@ -207,26 +209,35 @@ impl<'a> ControllerLoop<'a> {
             rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
             hold_log: startup.hold_log,
+            handing_over: false,
         })
     }
 
-    async fn run(mut self) -> Result<(), ListenFault> {
+    async fn run(mut self) -> Result<Handover, ListenFault> {
         loop {
             tokio::time::sleep(CONFIG_RELOAD_PAUSE).await;
             self.start_doctor_probe().await;
             self.refresh_storage_profile().await;
-            self.refresh_config_and_retire().await?;
+            if let Some(handover) = self.refresh_config_and_retire().await? {
+                return Ok(handover);
+            }
             self.supervise_local_workers().await;
             Box::pin(self.poll_connections()).await;
         }
     }
 
-    async fn refresh_config_and_retire(&mut self) -> Result<(), ListenFault> {
+    async fn refresh_config_and_retire(&mut self) -> Result<Option<Handover>, ListenFault> {
         if !self
             .daemon_lock
             .matches_path(&self.state.join("daemon.lock"))
         {
             return Err(HostError::Lock.into());
+        }
+        if self.handing_over {
+            return Ok(self
+                .connection_sessions
+                .is_empty()
+                .then_some(Handover::RustRunner));
         }
         let next = match crate::host_controller::config_watch::read_host_config(
             &self.state.join("host.toml"),
@@ -247,6 +258,22 @@ impl<'a> ControllerLoop<'a> {
             docker: &self.docker,
             connection_sessions: &mut self.connection_sessions,
         };
+        if let Some(next) = &next
+            && handover_to(&self.current, next).is_some()
+        {
+            eprintln!(
+                "host controller: launch mode changed; draining every connection before the rust-runner controller takes over"
+            );
+            let drained = self.current.without_connections();
+            self.handing_over = apply_config(
+                &mut self.current,
+                &mut self.pending_retirements,
+                drained,
+                &mut effects,
+            )
+            .await;
+            return Ok(None);
+        }
         if let Some(next) = next
             && next != self.current
         {
@@ -267,7 +294,7 @@ impl<'a> ControllerLoop<'a> {
         if let Err(error) = retire_pending(&mut self.pending_retirements, &mut effects).await {
             eprintln!("host controller connection retirement held: {error}");
         }
-        Ok(())
+        Ok(None)
     }
 
     async fn poll_connections(&mut self) {

@@ -25,9 +25,11 @@ mod removal;
 pub(crate) use removal::{RemovedRunnerProver, RunnerProver};
 
 use support::{
-    CreateIds, create_connection_scale_set, map_host, map_repository, map_session, open_admin,
+    CreateIds, create_connection_scale_set, map_host, map_repository, open_admin,
     revalidate_repository_scope, selected_group_id, selector_valid,
 };
+
+pub(crate) use support::{create_labels, map_session};
 
 const GITHUB_API: &str = "https://api.github.com";
 
@@ -257,7 +259,7 @@ fn repository_parts(repository: &str) -> Result<(&str, &str), EnsureError> {
 
 /// Opens the admin session of `binding`'s repository: the verified scope, then an admin
 /// connection. Shared by every observation and removal that acts for one connection.
-fn open_binding_admin(
+pub(crate) fn open_binding_admin(
     pat: &str,
     binding: &RepositoryConnection,
 ) -> Result<(support::Recording, velnor_runner_github::AdminConnection), EnsureError> {

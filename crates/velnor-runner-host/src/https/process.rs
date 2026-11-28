@@ -16,6 +16,8 @@ pub(super) struct CurlResponse {
     pub(super) status: u16,
     pub(super) body: Vec<u8>,
     pub(super) retry_after: Option<Vec<u8>>,
+    pub(super) reset: Option<Vec<u8>>,
+    pub(super) rate_limited: bool,
 }
 
 pub(super) fn run_curl(
@@ -85,16 +87,40 @@ fn run_curl_with_home(
     let finished = finished?;
     let response = response?;
     let status = classify_exit(finished.status.code(), &response.status)?;
-    let retry_after = stderr
+    let headers = stderr
         .filter(|captured| !captured.overflow)
-        .filter(|_| matches!(status, 429 | 503))
-        .map(|captured| captured.bytes)
-        .filter(|bytes| !bytes.is_empty());
+        .map_or_else(Vec::new, |captured| captured.bytes);
+    let signals = rate_signals(status, &headers);
     Ok(CurlResponse {
         status,
         body: response.body,
-        retry_after,
+        retry_after: signals.retry_after,
+        reset: signals.reset,
+        rate_limited: signals.rate_limited,
     })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RateSignals {
+    retry_after: Option<Vec<u8>>,
+    reset: Option<Vec<u8>>,
+    rate_limited: bool,
+}
+
+fn rate_signals(status: u16, headers: &[u8]) -> RateSignals {
+    let mut lines = headers
+        .split(|byte| *byte == b'\n')
+        .map(|line| Some(line.trim_ascii().to_vec()).filter(|bytes| !bytes.is_empty()));
+    let retry_after = lines.next().flatten();
+    let remaining = lines.next().flatten();
+    let reset = lines.next().flatten();
+    let exhausted = remaining.as_deref() == Some(b"0".as_slice());
+    let limited_status = matches!(status, 403 | 429 | 503);
+    RateSignals {
+        rate_limited: status == 403 && (retry_after.is_some() || exhausted),
+        retry_after: retry_after.filter(|_| limited_status),
+        reset: reset.filter(|_| limited_status && exhausted),
+    }
 }
 
 struct BoundedResponse {
@@ -226,3 +252,6 @@ fn stop_child(child: &mut Child) {
     let _killed = child.kill();
     let _reaped = child.wait();
 }
+
+#[cfg(test)]
+mod tests;
