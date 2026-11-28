@@ -68,6 +68,7 @@ function sessions(path: string): void {
     const refused = refusal("session.refresh");
     const scripted = scriptedReply("session.refreshed");
     record("session.refresh", { id: session[2], status: refused?.status ?? 200 });
+    held("refresh");
     if (refused) reply(refused.status, { message: "refresh refused" });
     reply(200, { sessionId: session[2], messageQueueUrl: config.queue_url, messageQueueAccessToken: `queue-token-${session[2]}-refreshed`, ...scripted?.patch });
   }

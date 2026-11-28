@@ -10,12 +10,7 @@ use super::harness::World;
 
 const FOREIGN_ID: u64 = 300;
 
-#[test]
-fn rust_runner_controller_leaves_a_runner_of_another_scale_set() -> TestResult<()> {
-    if let Some(root) = super::child_root() {
-        return super::child::run(&root);
-    }
-    let test = "scope::rust_runner_controller_leaves_a_runner_of_another_scale_set";
+pub(super) fn leaves_a_runner_of_another_scale_set(test: &str) -> TestResult<()> {
     let mut world = World::new("T14", 1, true)?;
     let state_path = world.github.join("state.json");
     let mut state: Value = serde_json::from_str(&std::fs::read_to_string(&state_path)?)?;

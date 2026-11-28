@@ -6,37 +6,23 @@ use super::events::wait_for;
 use super::fixtures::{TestResult, WORKFLOW, assigned, push_offer, with_acquire_returns};
 use super::harness::World;
 
-#[test]
-fn rust_runner_controller_goes_to_jit_for_an_assigned_offer() -> TestResult<()> {
+pub(super) fn goes_to_jit(test: &str) -> TestResult<()> {
     let offers = [with_acquire_returns(
         assigned(push_offer(1, 9901, "main", WORKFLOW)),
         "none",
     )];
-    goes_to_jit(
-        "rust_runner_controller_goes_to_jit_for_an_assigned_offer",
-        &offers,
-    )
+    run(test, &offers)
 }
 
-#[test]
-fn rust_runner_controller_goes_to_jit_for_an_assigned_offer_that_supersedes_an_available_one()
--> TestResult<()> {
+pub(super) fn goes_to_jit_after_an_available_one(test: &str) -> TestResult<()> {
     let available = with_acquire_returns(push_offer(1, 9901, "main", WORKFLOW), "none");
-    let offers = [available.clone(), assigned(available)];
-    goes_to_jit(
-        "rust_runner_controller_goes_to_jit_for_an_assigned_offer_that_supersedes_an_available_one",
-        &offers,
-    )
+    run(test, &[available.clone(), assigned(available)])
 }
 
-fn goes_to_jit(name: &str, offers: &[serde_json::Value]) -> TestResult<()> {
-    if let Some(root) = super::child_root() {
-        return super::child::run(&root);
-    }
-    let test = format!("assigned::{name}");
+fn run(test: &str, offers: &[serde_json::Value]) -> TestResult<()> {
     let mut world = World::new("T43", 1, true)?;
     world.queue_message(99, offers)?;
-    world.spawn_controller(&test, &[])?;
+    world.spawn_controller(test, &[])?;
     world.wait_for_event("an acquire or a jit", 40, |events| {
         events
             .iter()

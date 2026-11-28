@@ -83,6 +83,7 @@ pub enum Rule {
     DistFileCollision(String),
     EnvTooLong(usize),
     ExpressionTooLong(usize),
+    ConditionTooLong(usize),
     ImageBoundary(&'static str),
 }
 
@@ -152,6 +153,10 @@ impl fmt::Display for RuleViolation {
             Rule::ExpressionTooLong(length) => write!(
                 f,
                 "an env value joins its expressions into one of {length} characters, and GitHub fails a step whose expression is over {MAX_EXPRESSION_CHARACTERS}; shorten it or pass a list without per-entry expressions"
+            ),
+            Rule::ConditionTooLong(length) => write!(
+                f,
+                "an if condition is {length} characters, and GitHub fails a step whose expression is over {MAX_EXPRESSION_CHARACTERS}; narrow the gate or read the selection from fewer places"
             ),
             Rule::ImageBoundary(why) => f.write_str(why),
             Rule::TokenJobRunnerNotX64(runner) => write!(
