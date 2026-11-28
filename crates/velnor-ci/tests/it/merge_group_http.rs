@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 use serde_json::{Value, json};
-use velnor_ci::github::{compare_files_path, merge_group_runs_path};
+use velnor_ci::github::{compare_path, merge_group_runs_path};
 
 use crate::io::{Repo, serve_with_status};
 use crate::support::repo;
@@ -40,8 +40,8 @@ fn queue_run() -> (String, (u16, String)) {
     )
 }
 
-fn page(number: u32, before: &str, reply: (u16, String)) -> (String, (u16, String)) {
-    (compare_files_path(&repo(), before, SHA, number), reply)
+fn page(before: &str, reply: (u16, String)) -> (String, (u16, String)) {
+    (compare_path(&repo(), before, SHA), reply)
 }
 
 fn ahead(names: &[&str]) -> (u16, String) {
@@ -98,9 +98,7 @@ fn assert_everything(outcome: &Outcome) {
 
 #[test]
 fn a_multi_commit_push_whose_earlier_commit_bumps_the_lock_runs_everything() {
-    let outcome = push(vec![page(
-        1,
-        BEFORE,
+    let outcome = push(vec![page(BEFORE,
         (
             200,
             json!({"status": "ahead", "total_commits": 3, "files": files(&["src/lib.rs", "Cargo.lock"])}).to_string(),
@@ -117,7 +115,6 @@ fn a_multi_commit_push_whose_earlier_commit_bumps_the_lock_runs_everything() {
 #[test]
 fn a_nested_lock_runs_everything() {
     assert_everything(&push(vec![page(
-        1,
         BEFORE,
         ahead(&["tools/xtask/Cargo.lock"]),
     )]));
@@ -126,50 +123,39 @@ fn a_nested_lock_runs_everything() {
 #[test]
 fn a_removed_lock_runs_everything() {
     let removed = json!([{"filename": "Cargo.lock", "status": "removed"}]);
-    assert_everything(&push(vec![page(
-        1,
-        BEFORE,
-        (200, compare("ahead", &removed)),
-    )]));
+    assert_everything(&push(vec![page(BEFORE, (200, compare("ahead", &removed)))]));
 }
 
 #[test]
 fn a_rename_away_from_a_lock_runs_everything() {
     let renamed = json!([{"filename": "locks/old.txt", "previous_filename": "Cargo.lock", "status": "renamed"}]);
-    assert_everything(&push(vec![page(
-        1,
-        BEFORE,
-        (200, compare("ahead", &renamed)),
-    )]));
+    assert_everything(&push(vec![page(BEFORE, (200, compare("ahead", &renamed)))]));
 }
 
 #[test]
-fn a_lock_on_a_later_page_of_the_file_list_runs_everything() {
-    let first: Vec<String> = (0..100).map(|n| format!("src/file{n}.rs")).collect();
-    let first: Vec<&str> = first.iter().map(String::as_str).collect();
-    let outcome = push(vec![
-        page(1, BEFORE, ahead(&first)),
-        page(2, BEFORE, ahead(&["Cargo.lock"])),
-    ]);
-    assert_everything(&outcome);
+fn a_lock_listed_last_of_299_files_runs_everything() {
+    let mut names: Vec<String> = (0..298).map(|n| format!("src/file{n}.rs")).collect();
+    names.push("Cargo.lock".to_owned());
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    assert_everything(&push(vec![page(BEFORE, ahead(&names))]));
 }
 
 #[test]
 fn a_zero_before_runs_everything() {
-    let clean = page(1, ZEROS, ahead(&["README.md"]));
+    let clean = page(ZEROS, ahead(&["README.md"]));
     assert_everything(&run_step(vec![clean], Some(payload(Some(ZEROS)))));
 }
 
 #[test]
 fn a_missing_before_or_payload_runs_everything() {
-    let clean = page(1, "", ahead(&["README.md"]));
+    let clean = page("", ahead(&["README.md"]));
     assert_everything(&run_step(vec![clean.clone()], Some(payload(None))));
     assert_everything(&run_step(vec![clean], None));
 }
 
 #[test]
 fn a_compare_api_error_runs_everything() {
-    let broken = page(1, BEFORE, (500, "{}".to_owned()));
+    let broken = page(BEFORE, (500, "{}".to_owned()));
     assert_everything(&push(vec![broken]));
 }
 
@@ -177,18 +163,15 @@ fn a_compare_api_error_runs_everything() {
 fn a_compare_that_is_not_ahead_runs_everything() {
     for status in ["diverged", "behind", "identical"] {
         let reply = (200, compare(status, &files(&["README.md"])));
-        assert_everything(&push(vec![page(1, BEFORE, reply)]));
+        assert_everything(&push(vec![page(BEFORE, reply)]));
     }
 }
 
 #[test]
-fn a_truncated_file_list_runs_everything() {
-    let names: Vec<String> = (0..100).map(|n| format!("src/file{n}.rs")).collect();
+fn a_file_list_of_300_files_may_be_truncated_and_runs_everything() {
+    let names: Vec<String> = (0..300).map(|n| format!("src/file{n}.rs")).collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let pages = (1..=3)
-        .map(|number| page(number, BEFORE, ahead(&names)))
-        .collect();
-    let outcome = push(pages);
+    let outcome = push(vec![page(BEFORE, ahead(&names))]);
     assert_everything(&outcome);
     assert!(
         outcome.stdout.contains("300 files or more"),
@@ -205,14 +188,14 @@ fn a_push_that_leaves_every_lock_unchanged_still_skips() {
         "not-Cargo.lock",
         "Cargo.lock.d/x.rs",
     ];
-    let outcome = push(vec![page(1, BEFORE, ahead(&names))]);
+    let outcome = push(vec![page(BEFORE, ahead(&names))]);
     assert_eq!(outcome.skip, "skip=true\n", "{}", outcome.stdout);
 }
 
 #[test]
 fn a_path_in_the_note_cannot_inject_a_workflow_command() {
     let hostile = "evil\n::error::injected/Cargo.lock";
-    let outcome = push(vec![page(1, BEFORE, ahead(&[hostile]))]);
+    let outcome = push(vec![page(BEFORE, ahead(&[hostile]))]);
     assert_everything(&outcome);
     assert!(
         !outcome.stdout.lines().any(|line| line.starts_with("::")),

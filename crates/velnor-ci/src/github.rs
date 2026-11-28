@@ -252,14 +252,6 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 }
 
 #[must_use]
-pub fn compare_files_path(repo: &Repo, before: &str, head: &str, page: u32) -> String {
-    format!(
-        "/repos/{repo}/compare/{}...{head}?per_page=100&page={page}",
-        encode(before)
-    )
-}
-
-#[must_use]
 pub fn commit_pulls_path(repo: &Repo, sha: &str) -> String {
     format!("/repos/{repo}/commits/{}/pulls?per_page=100", encode(sha))
 }

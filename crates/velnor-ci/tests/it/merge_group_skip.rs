@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::json;
-use velnor_ci::github::{compare_files_path, merge_group_runs_path, run_jobs_path};
+use velnor_ci::github::{compare_path, merge_group_runs_path, run_jobs_path};
 use velnor_ci::merge_group::{Context, skip_push};
 
 use crate::support::{FakeGitHub, repo};
@@ -58,7 +58,7 @@ fn runs(entries: &[(&str, &str, &str, &str)]) -> String {
 
 fn unchanged_lock(fake: &mut FakeGitHub) {
     fake.respond(
-        compare_files_path(&repo(), BEFORE, SHA, 1),
+        compare_path(&repo(), BEFORE, SHA),
         r#"{"status": "ahead", "files": [{"filename": "README.md"}]}"#,
     );
 }

@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::github::{ApiCompareFile, ApiCompareFiles, GitHub, Repo, compare_files_path, parse};
+use crate::github::{ApiCompareFile, ApiCompareFiles, GitHub, Repo, compare_path, parse};
 use crate::merge_group::commit;
 
 const LOCK_FILE: &str = "Cargo.lock";
-const PAGE_SIZE: u32 = 100;
-const PAGES: u32 = 3;
+const LISTED_AT_MOST: usize = 300;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LockChange {
@@ -38,28 +37,26 @@ pub fn lock_change(github: &impl GitHub, repo: &Repo, before: &str, sha: &str) -
     if !commit(before) || zero(before) {
         return LockChange::Unknown("the push event names no before commit".to_owned());
     }
-    for page in 1..=PAGES {
-        let path = compare_files_path(repo, before, sha, page);
-        let compare: ApiCompareFiles =
-            match github.get(&path).and_then(|body| parse(&body, "compare")) {
-                Ok(compare) => compare,
-                Err(error) => return LockChange::Unknown(error.to_string()),
-            };
-        if compare.status != "ahead" {
-            return LockChange::Unknown(format!(
-                "the push is {} its before commit, not ahead of it",
-                compare.status
-            ));
-        }
-        if let Some(path) = compare.files.iter().find_map(touched) {
-            return LockChange::Changed(path.to_owned());
-        }
-        if compare.files.len() < PAGE_SIZE as usize {
-            return LockChange::Unchanged;
-        }
+    let compare: ApiCompareFiles = match github
+        .get(&compare_path(repo, before, sha))
+        .and_then(|body| parse(&body, "compare"))
+    {
+        Ok(compare) => compare,
+        Err(error) => return LockChange::Unknown(error.to_string()),
+    };
+    if compare.status != "ahead" {
+        return LockChange::Unknown(format!(
+            "the push is {} its before commit, not ahead of it",
+            compare.status
+        ));
     }
-    LockChange::Unknown(format!(
-        "the compare lists {} files or more, so its file list may be truncated",
-        PAGES * PAGE_SIZE
-    ))
+    if let Some(path) = compare.files.iter().find_map(touched) {
+        return LockChange::Changed(path.to_owned());
+    }
+    if compare.files.len() >= LISTED_AT_MOST {
+        return LockChange::Unknown(format!(
+            "the compare lists {LISTED_AT_MOST} files or more, so its file list may be truncated"
+        ));
+    }
+    LockChange::Unchanged
 }
