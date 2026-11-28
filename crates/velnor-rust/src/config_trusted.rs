@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, HostedRunners, MisePlatform, RunnerLabel, TestGroup, TrustedRunners,
+    CratesMirror, HostedRunners, MisePlatform, RunnerLabel, TestGroup, TestLane, TrustedRunners,
     looks_github_hosted,
 };
 
@@ -16,6 +16,7 @@ pub(crate) struct Fixed<'a> {
     hosted_runners: &'a HostedRunners,
     mirror_runner: Option<&'a RunnerLabel>,
     groups: &'a [TestGroup],
+    lanes: &'a [TestLane],
 }
 
 pub(crate) struct Declared<'a> {
@@ -26,6 +27,7 @@ pub(crate) struct Declared<'a> {
     pub(crate) trusted_runner: Option<String>,
     pub(crate) crates_mirror: Option<RawCratesMirror>,
     pub(crate) test_groups: &'a [TestGroup],
+    pub(crate) test_lanes: &'a [TestLane],
 }
 
 pub(crate) struct Runners {
@@ -42,22 +44,29 @@ impl Declared<'_> {
             .as_ref()
             .and_then(|mirror| mirror.trusted_runner.clone());
         let crates_mirror = crate::config_mirror::optional(self.crates_mirror)?;
-        let hosted_key =
-            self.hosted.is_some() || self.test_groups.iter().any(|group| group.hosted.is_some());
+        let hosted_key = self.hosted.is_some()
+            || self.test_groups.iter().any(|group| group.hosted.is_some())
+            || self.test_lanes.iter().any(|lane| {
+                lane.job.parallel().is_some_and(|job| {
+                    job.runner
+                        .as_ref()
+                        .is_some_and(|runner| runner.hosted.is_some())
+                })
+            });
         let hosted_runners = crate::config_hosting::resolve(
             (
                 self.runner,
                 self.hosted.or((!self.explicit_runner).then_some(true)),
             ),
             crates_mirror.as_ref(),
-            self.test_groups,
+            (self.test_groups, self.test_lanes),
         )?;
         let fork_runner = crate::config_fork::fork_runner(self.fork_runner, self.runner)?;
         let trusted_runners = resolve(
             (self.trusted_runner, mirror_key),
             (self.runner, &fork_runner, &hosted_runners),
             crates_mirror.as_ref(),
-            self.test_groups,
+            (self.test_groups, self.test_lanes),
         )?;
         Ok(Runners {
             crates_mirror,
@@ -100,6 +109,12 @@ fn label(
             .iter()
             .filter_map(|group| group.runner.as_ref()),
     )
+    .chain(fixed.lanes.iter().filter_map(|lane| {
+        lane.job
+            .parallel()
+            .and_then(|job| job.runner.as_ref())
+            .map(|runner| &runner.label)
+    }))
     .all(|other| !same(&trusted, other));
     let acceptable = expression_safe(&trusted)
         && !looks_github_hosted(trusted.as_str())
@@ -117,7 +132,7 @@ pub(crate) fn resolve(
     keys: (Option<String>, Option<String>),
     runners: (&RunnerLabel, &RunnerLabel, &HostedRunners),
     mirror: Option<&CratesMirror>,
-    groups: &[TestGroup],
+    (groups, lanes): (&[TestGroup], &[TestLane]),
 ) -> Result<TrustedRunners, Reason> {
     let (trusted_runner, mirror_trusted_runner) = keys;
     let (runner, fork_runner, hosted_runners) = runners;
@@ -127,6 +142,7 @@ pub(crate) fn resolve(
         hosted_runners,
         mirror_runner: mirror.map(|mirror| &mirror.runner),
         groups,
+        lanes,
     };
     let top = trusted_runner
         .as_deref()

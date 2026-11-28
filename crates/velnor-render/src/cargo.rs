@@ -325,6 +325,11 @@ fn nextest_filter(filter: &FilterRef) -> String {
         FilterRef::All => "$TEST_FILTER".to_owned(),
         FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
         FilterRef::Expr { expr, except } => crate::cargo_features::expr(expr, except),
+        FilterRef::Excluding { base, lanes } => {
+            lanes.iter().fold(nextest_filter(base), |text, lane| {
+                format!("({text}) and not ({lane})")
+            })
+        }
         FilterRef::Group {
             include,
             exclude,

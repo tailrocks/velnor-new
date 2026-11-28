@@ -127,9 +127,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let release_assets =
         crate::config_release_assets::parse(&raw.release_assets, private_sources.as_ref())
             .map_err(invalid)?;
-    let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
-    let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
+    let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
     let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
     let runners = crate::config_trusted::Declared {
@@ -140,6 +139,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         trusted_runner: raw.trusted_runner,
         crates_mirror: raw.crates_mirror,
         test_groups: &test_groups,
+        test_lanes: &test_lanes,
     }
     .resolve()
     .map_err(invalid)?;
@@ -147,7 +147,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
             .map_err(invalid)?;
     Ok(RustCiConfig {
-        workspace_groups,
+        workspace_groups: crate::groups::parse(raw.workspace_groups).map_err(invalid)?,
         policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
@@ -157,9 +157,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         check_configurations: crate::config_check_configurations::parse(raw.check_configurations)
             .map_err(invalid)?,
         checkout: checkout_scope(raw.sparse_checkout),
-        lint,
+        lint: crate::config_lint::parse(raw.lint).map_err(invalid)?,
         test_groups,
-        test_lanes: crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?,
+        test_lanes,
         workspace_features: workspace_features(raw.workspace_features).map_err(invalid)?,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),

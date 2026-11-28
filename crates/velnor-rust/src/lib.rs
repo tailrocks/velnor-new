@@ -32,6 +32,7 @@ mod config_image_actors;
 mod config_image_registry;
 mod config_image_runner;
 mod config_keys;
+mod config_lane_job;
 mod config_lint;
 mod config_mirror;
 mod config_policy;

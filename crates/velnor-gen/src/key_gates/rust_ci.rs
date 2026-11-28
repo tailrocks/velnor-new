@@ -247,20 +247,24 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_lane.all_features", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.doc", (0, 1, 93)),
+    gate(RustCi, "test_lane.exclusive", (0, 1, 118)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.features", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.filter", (0, 1, 93)),
+    gate(RustCi, "test_lane.hosted", (0, 1, 118)),
     // helper-gate: first in tools-v0.1.107 via 9d5c60385d
     gate(RustCi, "test_lane.job", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.lint", (0, 1, 93)),
+    gate(RustCi, "test_lane.needs", (0, 1, 118)),
     // helper-gate: first in tools-v0.1.107 via ecf0352364
     gate(RustCi, "test_lane.no_default_features", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.packages", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.root", (0, 1, 93)),
+    gate(RustCi, "test_lane.runner", (0, 1, 118)),
     // helper-gate: first in tools-v0.1.109 via 7f64ddb2c4
     gate(RustCi, "test_lane.timeout_minutes", (0, 1, 109)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07

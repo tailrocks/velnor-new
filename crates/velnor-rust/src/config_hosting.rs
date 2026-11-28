@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use velnor_model::{CratesMirror, HostedRunners, RunnerLabel, TestGroup, looks_github_hosted};
+use velnor_model::{
+    CratesMirror, HostedRunners, RunnerLabel, TestGroup, TestLane, looks_github_hosted,
+};
 
 use crate::error::Reason;
 
@@ -42,7 +44,7 @@ impl fmt::Display for HostingError {
 pub(crate) fn resolve(
     runner: (&RunnerLabel, Option<bool>),
     mirror: Option<&CratesMirror>,
-    groups: &[TestGroup],
+    (groups, lanes): (&[TestGroup], &[TestLane]),
 ) -> Result<HostedRunners, Reason> {
     let mut uses = vec![runner];
     uses.extend(mirror.map(|mirror| (&mirror.runner, Some(false))));
@@ -57,6 +59,10 @@ pub(crate) fn resolve(
             (None, None) => {}
         }
     }
+    uses.extend(lanes.iter().filter_map(|lane| {
+        let runner = lane.job.parallel()?.runner.as_ref()?;
+        Some((&runner.label, runner.hosted))
+    }));
     let mut declared: BTreeMap<String, (bool, &RunnerLabel)> = BTreeMap::new();
     for (label, hosted) in uses
         .iter()

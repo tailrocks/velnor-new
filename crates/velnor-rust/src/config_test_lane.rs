@@ -9,6 +9,8 @@ use velnor_model::{
     RustCiConfig, RustRoot, TestLane,
 };
 
+use crate::config_lane_job::{RawLaneJob, scope};
+
 use crate::config::{CONFIG_PATH, TIMEOUT_RANGE};
 use crate::config_test_groups::ranged;
 use crate::error::{DetectError, Reason};
@@ -26,6 +28,7 @@ pub(crate) struct RawTestLane {
     all_features: Option<bool>,
     no_default_features: Option<bool>,
     filter: Option<String>,
+    exclusive: Option<bool>,
     #[serde(default)]
     lint: bool,
     #[serde(default)]
@@ -33,6 +36,10 @@ pub(crate) struct RawTestLane {
     #[serde(default)]
     packages: Vec<String>,
     job: Option<String>,
+    runner: Option<String>,
+    hosted: Option<bool>,
+    #[serde(default)]
+    needs: Vec<String>,
     timeout_minutes: Option<u16>,
 }
 
@@ -87,16 +94,13 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         raw.timeout_minutes,
         &TIMEOUT_RANGE,
     )?;
-    let job = match raw.job.as_deref() {
-        None | Some("inline") => LaneJob::Inline,
-        Some("parallel") => LaneJob::Parallel,
-        Some(other) => {
-            return Err(Reason::InvalidValue {
-                key: "test_lane.job",
-                value: other.to_owned(),
-            });
-        }
-    };
+    let job = crate::config_lane_job::parse(&RawLaneJob {
+        job: raw.job.as_deref(),
+        runner: raw.runner.as_deref(),
+        hosted: raw.hosted,
+        needs: &raw.needs,
+    })?;
+    let scope = scope(raw.filter.clone(), raw.exclusive)?;
     Ok(TestLane {
         root,
         features: LaneFeatures {
@@ -104,7 +108,7 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
             all,
             no_default,
         },
-        filter: raw.filter,
+        scope,
         lint: raw.lint,
         doc: raw.doc,
         packages,
@@ -197,14 +201,15 @@ pub(crate) fn commands(
 ) -> Vec<CargoCommand> {
     let mut linted = BTreeSet::new();
     let mut documented = BTreeSet::new();
-    lanes_of(config, root, LaneJob::Inline)
+    lanes_of(config, root, false)
         .flat_map(|lane| lane_commands(lane, root, direct, &mut linted, &mut documented))
         .collect()
 }
 
-pub(crate) struct ParallelLane {
+pub(crate) struct LaneJobPlan {
     pub(crate) features: LaneFeatures,
     pub(crate) timeout_minutes: Option<u16>,
+    pub(crate) job: velnor_model::ParallelLane,
     pub(crate) commands: Vec<CargoCommand>,
 }
 
@@ -212,11 +217,12 @@ pub(crate) fn parallel(
     config: &RustCiConfig,
     root: &RustRoot,
     direct: &[String],
-) -> Vec<ParallelLane> {
-    lanes_of(config, root, LaneJob::Parallel)
-        .map(|lane| ParallelLane {
+) -> Vec<LaneJobPlan> {
+    lanes_of(config, root, true)
+        .map(|lane| LaneJobPlan {
             features: lane.features.clone(),
             timeout_minutes: lane.timeout_minutes,
+            job: lane.job.parallel().cloned().unwrap_or_default(),
             commands: lane_commands(
                 lane,
                 root,
@@ -232,18 +238,26 @@ pub(crate) fn has_parallel(config: &RustCiConfig) -> bool {
     config
         .test_lanes
         .iter()
-        .any(|lane| lane.job == LaneJob::Parallel)
+        .any(|lane| lane.job.parallel().is_some())
+}
+
+pub(crate) fn exclusive(config: &RustCiConfig, root: &RustRoot) -> Vec<String> {
+    config
+        .test_lanes
+        .iter()
+        .filter(|lane| lane.root == root.manifest.parent())
+        .filter_map(|lane| lane.scope.exclusive().map(str::to_owned))
+        .collect()
 }
 
 fn lanes_of<'a>(
     config: &'a RustCiConfig,
     root: &'a RustRoot,
-    job: LaneJob,
+    parallel: bool,
 ) -> impl Iterator<Item = &'a TestLane> {
-    config
-        .test_lanes
-        .iter()
-        .filter(move |lane| lane.job == job && lane.root == root.manifest.parent())
+    config.test_lanes.iter().filter(move |lane| {
+        matches!(lane.job, LaneJob::Parallel(_)) == parallel && lane.root == root.manifest.parent()
+    })
 }
 
 fn lane_commands(
@@ -257,22 +271,22 @@ fn lane_commands(
     let mut commands = vec![CargoCommand::NextestFeatures {
         features: features(),
         packages: lane.packages.clone(),
-        filter: match &lane.filter {
+        filter: match lane.scope.filter() {
             Some(expr) => FilterRef::Expr {
-                expr: expr.clone(),
+                expr: expr.to_owned(),
                 except: direct.to_vec(),
             },
             None if direct.is_empty() => FilterRef::All,
             None => FilterRef::AllExcept(direct.to_vec()),
         },
         ci_profile: root.nextest_ci_profile,
-        reports: lane.job == LaneJob::Parallel,
+        reports: lane.job.parallel().is_some(),
     }];
-    if let Some(expr) = &lane.filter {
+    if let Some(expr) = lane.scope.filter() {
         commands.push(CargoCommand::LaneGuard {
             features: features(),
             packages: lane.packages.clone(),
-            filter: expr.clone(),
+            filter: expr.to_owned(),
             except: direct.to_vec(),
         });
     }
