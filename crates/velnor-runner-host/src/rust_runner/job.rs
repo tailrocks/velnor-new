@@ -14,6 +14,9 @@ use super::store::Store;
 use super::{GUEST_RUNNER, JobPaths, ReservationId, RustRunnerLauncher, TrustedFacts};
 use crate::error::{HostError, RustRunnerFailure};
 
+#[cfg(test)]
+mod tests;
+
 const BREACH_EXIT: i32 = 125;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -23,6 +26,7 @@ pub(crate) enum JobBreach {
     ForeignDevice,
     MachineFull,
     Processes,
+    Memory,
 }
 
 #[derive(serde::Deserialize)]

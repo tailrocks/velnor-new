@@ -311,6 +311,21 @@ fn a_subvolume_created_under_the_job_directories_kills_the_job() {
 }
 
 #[test]
+fn a_job_the_kernel_kills_for_memory_is_a_breach_with_its_record() {
+    let sandbox = Sandbox::new("oom").with("--max-jobs", "1024");
+    killed_with(
+        &sandbox,
+        &[
+            "/usr/bin/python3",
+            "-c",
+            "data = b'x' * (1 << 30)\nprint('survived', len(data))\n",
+        ],
+        "velnor: job was killed for using more memory than its limit",
+        "memory",
+    );
+}
+
+#[test]
 fn a_fork_bomb_is_contained_and_the_job_is_killed_cleanly() {
     let sandbox = Sandbox::new("fork-bomb");
     let output = sandbox.shell("while :; do sleep 605 & done");

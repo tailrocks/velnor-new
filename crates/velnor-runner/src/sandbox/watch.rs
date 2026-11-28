@@ -21,6 +21,7 @@ pub(super) enum Breach {
     ForeignDevice,
     MachineFull,
     Processes,
+    Memory,
 }
 
 impl Breach {
@@ -30,6 +31,7 @@ impl Breach {
             Self::ForeignDevice => "foreign_device",
             Self::MachineFull => "machine_full",
             Self::Processes => "processes",
+            Self::Memory => "memory",
         }
     }
 
@@ -41,6 +43,9 @@ impl Breach {
             }
             Self::MachineFull => "velnor: the machine's disk is nearly full".to_owned(),
             Self::Processes => format!("velnor: job started more than {PIDS_MAX} processes"),
+            Self::Memory => {
+                "velnor: job was killed for using more memory than its limit".to_owned()
+            }
         }
     }
 }

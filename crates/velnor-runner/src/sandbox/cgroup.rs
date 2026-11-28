@@ -49,10 +49,10 @@ pub(super) fn kill_and_remove(path: &Path) -> Result<()> {
     }
 }
 
-pub(super) fn limit_hit(events: &str) -> bool {
+pub(super) fn counted(events: &str, key: &str) -> bool {
     events
         .lines()
-        .filter_map(|line| line.strip_prefix("max "))
+        .filter_map(|line| line.strip_prefix(key)?.strip_prefix(' '))
         .any(|count| count.trim().parse::<u64>().is_ok_and(|count| count > 0))
 }
 
@@ -118,7 +118,12 @@ impl Cgroup {
 
     pub(super) fn exhausted_processes(&self) -> bool {
         std::fs::read_to_string(self.path.join("pids.events"))
-            .is_ok_and(|events| limit_hit(&events))
+            .is_ok_and(|events| counted(&events, "max"))
+    }
+
+    pub(super) fn killed_for_memory(&self) -> bool {
+        std::fs::read_to_string(self.path.join("memory.events"))
+            .is_ok_and(|events| counted(&events, "oom_kill"))
     }
 }
 

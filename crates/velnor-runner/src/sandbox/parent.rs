@@ -127,7 +127,11 @@ async fn launch(
     loop {
         tokio::select! {
             status = child.wait() => {
-                return Ok(Finished { status: status.context("wait for the sandbox")?, breach });
+                let status = status.context("wait for the sandbox")?;
+                if breach.is_none() && cgroup.killed_for_memory() {
+                    breach = Some(Breach::Memory);
+                }
+                return Ok(Finished { status, breach });
             }
             () = interrupts.next() => {
                 if asked {

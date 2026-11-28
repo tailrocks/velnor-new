@@ -147,6 +147,18 @@ fn the_removal_finishes_a_tree_an_interrupted_run_left_flattened() {
 }
 
 #[test]
+fn a_directory_wider_than_one_batch_is_removed_completely() {
+    let root = scratch("wide");
+    for index in 0..1300 {
+        assert!(std::fs::create_dir_all(root.join(format!("d{index}/inner"))).is_ok());
+        assert!(std::fs::write(root.join(format!("d{index}/inner/file")), b"x").is_ok());
+        assert!(std::fs::write(root.join(format!("f{index}")), b"x").is_ok());
+    }
+    assert!(dirs::remove(&root).is_ok(), "the wide tree was not removed");
+    assert!(!root.exists());
+}
+
+#[test]
 fn disk_overage_names_the_use_and_the_limit() {
     let used = |bytes| Usage {
         bytes,

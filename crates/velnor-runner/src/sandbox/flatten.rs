@@ -63,26 +63,7 @@ impl Flattening {
         Ok(true)
     }
 
-    fn scan_top(&self) -> Result<Vec<CString>> {
-        let mut entries = Dir::read_from(&self.top).context("list the top directory")?;
-        let mut directories = Vec::new();
-        while let Some(entry) = entries.read() {
-            let entry = entry.context("read a directory entry")?;
-            if skipped(entry.file_name()) {
-                continue;
-            }
-            let name = entry.file_name().to_owned();
-            if self.is_directory(&self.top, &name, entry.file_type())? {
-                directories.push(name);
-            } else {
-                unlinkat(&self.top, name.as_c_str(), AtFlags::empty())
-                    .with_context(|| format!("remove {}", lossy(&name)))?;
-            }
-        }
-        Ok(directories)
-    }
-
-    fn lift(&mut self, parent: &OwnedFd, name: &CString) -> Result<CString> {
+    fn lift(&mut self, parent: &OwnedFd, name: &CString) -> Result<()> {
         loop {
             let target = CString::new(format!(".velnor-flat-{}", self.next))
                 .context("name a flattened directory")?;
@@ -94,44 +75,51 @@ impl Flattening {
                 target.as_c_str(),
                 RenameFlags::NOREPLACE,
             ) {
-                Ok(()) => return Ok(target),
+                Ok(()) => return Ok(()),
                 Err(Errno::EXIST) => {}
                 Err(error) => return Err(error).with_context(|| format!("lift {}", lossy(name))),
             }
         }
     }
 
-    fn clear(&mut self, directory: &OwnedFd, lifted: &mut Vec<CString>) -> Result<()> {
-        loop {
-            let mut entries = Dir::read_from(directory).context("list a directory")?;
-            let mut batch = Vec::new();
-            while batch.len() < BATCH {
-                let Some(entry) = entries.read() else { break };
-                let entry = entry.context("read a directory entry")?;
-                if !skipped(entry.file_name()) {
-                    batch.push((entry.file_name().to_owned(), entry.file_type()));
-                }
+    fn batch(directory: &OwnedFd) -> Result<Vec<(CString, FileType)>> {
+        let mut entries = Dir::read_from(directory).context("list a directory")?;
+        let mut batch = Vec::new();
+        while batch.len() < BATCH {
+            let Some(entry) = entries.read() else { break };
+            let entry = entry.context("read a directory entry")?;
+            if !skipped(entry.file_name()) {
+                batch.push((entry.file_name().to_owned(), entry.file_type()));
             }
-            drop(entries);
+        }
+        Ok(batch)
+    }
+
+    fn drain(&mut self, directory: &OwnedFd, is_top: bool) -> Result<()> {
+        loop {
+            let batch = Self::batch(directory)?;
             let complete = batch.len() < BATCH;
+            let empty = batch.is_empty();
             for (name, kind) in batch {
-                if self.is_directory(directory, &name, kind)? {
-                    lifted.push(self.lift(directory, &name)?);
-                } else {
+                if !self.is_directory(directory, &name, kind)? {
                     unlinkat(directory, name.as_c_str(), AtFlags::empty())
                         .with_context(|| format!("remove {}", lossy(&name)))?;
+                } else if is_top {
+                    self.descend(&name)?;
+                } else {
+                    self.lift(directory, &name)?;
                 }
             }
-            if complete {
+            if empty || (complete && !is_top) {
                 return Ok(());
             }
         }
     }
 
-    fn descend(&mut self, name: &CString, lifted: &mut Vec<CString>) -> Result<()> {
+    fn descend(&mut self, name: &CString) -> Result<()> {
         let child = openat(&self.top, name.as_c_str(), directory_flags(), Mode::empty())
             .with_context(|| format!("open {}", lossy(name)))?;
-        self.clear(&child, lifted)?;
+        self.drain(&child, false)?;
         drop(child);
         match unlinkat(&self.top, name.as_c_str(), AtFlags::REMOVEDIR) {
             Ok(()) => Ok(()),
@@ -153,9 +141,7 @@ pub(super) fn empty(root: &Path) -> Result<()> {
         device,
         next: 0,
     };
-    let mut lifted = flattening.scan_top()?;
-    while let Some(name) = lifted.pop() {
-        flattening.descend(&name, &mut lifted)?;
-    }
-    Ok(())
+    let top = openat(&flattening.top, ".", directory_flags(), Mode::empty())
+        .context("reopen the top directory")?;
+    flattening.drain(&top, true)
 }

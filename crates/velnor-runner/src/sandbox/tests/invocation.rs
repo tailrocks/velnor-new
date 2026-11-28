@@ -5,7 +5,7 @@ use std::io::Read;
 
 use clap::Parser;
 
-use super::super::cgroup::{limit_hit, memory_limit};
+use super::super::cgroup::{counted, memory_limit};
 use super::super::disk::Usage;
 use super::super::frames::Delivery;
 use super::super::jit::Jit;
@@ -91,10 +91,18 @@ fn the_jit_comes_out_of_the_pipe_once() {
 
 #[test]
 fn the_process_limit_counts_as_hit_only_after_a_fork_was_refused() {
-    assert!(!limit_hit("max 0\n"));
-    assert!(limit_hit("max 3\n"));
-    assert!(!limit_hit(""));
-    assert!(!limit_hit("max x\n"));
+    assert!(!counted("max 0\n", "max"));
+    assert!(counted("low 0\nmax 3\n", "max"));
+    assert!(!counted("", "max"));
+    assert!(!counted("max x\n", "max"));
+    assert!(!counted("maxed 3\n", "max"));
+}
+
+#[test]
+fn a_memory_kill_counts_only_after_the_kernel_killed_a_process() {
+    assert!(!counted("oom 0\noom_kill 0\n", "oom_kill"));
+    assert!(counted("oom 2\noom_kill 1\noom_group_kill 1\n", "oom_kill"));
+    assert!(!counted("oom_group_kill 1\n", "oom_kill"));
 }
 
 #[test]
@@ -111,6 +119,7 @@ fn a_breach_names_its_kind_for_the_host_record() {
         (Breach::ForeignDevice, "foreign_device"),
         (Breach::MachineFull, "machine_full"),
         (Breach::Processes, "processes"),
+        (Breach::Memory, "memory"),
     ];
     for (breach, kind) in kinds {
         assert_eq!(breach.kind(), kind);
