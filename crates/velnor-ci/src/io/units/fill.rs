@@ -19,12 +19,6 @@ impl Audit<'_> {
         name: &str,
     ) {
         if let Some(fingerprint) = Fingerprint::parse(name) {
-            if fingerprint.kind == UnitKind::Normal {
-                self.names.insert(
-                    (index, configuration.clone(), fingerprint.target.clone()),
-                    hash.clone(),
-                );
-            }
             self.fingerprints.insert(
                 (index, configuration.clone(), hash.clone()),
                 (package.clone(), fingerprint),
@@ -57,6 +51,7 @@ impl Audit<'_> {
         file: &Path,
         profile: &str,
         package: &str,
+        hash: &str,
     ) -> Result<(), CiError> {
         let Some((source, built)) = self.dep_info(
             workspace,
@@ -75,7 +70,7 @@ impl Audit<'_> {
                     .insert((package.to_owned(), source.clone()));
             }
             self.scripts
-                .entry((*index, profile.to_owned(), package.to_owned()))
+                .entry((*index, hash.to_owned()))
                 .or_default()
                 .entry(source.clone())
                 .and_modify(|compiled| *compiled = (*compiled).min(built))
@@ -86,9 +81,9 @@ impl Audit<'_> {
 
     pub(in crate::io) fn orphans(&mut self) {
         for ((index, configuration, hash), (package, fingerprint)) in &self.fingerprints {
-            let key = |name: &String| (*index, configuration.clone(), name.clone());
-            if !self.present.contains(&key(hash))
-                && !self.present.contains(&key(&fingerprint.target))
+            if !self
+                .present
+                .contains(&(*index, configuration.clone(), hash.clone()))
             {
                 self.built[*index].orphans.insert((
                     configuration.clone(),

@@ -76,6 +76,7 @@ fn a_build_script_and_its_run_are_told_apart() {
         Some(UnitFile::Script {
             profile: "debug".to_owned(),
             package: "dep".to_owned(),
+            hash: "3f722b21ff7c4711".to_owned(),
         })
     );
     assert_eq!(

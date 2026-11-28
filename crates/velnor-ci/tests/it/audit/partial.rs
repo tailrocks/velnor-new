@@ -5,6 +5,7 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::own_units::{link_own_run, link_script};
 use super::{
     audit, own_units, own_units_in, path_dependency_units_in, placed,
     root_package_with_path_dependencies, unit, workspace_below_the_root,
@@ -51,6 +52,7 @@ fn a_build_script_run_with_a_fingerprint_and_no_output_makes_the_audit_refuse() 
         &format!("{DEBUG}/build/lib-f0000000000000e1/output"),
         "",
     );
+    link_own_run(&repo, DEBUG, "lib", "lib-f0000000000000e1");
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
     assert!(written(&repo));
@@ -112,6 +114,11 @@ fn a_stale_host_unit_of_a_member_used_as_a_build_dependency_makes_the_audit_refu
         &repo,
         &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
         "",
+    );
+    link_script(
+        &repo,
+        &format!("{DEBUG}/build/lib-f0000000000000b2/build_script_build-f0000000000000b2.d"),
+        &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
     );
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
@@ -187,6 +194,7 @@ fn the_host_build_script_run_of_a_build_dependency_member_is_required_in_the_hos
         &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
         "",
     );
+    link_own_run(&repo, DEBUG, "lib", "lib-f0000000000000b3");
     let host_run = audit(&repo, &["--write"]);
     assert!(host_run.status.success(), "{host_run:?}");
 }
@@ -235,6 +243,7 @@ fn a_host_copy_of_a_build_dependency_member_does_not_stand_in_for_its_target_lib
         &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
         "",
     );
+    link_own_run(&repo, DEBUG, "lib", "lib-f0000000000000b3");
     refuses(
         &audit(&repo, &["--write"]),
         &format!(
@@ -258,6 +267,7 @@ fn a_stale_build_script_run_is_not_covered_by_another_current_run_of_the_same_sc
             "",
         );
         unit(&repo, &format!("{DEBUG}/build/lib-{hash}/output"), rerun);
+        link_own_run(&repo, DEBUG, "lib", &format!("lib-{hash}"));
     }
     unit(&repo, "rust/lib/data.txt", "");
     repo.set_mtime(

@@ -12,7 +12,7 @@ use velnor_model::RepoPath;
 use velnor_rust::{Located, dep_info_paths, locate, normalize, rerun_if_changed};
 
 use super::super::units::UnitFile;
-use super::links::{self, Links};
+use super::links::{self, Links, Resolved};
 use super::{Audit, REBUILD, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
@@ -39,7 +39,7 @@ struct Run {
 pub(super) struct BuildOutputs {
     runs: BTreeMap<(usize, String, String), Run>,
     texts: BTreeMap<PathBuf, String>,
-    owned: BTreeMap<(usize, String, String), String>,
+    linked: Resolved,
     read_only: OnceCell<Vec<PathBuf>>,
 }
 
@@ -85,6 +85,20 @@ impl Audit<'_> {
     }
 }
 
+impl BuildOutputs {
+    pub(super) fn script_of(
+        &self,
+        target: usize,
+        configuration: &str,
+        run: &str,
+    ) -> Option<String> {
+        self.linked
+            .scripts
+            .get(&(target, configuration.to_owned(), run.to_owned()))
+            .cloned()
+    }
+}
+
 impl Audit<'_> {
     pub(in crate::io) fn note_build_outputs(
         &mut self,
@@ -122,7 +136,7 @@ impl Audit<'_> {
                 _ => {}
             }
         }
-        self.outputs.owned = links.resolve();
+        self.outputs.linked = links.resolve()?;
         Ok(())
     }
 
@@ -194,10 +208,11 @@ impl Audit<'_> {
         else {
             return None;
         };
-        let run = self
-            .outputs
-            .owned
-            .get(&(target, configuration.to_owned(), hash.to_owned()))?;
+        let run =
+            self.outputs
+                .linked
+                .owned
+                .get(&(target, configuration.to_owned(), hash.to_owned()))?;
         self.outputs
             .runs
             .get(&(target, configuration.to_owned(), run.clone()))

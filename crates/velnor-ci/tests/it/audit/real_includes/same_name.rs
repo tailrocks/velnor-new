@@ -10,12 +10,14 @@ use crate::io::Repo;
 const A_LINE: &str = ".\tx\ta/x/Cargo.toml";
 const B_LINE: &str = ".\tx\tb/x/Cargo.toml";
 
-fn audited(repo: &Repo, roots: &[&str], deleted_in: &str, layout: Layout) -> String {
+fn audited(repo: &Repo, roots: &[&str], deleted_in: &[&str], layout: Layout) -> String {
     repo.git(&["add", "--all"]);
     for root in roots {
         build_in(repo, root, Share::Zero, layout);
     }
-    assert!(remove_named(&repo.root().join(deleted_in).join("target"), "root-output") > 0);
+    for root in deleted_in {
+        assert!(remove_named(&repo.root().join(root).join("target"), "root-output") > 0);
+    }
     let written = audit_after(repo);
     assert!(
         written.status.success(),
@@ -35,7 +37,7 @@ fn declared_beside_undeclared(layout: Layout) {
     with_script(&repo, "a", "x", "version = \"0.1.0\"\n", DECLARES);
     with_script(&repo, "b", "x", "version = \"0.2.0\"\n", "");
     consumer(&repo, "c");
-    only_b(&audited(&repo, &["a", "b", "c"], "c", layout));
+    only_b(&audited(&repo, &["a", "b", "c"], &["c"], layout));
 }
 
 fn plain_beside_undeclared(layout: Layout) {
@@ -44,7 +46,7 @@ fn plain_beside_undeclared(layout: Layout) {
     unit(&repo, "a/x/src/lib.rs", "pub const A: u8 = 1;\n");
     with_script(&repo, "b", "x", "version = \"0.2.0\"\n", "");
     consumer(&repo, "c");
-    only_b(&audited(&repo, &["a", "b", "c"], "c", layout));
+    only_b(&audited(&repo, &["a", "b", "c"], &["b", "c"], layout));
 }
 
 fn consumer(repo: &Repo, root: &str) {
@@ -91,7 +93,7 @@ fn member_beside_renamed(layout: Layout) {
     );
     unit(&repo, "a/y/src/lib.rs", "pub use x2::O;\n");
     with_script(&repo, "b", "x", "version = \"0.2.0\"\n", "");
-    only_b(&audited(&repo, &["a", "b"], "a", layout));
+    only_b(&audited(&repo, &["a", "b"], &["a"], layout));
 }
 
 #[test]

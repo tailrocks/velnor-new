@@ -4,6 +4,7 @@
 use std::fs;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::own_units::link_script;
 use super::{
     audit, own_units, own_units_in, path_dependency_units, root_package_with_path_dependencies,
     unit, workspace_below_the_root,
@@ -34,6 +35,11 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         &repo,
         &format!("{target}/build/lib-0000000000000005/output"),
         "cargo:rerun-if-changed=../..\n",
+    );
+    link_script(
+        &repo,
+        &format!("{target}/build/lib-0000000000000006/build_script_build-0000000000000006.d"),
+        &format!("{target}/build/lib-0000000000000005/output"),
     );
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
@@ -195,6 +201,11 @@ fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_unc
         &format!("{target}/build/lib-000000000000000f/output"),
         "cargo:rerun-if-changed=../../shared/build.txt\n",
     );
+    link_script(
+        &repo,
+        &format!("{target}/build/lib-000000000000000e/build_script_build-000000000000000e.d"),
+        &format!("{target}/build/lib-000000000000000f/output"),
+    );
     super::inventory::build(
         &repo,
         &format!("{target}/build/lib-000000000000000f/output"),
@@ -227,12 +238,6 @@ fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_targe
     ]);
     let target = "rust/target/x86_64-unknown-linux-gnu/debug";
     own_units_in(&repo, "rust/target/debug", target, &[]);
-    fs::rename(
-        repo.root()
-            .join(format!("{target}/deps/lib-f000000000000005.d")),
-        repo.root().join(format!("{target}/deps/lib.d")),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
     let recompiled =
         "rust/target/debug/build/lib-f00000000000001a/build_script_build-f00000000000001a.d";
     unit(&repo, recompiled, "out.d: lib/build.rs\n");

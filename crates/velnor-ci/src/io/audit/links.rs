@@ -5,30 +5,46 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
+use super::REBUILD;
 use crate::coverage::Fingerprint;
+use crate::error::CiError;
 
 const RUN_PREFIX: &str = "run-";
-const SCRIPT: &str = "build_script_build";
+const SCRIPT_PREFIX: &str = "build-script-";
+
+type Key = (usize, String, String);
 
 #[derive(Clone, Copy)]
 pub(super) enum Kind {
     Unit,
     Run,
+    RunUnit,
+    Compiled,
 }
 
 #[derive(Default)]
 pub(super) struct Links {
-    wanted: BTreeMap<(usize, String, String), String>,
-    provided: BTreeMap<(usize, String, String), String>,
+    wanted: BTreeMap<Key, Vec<String>>,
+    provided: BTreeMap<Key, Vec<String>>,
+    run_wanted: BTreeMap<Key, Vec<String>>,
+    compiled: BTreeMap<(usize, String), Vec<String>>,
+}
+
+#[derive(Default)]
+pub(super) struct Resolved {
+    pub(super) owned: BTreeMap<Key, String>,
+    pub(super) scripts: BTreeMap<Key, String>,
 }
 
 pub(super) fn kind(name: &str) -> Option<Kind> {
-    if name.starts_with(RUN_PREFIX) && !name.contains('.') {
-        return Some(Kind::Run);
+    match name.strip_suffix(".json") {
+        Some(bare) if bare.starts_with(RUN_PREFIX) => Some(Kind::RunUnit),
+        Some(bare) => Fingerprint::parse(bare).map(|_| Kind::Unit),
+        None if name.contains('.') => None,
+        None if name.starts_with(RUN_PREFIX) => Some(Kind::Run),
+        None if name.starts_with(SCRIPT_PREFIX) => Some(Kind::Compiled),
+        None => None,
     }
-    name.strip_suffix(".json")
-        .and_then(Fingerprint::parse)
-        .map(|_| Kind::Unit)
 }
 
 impl Links {
@@ -40,43 +56,88 @@ impl Links {
         configuration: &str,
         hash: &str,
     ) {
+        let unit = (target, configuration.to_owned(), hash.to_owned());
         match kind {
-            Kind::Run => {
-                self.provided.insert(
-                    (target, configuration.to_owned(), text.trim().to_owned()),
-                    hash.to_owned(),
-                );
-            }
+            Kind::Run => self
+                .provided
+                .entry((target, configuration.to_owned(), text.trim().to_owned()))
+                .or_default()
+                .push(hash.to_owned()),
+            Kind::Compiled => self
+                .compiled
+                .entry((target, text.trim().to_owned()))
+                .or_default()
+                .push(hash.to_owned()),
             Kind::Unit => {
-                if let Some(run) = dependency(text) {
-                    self.wanted
-                        .insert((target, configuration.to_owned(), hash.to_owned()), run);
-                }
+                self.wanted.insert(unit, digests(text));
+            }
+            Kind::RunUnit => {
+                self.run_wanted.insert(unit, digests(text));
             }
         }
     }
 
-    pub(super) fn resolve(self) -> BTreeMap<(usize, String, String), String> {
-        let Self { wanted, provided } = self;
-        wanted
-            .into_iter()
-            .filter_map(|((target, configuration, unit), digest)| {
-                let run = provided
-                    .get(&(target, configuration.clone(), digest))?
-                    .clone();
-                Some(((target, configuration, unit), run))
-            })
-            .collect()
+    pub(super) fn resolve(self) -> Result<Resolved, CiError> {
+        let Self {
+            wanted,
+            provided,
+            run_wanted,
+            compiled,
+        } = self;
+        let mut resolved = Resolved::default();
+        for (unit, found) in wanted {
+            let (target, configuration, _) = &unit;
+            let runs = found
+                .iter()
+                .filter_map(|digest| {
+                    provided.get(&(*target, configuration.clone(), digest.clone()))
+                })
+                .flatten();
+            if let Some(run) = one(runs, &unit, "build-script runs")? {
+                resolved.owned.insert(unit, run);
+            }
+        }
+        for (run, found) in run_wanted {
+            let (target, _, _) = &run;
+            let scripts = found
+                .iter()
+                .filter_map(|digest| compiled.get(&(*target, digest.clone())))
+                .flatten();
+            if let Some(script) = one(scripts, &run, "compiled build scripts")? {
+                resolved.scripts.insert(run, script);
+            }
+        }
+        Ok(resolved)
     }
 }
 
-fn dependency(text: &str) -> Option<String> {
-    let value: Value = serde_json::from_str(text).ok()?;
-    value.get("deps")?.as_array()?.iter().find_map(|entry| {
-        let entry = entry.as_array()?;
-        (entry.get(1)?.as_str()? == SCRIPT)
-            .then(|| entry.get(3)?.as_u64())
-            .flatten()
-            .map(|digest| format!("{:016x}", digest.swap_bytes()))
-    })
+fn one<'a>(
+    mut found: impl Iterator<Item = &'a String>,
+    unit: &Key,
+    what: &str,
+) -> Result<Option<String>, CiError> {
+    let Some(first) = found.next() else {
+        return Ok(None);
+    };
+    if found.any(|other| other != first) {
+        return Err(CiError::new(format!(
+            "unit {} of {} depends on several {what}, so none can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
+            unit.2, unit.1
+        )));
+    }
+    Ok(Some(first.clone()))
+}
+
+fn digests(text: &str) -> Vec<String> {
+    let Ok(value) = serde_json::from_str::<Value>(text) else {
+        return Vec::new();
+    };
+    value
+        .get("deps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.as_array()?.get(3)?.as_u64())
+        .map(|digest| format!("{:016x}", digest.swap_bytes()))
+        .collect()
 }

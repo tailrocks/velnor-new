@@ -5,6 +5,7 @@ use std::fs;
 
 use crate::io::Repo;
 
+use super::own_units::link_builds;
 use super::{
     audit, own_units, path_dependency_units, root_package_with_path_dependencies, unit,
     workspace_below_the_root,
@@ -72,6 +73,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/build/app-000000000000000c/output"),
         "cargo:rerun-if-changed=../../shared/app-build.txt\n",
     );
+    link_builds(&repo, target);
     super::inventory::build(
         &repo,
         &format!("{target}/build/lib-0000000000000005/output"),
@@ -183,6 +185,7 @@ fn a_target_directory_that_contains_tracked_inputs_is_refused() {
         &format!("{target}/build/lib-0000000000000004/output"),
         "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
     );
+    link_builds(&repo, target);
     let output = audit(&repo, &["--write"]);
     assert!(!output.status.success(), "{output:?}");
     assert!(

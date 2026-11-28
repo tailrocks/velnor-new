@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use velnor_model::RepoPath;
 use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
-use super::super::units::{UnitFile, profile};
+use super::super::units::UnitFile;
 use super::freshness::Cause;
 use super::{Audit, REBUILD, UnitIdentity};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
@@ -59,13 +59,17 @@ impl Audit<'_> {
             UnitFile::DepInfo {
                 configuration,
                 hash,
-                stem,
-            } => self.record_dep_info(indices, file, &configuration, hash.as_deref(), &stem)?,
-            UnitFile::Script { profile, package } => {
+                ..
+            } => self.record_dep_info(indices, file, &configuration, hash.as_deref())?,
+            UnitFile::Script {
+                profile,
+                package,
+                hash,
+            } => {
                 let owners = self.member_owners(&package, indices);
                 if let Some(first) = owners.first() {
                     let base = self.roots[*first].clone();
-                    self.script(&base, &owners, file, &profile, &package)?;
+                    self.script(&base, &owners, file, &profile, &package, &hash)?;
                 }
             }
             UnitFile::BuildOutput {
@@ -75,7 +79,8 @@ impl Audit<'_> {
             } => {
                 let owners = self.member_owners(&package, indices);
                 if !owners.is_empty() {
-                    self.build_output(&owners, file, &configuration, &package, &hash)?;
+                    let target = indices[0];
+                    self.build_output(&owners, target, file, &configuration, &package, &hash)?;
                 }
             }
             UnitFile::Directory { name, root } => {
@@ -93,46 +98,30 @@ impl Audit<'_> {
         file: &Path,
         configuration: &str,
         hash: Option<&str>,
-        stem: &str,
     ) -> Result<(), CiError> {
+        let Some(hash) = hash else {
+            return Err(CiError::new(format!(
+                "{} carries no unit hash, so no fingerprint can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
+                file.display()
+            )));
+        };
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
-        let mut unit_hash = None;
         for index in indices {
-            let key = (
-                *index,
-                configuration.to_owned(),
-                hash.unwrap_or(stem).to_owned(),
-            );
+            let key = (*index, configuration.to_owned(), hash.to_owned());
             self.present.insert(key.clone());
-            let named = match hash {
-                Some(hash) => Some(hash.to_owned()),
-                None => self.names.get(&key).cloned(),
-            };
-            let Some(named) = named else {
-                continue;
-            };
-            if let Some(identity) =
-                self.fingerprints
-                    .get(&(*index, configuration.to_owned(), named.clone()))
-            {
+            if let Some(identity) = self.fingerprints.get(&key) {
                 hits.push((*index, identity.clone()));
-                unit_hash.get_or_insert(named);
             }
         }
-        if hash.is_none() && hits.is_empty() {
-            return Ok(());
-        }
-        let found = match (hits.first(), unit_hash) {
-            (Some((_, (package, _))), Some(named)) => Some((package.clone(), named)),
-            _ => hash.and_then(|hash| {
-                indices.iter().find_map(|index| {
-                    self.foreign
-                        .get(&(*index, configuration.to_owned(), hash.to_owned()))
-                        .map(|package| (package.clone(), hash.to_owned()))
-                })
+        let found = match hits.first() {
+            Some((_, (package, _))) => Some(package.clone()),
+            None => indices.iter().find_map(|index| {
+                self.foreign
+                    .get(&(*index, configuration.to_owned(), hash.to_owned()))
+                    .cloned()
             }),
         };
-        let Some((package, unit_hash)) = found else {
+        let Some(package) = found else {
             return Err(CiError::new(format!(
                 "{} belongs to a unit with no fingerprint, so no build-script run can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
                 file.display()
@@ -148,7 +137,7 @@ impl Audit<'_> {
             UnitIdentity::Fingerprint {
                 target: indices[0],
                 configuration,
-                hash: &unit_hash,
+                hash,
             },
         )?
         else {
@@ -180,19 +169,21 @@ impl Audit<'_> {
     fn build_output(
         &mut self,
         indices: &[usize],
+        target: usize,
         file: &Path,
         configuration: &str,
         package: &str,
         hash: &str,
     ) -> Result<(), CiError> {
+        let script = self.outputs.script_of(target, configuration, hash);
         let text = self.build_output_text(indices[0], file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut seen = BTreeSet::new();
         for &index in indices {
-            let known: Vec<(RepoPath, SystemTime)> = self
-                .scripts
-                .get(&(index, profile(configuration).to_owned(), package.to_owned()))
+            let known: Vec<(RepoPath, SystemTime)> = script
+                .as_ref()
+                .and_then(|script| self.scripts.get(&(index, script.clone())))
                 .into_iter()
                 .flatten()
                 .map(|(source, compiled)| (source.clone(), *compiled))

@@ -116,6 +116,49 @@ fn a_dep_info_read_under_the_own_output_directory_of_an_undeclared_build_script_
     assert_eq!(written(&repo), ".\tlib\n");
 }
 
+const LIB_FINGERPRINT: &str = "rust/target/debug/.fingerprint/lib-f000000000000005/lib-lib.json";
+
+#[test]
+fn a_dependency_renamed_like_a_build_script_never_hides_the_run_of_the_unit() {
+    let repo = units();
+    unit(
+        &repo,
+        LIB_FINGERPRINT,
+        "{\"deps\":[[0,\"build_script_build\",false,2],[0,\"build_script_build\",false,1]]}",
+    );
+    let out = repo.lib_output("out");
+    recorded(&repo, &format!("{out}\n"));
+    unit(
+        &repo,
+        LIB_DEPS,
+        &format!("out.d: lib/src/lib.rs {out}/o.txt\n"),
+    );
+    assert_eq!(written(&repo), ".\tlib\n");
+}
+
+#[test]
+fn a_unit_that_depends_on_two_build_script_runs_refuses_the_audit() {
+    let repo = units();
+    unit(
+        &repo,
+        LIB_FINGERPRINT,
+        "{\"deps\":[[0,\"build_script_build\",false,2],[0,\"build_script_build\",false,1]]}",
+    );
+    unit(
+        &repo,
+        &format!("{TARGET}/.fingerprint/lib-f000000000000009/run-build-script-build-script-build"),
+        "0200000000000000",
+    );
+    let refused = audit(&repo, &["--write"]);
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{message}");
+    assert!(
+        message.contains("depends on several build-script runs"),
+        "{message}"
+    );
+    assert!(lock(&repo).is_none());
+}
+
 #[test]
 fn a_dep_info_read_under_the_cargo_home_registry_is_audited() {
     let repo = units();

@@ -3,6 +3,7 @@
 
 mod fixture;
 mod oracle;
+mod refusals;
 mod same_name;
 mod two_roots;
 
