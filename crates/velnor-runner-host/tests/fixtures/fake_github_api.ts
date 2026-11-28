@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
-import { type Connection, config as shared, configOf, connectionNamed, headers, method, offers, phase, record, reply, scriptedReply, unexpected } from "./fake_github_core.ts";
+import { type Connection, config as shared, configOf, connectionNamed, headers, method, mutate, offers, phase, record, reply, scriptedReply, unexpected } from "./fake_github_core.ts";
 import { pullJson, repository as repositoryJson, runJson, treeId, trees } from "./fake_github_shapes.ts";
 
 export function api(path: string): never {
   if (method === "POST" && path === "/actions/runner-registration") {
     const token = /registration-token\.([^\s]+)$/.exec(headers.get("authorization") ?? "")?.[1];
-    reply(200, { url: shared.admin_url, token: `admin-token.${token}` });
+    const generation = mutate((state) => (state.admin_issued = (state.admin_issued ?? 0) + 1));
+    reply(200, { url: shared.admin_url, token: `g${generation}-admin-token.${token}` });
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/actions\/runners\/registration-token$/.test(path)) reply(201, { token: `registration-token.${shared.repo}` });
   const owned = /^\/repos\/[^/]+\/([^/]+)/.exec(path);

@@ -152,7 +152,7 @@ fn recorded_set_held(recorded: i64) -> ListenFault {
 
 fn other_set_listed(recorded: i64, listed: i64) -> ListenFault {
     eprintln!(
-        "rust-runner startup held: the ownership record holds scale set {recorded}, but GitHub lists this name under scale set {listed}; delete scale set {listed} by its id in the runner settings of the repository or organization, then connect again"
+        "rust-runner startup held: the ownership record holds scale set {recorded}, but GitHub lists this name under scale set {listed}; delete scale set {listed} by its id in the runner settings of the repository or organization, run `velnor-host disconnect`, then connect again"
     );
     EnsureError::Uncertain.into()
 }

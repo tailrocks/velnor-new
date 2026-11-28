@@ -4,9 +4,11 @@
 use serde_json::{Value, json};
 
 use super::checks::{assert_clean, heartbeat_advances};
+use super::child::SUPERVISED;
 use super::events::wait_for;
-use super::fixtures::TestResult;
+use super::fixtures::{TestResult, host_toml_of};
 use super::harness::World;
+use super::world_files::TOKEN_A;
 
 const RECORD: &str = "rust-runner-scale-sets/lab";
 
@@ -43,6 +45,15 @@ fn started(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> T
 }
 
 fn launched(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> TestResult<()> {
+    launched_with(world, test, existing_labels, &[])
+}
+
+fn launched_with(
+    world: &mut World,
+    test: &str,
+    existing_labels: Option<&[&str]>,
+    environment: &[(&str, &str)],
+) -> TestResult<()> {
     let path = world.github.join("config.json");
     let mut config: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
     config["state"] = json!(world.state);
@@ -50,7 +61,7 @@ fn launched(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> 
         config["existing_labels"] = json!(labels);
     }
     std::fs::write(path, config.to_string())?;
-    world.spawn_controller(test, &[])?;
+    world.spawn_controller(test, environment)?;
     Ok(())
 }
 
@@ -240,9 +251,45 @@ pub(super) fn holds_a_repository_set_listed_under_another_id_than_its_record(
     assert!(
         world
             .child_stderr()
-            .contains("holds scale set 9, but GitHub lists this name under scale set 7; delete scale set 7 by its id in the runner settings of the repository or organization, then connect again")
+            .contains("holds scale set 9, but GitHub lists this name under scale set 7; delete scale set 7 by its id in the runner settings of the repository or organization, run `velnor-host disconnect`, then connect again")
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn serves_again_after_the_full_recovery_of_a_set_listed_under_another_id(
+    test: &str,
+) -> TestResult<()> {
+    let mut world = World::new("T12j", 1, true)?;
+    let with_lab = std::fs::read_to_string(world.state.join("host.toml"))?;
+    let without = host_toml_of(&world.root, 1, &[])?;
+    plant_scoped(
+        &world,
+        Some(9),
+        &json!({"kind": "repository", "repository_id": 42}),
+    )?;
+    world.write_marker("connection-drain/lab", TOKEN_A)?;
+    launched_with(&mut world, test, None, &[(SUPERVISED, "1")])?;
+    held(&world, "a set listed under another id than its record");
+
+    world.unlist_set("velnor-lab")?;
+    world.write_host_toml_text(&without)?;
+    world.wait_census("the config without lab", &without, &[]);
+    assert_eq!(world.detach(test, "lab", &with_lab)?, "Ok(Deleted)");
+    assert!(
+        !world.state.join(RECORD).exists(),
+        "the disconnect left the record that holds the connection"
+    );
+
+    world.write_host_toml_text(&with_lab)?;
+    world.wait_census("lab serving again", &with_lab, &["lab"]);
+    assert!(
+        !world.gh("session.create").is_empty(),
+        "the connection never opened a session after the recovery"
+    );
+    assert_eq!(recorded(&world)?["scale_set_id"], 7);
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Stopped)");
     Ok(())
 }

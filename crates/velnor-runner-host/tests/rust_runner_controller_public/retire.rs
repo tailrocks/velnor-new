@@ -1,15 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::checks::{heartbeat_advances, jit_name};
 use super::child::SUPERVISED;
 use super::events::wait_for;
-use super::fixtures::{KEYCHAIN_REFERENCE, Spec, TestResult, WORKFLOW, host_toml_of, push_offer};
+use super::fixtures::{
+    KEYCHAIN_REFERENCE, Spec, TestResult, WORKFLOW, host_toml, host_toml_of, push_offer,
+};
 use super::harness::World;
 
 const STALL_MS: u64 = 9_000;
+const CLOSE_TIMEOUT_MS: u64 = 12_000;
 const TICK_GAP_LIMIT_MS: u64 = 7_000;
 
 fn session_deletes(world: &World, set: &str) -> Vec<String> {
@@ -169,9 +172,114 @@ pub(super) fn revert(test: &str) -> TestResult<()> {
             >= 2
     });
     world.wait_census("both connections serving again", &both, &["lab", "second"]);
+    wait_for("the second close of the reverted session", 30, || {
+        session_deletes(&world, "7").len() >= 2
+    });
     assert_eq!(session_deletes(&world, "7")[..2], ["500", "204"]);
 
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Stopped)");
+    Ok(())
+}
+
+fn retiring_alone(test: &str, tag: &'static str, script: &Value) -> TestResult<(World, String)> {
+    let mut world = World::new(tag, 1, false)?;
+    let with_lab = host_toml(&world.root, 1)?;
+    let without = host_toml_of(&world.root, 1, &[])?;
+    world.spawn_controller(test, &[(SUPERVISED, "1")])?;
+    world.wait_census("lab serving", &with_lab, &["lab"]);
+    world.script_phase(script)?;
+    world.write_host_toml_text(&without)?;
+    Ok((world, without))
+}
+
+fn retired_alone(test: &str, tag: &'static str, script: &Value) -> TestResult<Vec<String>> {
+    let (mut world, without) = retiring_alone(test, tag, script)?;
+    world.wait_census("the census without lab", &without, &[]);
+    let closes = session_deletes(&world, "7");
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Stopped)");
+    Ok(closes)
+}
+
+pub(super) fn closes_after_a_timeout_and_a_404(test: &str) -> TestResult<()> {
+    let closes = retired_alone(
+        test,
+        "R8",
+        &json!({
+            "session.stall": {"statuses": [CLOSE_TIMEOUT_MS], "repeat_last": false},
+            "session.delete": {"statuses": [404], "repeat_last": false}
+        }),
+    )?;
+    assert_eq!(
+        closes,
+        ["404"],
+        "a 404 after a retired close that timed out must count as closed"
+    );
+    Ok(())
+}
+
+pub(super) fn holds_a_first_attempt_404(test: &str) -> TestResult<()> {
+    let closes = retired_alone(
+        test,
+        "R9",
+        &json!({"session.delete": {"statuses": [404], "repeat_last": false}}),
+    )?;
+    assert_eq!(
+        closes,
+        ["404", "204"],
+        "a 404 on the first close of a retired connection must be held"
+    );
+    Ok(())
+}
+
+fn stopped_after_retiring(test: &str, tag: &'static str, script: &Value) -> TestResult<World> {
+    let (mut world, _) = retiring_alone(test, tag, script)?;
+    world.wait_for_event("the second close of the retired session", 90, |events| {
+        events
+            .iter()
+            .filter(|event| event.label == "session.delete.begin")
+            .count()
+            >= 2
+    });
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Stopped)");
+    Ok(world)
+}
+
+pub(super) fn stop_counts_a_404_after_a_timed_out_close_as_closed(test: &str) -> TestResult<()> {
+    let world = stopped_after_retiring(
+        test,
+        "S1",
+        &json!({
+            "session.stall": {"statuses": [CLOSE_TIMEOUT_MS, CLOSE_TIMEOUT_MS], "repeat_last": false},
+            "session.delete": {"statuses": [404], "repeat_last": false}
+        }),
+    )?;
+    assert_eq!(session_deletes(&world, "7"), ["404"]);
+    assert_eq!(
+        world.child_stderr().matches("session close held").count(),
+        1,
+        "the stop treated a 404 after a timed out close as held: {}",
+        world.child_stderr()
+    );
+    Ok(())
+}
+
+pub(super) fn stop_holds_a_first_attempt_404(test: &str) -> TestResult<()> {
+    let mut world = World::new("S2", 1, false)?;
+    let with_lab = host_toml(&world.root, 1)?;
+    world.spawn_controller(test, &[(SUPERVISED, "1")])?;
+    world.wait_census("lab serving", &with_lab, &["lab"]);
+    world.script_phase(&json!({"session.delete": {"statuses": [404], "repeat_last": false}}))?;
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Stopped)");
+    assert_eq!(session_deletes(&world, "7"), ["404"]);
+    assert_eq!(
+        world.child_stderr().matches("session close held").count(),
+        1,
+        "the stop treated a first-attempt 404 as closed: {}",
+        world.child_stderr()
+    );
     Ok(())
 }

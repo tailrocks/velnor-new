@@ -56,6 +56,8 @@ export interface State {
   next_session: number;
   pending_jit?: number[];
   hidden_from_listing?: boolean;
+  admin_issued?: number;
+  admin_expired_through?: number;
 }
 interface Refusal {
   statuses: number[];

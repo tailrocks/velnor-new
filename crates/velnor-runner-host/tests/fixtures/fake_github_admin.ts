@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
 import {
   type Connection,
   body,
@@ -183,7 +183,26 @@ function jobs(id: number, owned: RegExpExecArray): void {
   }
 }
 
+function expireIssuedAdminTokens(): void {
+  const marker = `${seen}/expire-admin`;
+  if (!existsSync(marker)) return;
+  mutate((state) => {
+    if (!existsSync(marker)) return;
+    unlinkSync(marker);
+    state.admin_expired_through = state.admin_issued ?? 0;
+  });
+}
+
+function refuseExpiredAdminToken(): void {
+  expireIssuedAdminTokens();
+  const generation = Number(/g(\d+)-admin-token\./.exec(headers.get("authorization") ?? "")?.[1] ?? 0);
+  if (generation === 0 || generation > (readState().admin_expired_through ?? 0)) return;
+  record("admin.expired", { generation });
+  reply(401, { message: "admin token expired" });
+}
+
 export function admin(path: string): never {
+  refuseExpiredAdminToken();
   if (method === "GET" && path === "/_apis/runtime/runnergroups") reply(200, { count: 1, value: [{ id: 1, name: "Default", isDefaultGroup: true }] });
   if (path === SETS) {
     const connection = caller();

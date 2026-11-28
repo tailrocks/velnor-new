@@ -229,6 +229,16 @@ impl World {
         self.write_marker(CENSUS, &census.to_string())
     }
 
+    pub(super) fn unlist_set(&self, repo: &str) -> TestResult<()> {
+        self.mutate_fake(|state| {
+            state["scale_sets"]
+                .as_object_mut()
+                .ok_or("scale_sets")?
+                .remove(repo);
+            Ok(())
+        })
+    }
+
     pub(super) fn hide_from_listing(&self) -> TestResult<()> {
         self.mutate_fake(|state| {
             state["hidden_from_listing"] = json!(true);

@@ -358,3 +358,33 @@ controller_test!(
     rust_runner_startup_counts_a_404_after_a_timed_out_close_as_closed,
     startup::counts_a_404_after_a_timed_out_close_as_closed
 );
+
+controller_test!(
+    rust_runner_startup_renews_the_admin_token_while_it_retries_a_close,
+    startup::renews_the_admin_token_while_it_retries_a_close
+);
+
+controller_test!(
+    rust_runner_retired_connection_counts_a_404_after_a_timed_out_close_as_closed,
+    retire::closes_after_a_timeout_and_a_404
+);
+
+controller_test!(
+    rust_runner_retired_connection_holds_a_404_on_its_first_close,
+    retire::holds_a_first_attempt_404
+);
+
+controller_test!(
+    rust_runner_stop_counts_a_404_after_a_timed_out_retired_close_as_closed,
+    retire::stop_counts_a_404_after_a_timed_out_close_as_closed
+);
+
+controller_test!(
+    rust_runner_stop_holds_a_404_on_a_first_close,
+    retire::stop_holds_a_first_attempt_404
+);
+
+controller_test!(
+    rust_runner_serves_again_after_the_full_recovery_of_a_set_listed_under_another_id,
+    organization::serves_again_after_the_full_recovery_of_a_set_listed_under_another_id
+);

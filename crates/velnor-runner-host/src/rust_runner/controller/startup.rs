@@ -299,6 +299,28 @@ pub(super) async fn close_pending(pending: &[Pending]) {
     close_all(open_sessions(pending)).await;
 }
 
+async fn renew_admins(pending: &[Pending], sessions: Vec<OpenSession>) -> Vec<OpenSession> {
+    let renewals = sessions.into_iter().map(|session| async move {
+        let Some(connection) = pending.iter().find(|connection| {
+            connection
+                .session
+                .as_ref()
+                .is_some_and(|open| open.session_id == session.2)
+        }) else {
+            return session;
+        };
+        let (pat, binding) = (connection.pat.clone(), connection.binding.clone());
+        match blocking(move || github::renew_admin(&pat, &binding)).await {
+            Ok(admin) => (admin, session.1, session.2, session.3),
+            Err(error) => {
+                eprintln!("rust-runner admin renewal held: {error}");
+                session
+            }
+        }
+    });
+    futures_util::future::join_all(renewals).await
+}
+
 async fn close_until_closed(
     cx: &Context,
     shutdown: &mut Shutdown<'_>,
@@ -311,6 +333,7 @@ async fn close_until_closed(
         if remaining.is_empty() {
             return Started::ConfigChanged;
         }
+        remaining = renew_admins(pending, remaining).await;
         let retry_at = Instant::now() + backoff;
         backoff = (backoff * 2).min(STARTUP_RETRY);
         while Instant::now() < retry_at {

@@ -58,7 +58,7 @@ impl Run<'_> {
                     live.admin.clone(),
                     live.scale_set_id,
                     live.session.session_id.clone(),
-                    CloseHistory::Untried,
+                    live.close_history,
                 )
             })
             .collect();

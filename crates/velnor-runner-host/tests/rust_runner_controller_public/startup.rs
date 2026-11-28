@@ -83,6 +83,33 @@ pub(super) fn holds_a_changed_config_until_the_session_is_closed(test: &str) -> 
     Ok(())
 }
 
+pub(super) fn renews_the_admin_token_while_it_retries_a_close(test: &str) -> TestResult<()> {
+    let mut world = World::new("T13e", 1, true)?;
+    world.script_refusals(&json!({"runner.list": {"statuses": [500], "repeat_last": true}}))?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("the session of a held startup", 60, |events| {
+        events.iter().any(|event| event.label == "session.create")
+    });
+    std::fs::write(world.seen.join("expire-admin"), "")?;
+    world.write_host_toml(2)?;
+    assert_eq!(world.finish(90)?, "Ok(ConfigChanged)");
+    assert!(
+        !world.gh("admin.expired").is_empty(),
+        "the admin token never expired"
+    );
+    let closes: Vec<String> = world
+        .gh("session.delete")
+        .iter()
+        .map(|event| event.field("status").to_owned())
+        .collect();
+    assert_eq!(
+        closes,
+        ["204"],
+        "a close retried with the expired admin token never succeeded"
+    );
+    Ok(())
+}
+
 pub(super) fn counts_a_404_after_a_timed_out_close_as_closed(test: &str) -> TestResult<()> {
     let mut world = World::new("T13d", 1, true)?;
     world.script_refusals(&json!({
