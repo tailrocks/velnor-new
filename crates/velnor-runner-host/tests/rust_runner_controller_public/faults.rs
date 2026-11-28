@@ -120,3 +120,56 @@ pub(super) fn leaves_everything_after_a_lost_lock(test: &str) -> TestResult<()> 
     assert_eq!(registered_runners(&world)?, 1);
     Ok(())
 }
+
+fn degraded_then_recovered(world: &mut World) -> TestResult<()> {
+    wait_for("the session_failing heartbeat", 60, || {
+        world.heartbeat_phase().as_deref() == Some("session_failing")
+    });
+    assert_eq!(controller_readiness(&world.state), Readiness::Degraded);
+    std::fs::write(world.seen.join("release-polls"), "")?;
+    wait_for("the ready heartbeat after a real response", 60, || {
+        world.heartbeat_phase().as_deref() == Some("ready")
+    });
+    assert_eq!(controller_readiness(&world.state), Readiness::Ready);
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+#[test]
+fn rust_runner_controller_reports_failing_polls_as_degraded() -> TestResult<()> {
+    if let Some(root) = super::child_root() {
+        return super::child::run(&root);
+    }
+    let mut world = World::new("T43", 1, true)?;
+    world.script_refusals(&json!({
+        "poll.expired": {"statuses": [500], "repeat_last": true, "until": "seen/release-polls"}
+    }))?;
+    world.spawn_controller(
+        "faults::rust_runner_controller_reports_failing_polls_as_degraded",
+        &[],
+    )?;
+    degraded_then_recovered(&mut world)?;
+    assert!(world.gh("session.refresh").is_empty());
+    Ok(())
+}
+
+#[test]
+fn rust_runner_controller_reports_repeated_401_acknowledges_as_degraded() -> TestResult<()> {
+    if let Some(root) = super::child_root() {
+        return super::child::run(&root);
+    }
+    let mut world = World::new("T44", 1, true)?;
+    world.queue_message(91, &[push_offer(1, 9101, "main", WORKFLOW)])?;
+    world.script_refusals(&json!({
+        "message.expired": {"statuses": [401], "repeat_last": true, "until": "seen/release-polls"}
+    }))?;
+    world.spawn_controller(
+        "faults::rust_runner_controller_reports_repeated_401_acknowledges_as_degraded",
+        &[],
+    )?;
+    degraded_then_recovered(&mut world)?;
+    assert!(world.gh("session.refresh").len() >= 3);
+    assert_eq!(world.gh("jit").len(), 1);
+    Ok(())
+}
