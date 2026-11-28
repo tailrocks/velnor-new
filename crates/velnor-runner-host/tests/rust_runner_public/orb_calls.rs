@@ -8,6 +8,8 @@ use velnor_runner_host::{HostError, RustRunnerFailure};
 
 use super::support::{Fixture, process_exists};
 
+const CHILD: &str = "VELNOR_TEST_ORB_CHILD";
+const INCOMPATIBLE: &str = r#"[{"name":"velnor","image":{"distro":"debian","arch":"arm64"}}]"#;
 const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
 
 fn grandchild(fixture: &Fixture) -> Result<String, Box<dyn Error>> {
@@ -79,5 +81,44 @@ fn rust_runner_orb_call_bounds_the_stdout_read_by_its_deadline() -> Result<(), B
         elapsed < Duration::from_secs(5),
         "the stdout read was not bounded by the deadline: {elapsed:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn rust_runner_runs_the_orb_named_by_velnor_orb() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os(CHILD).is_some() {
+        let outcome = velnor_runner_host::RustRunnerLauncher::from_environment().ensure_machine();
+        println!("OUTCOME={:?}", outcome.err());
+        return Ok(());
+    }
+    let fixture = Fixture::new(INCOMPATIBLE)?;
+    let bun = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("bun"))
+        .find(|candidate| candidate.is_file())
+        .ok_or("bun is not on PATH")?;
+    let tools = fixture.root.join("tools");
+    std::fs::create_dir(&tools)?;
+    std::os::unix::fs::symlink(bun, tools.join("bun"))?;
+    let path = std::env::join_paths([tools, "/usr/bin".into(), "/bin".into()])?;
+    let output = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "orb_calls::rust_runner_runs_the_orb_named_by_velnor_orb",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .env("VELNOR_ORB", fixture.root.join("orb"))
+        .env("PATH", path)
+        .output()?;
+    let reported = String::from_utf8(output.stdout)?;
+    assert!(output.status.success(), "{reported}");
+    let expected = format!(
+        "OUTCOME={:?}",
+        Some(HostError::RustRunner(
+            RustRunnerFailure::MachineIncompatible
+        ))
+    );
+    assert!(reported.lines().any(|line| line == expected), "{reported}");
+    assert_eq!(fixture.log()?, ["list -f json"]);
     Ok(())
 }
