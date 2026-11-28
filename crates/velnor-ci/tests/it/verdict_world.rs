@@ -230,7 +230,7 @@ impl World {
             )
             .env(
                 "VELNOR_MERGE_GROUP_HEAD_REF",
-                format!("gh-readonly-queue/main/pr-7-{HEAD}"),
+                format!("gh-readonly-queue/main/pr-7-{BASE}"),
             )
             .env("VELNOR_MERGE_GROUP_BASE_SHA", BASE)
             .env("VELNOR_REQUIRED_CHECK", "Required")

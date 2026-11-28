@@ -5,7 +5,7 @@ use serde_json::json;
 
 use velnor_model::REUSE_RUN_MAX_BYTES;
 
-use crate::verdict_world::{BASE, HEAD, REPOSITORY, World, jobs, json_body, path, tree};
+use crate::verdict_world::{BASE, HEAD, REPOSITORY, World, jobs, json_body, path};
 
 fn runs_body(ids: &[u64]) -> Vec<u8> {
     let runs: Vec<_> = ids
@@ -151,9 +151,9 @@ fn two_live_verdict_artifacts_are_refused() {
 const MOVED: &str = "3333333333333333333333333333333333333333";
 
 #[test]
-fn a_pull_request_head_that_moved_since_it_was_queued_is_refused() {
+fn a_pull_request_head_that_moved_to_another_tree_since_it_was_queued_is_refused() {
     let mut world = World::new();
-    let moved_tree = tree(&world.checkout);
+    let moved_tree = "f".repeat(40);
     world.routes.insert(
         path("/pulls/7"),
         json_body(&json!({"head": {"sha": MOVED, "repo": {"full_name": REPOSITORY}}})),
@@ -178,7 +178,7 @@ fn a_pull_request_head_that_moved_since_it_was_queued_is_refused() {
     let result = world.run();
     assert_eq!(result.outputs["reuse"], "false", "{}", result.stdout());
     assert!(
-        result.stdout().contains("not the queued commit"),
+        result.stdout().contains("the pull request head has tree"),
         "{}",
         result.stdout()
     );

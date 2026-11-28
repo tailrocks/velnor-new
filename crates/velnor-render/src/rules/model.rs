@@ -34,6 +34,7 @@ pub struct RenderedReuse {
     pub id: String,
     pub plan: String,
     pub build_only: bool,
+    pub root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

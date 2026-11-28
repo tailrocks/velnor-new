@@ -111,7 +111,6 @@ pub enum Refusal {
     OtherTree,
     OtherPlan,
     NoAttempt,
-    HeadMoved { queued: String, live: String },
     RunUrlTooLong,
     AmbiguousJob(String),
     AmbiguousStep { job: String, step: String },
@@ -146,10 +145,6 @@ impl fmt::Display for Refusal {
             Self::OtherTree => f.write_str("the verdict is for another tree"),
             Self::OtherPlan => f.write_str("the verdict is for another plan"),
             Self::NoAttempt => f.write_str("the run's jobs report no run attempt"),
-            Self::HeadMoved { queued, live } => write!(
-                f,
-                "the pull request head is {live}, not the queued commit {queued}"
-            ),
             Self::RunUrlTooLong => f.write_str("the run URL is longer than the output allows"),
             Self::AmbiguousJob(job) => write!(
                 f,

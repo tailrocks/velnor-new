@@ -21,16 +21,26 @@ fn outputs(knob: bool) -> Result<Value, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn a_lane_that_reuse_can_skip_reports_absent_counts_not_zeros() -> TestResult {
-    for name in ["tests_run", "tests_listed", "tests_by_package"] {
+fn a_lane_that_reuse_can_skip_reports_absent_counts_only_when_reuse_skipped_it() -> TestResult {
+    for (name, fallback) in [
+        ("tests_run", "0"),
+        ("tests_listed", "0"),
+        ("tests_by_package", "{}"),
+    ] {
         let reused = outputs(true)?[name].as_str().unwrap_or_default().to_owned();
-        assert!(reused.starts_with("${{ steps.test"), "{name}: {reused}");
-        assert!(!reused.contains("||"), "{name}: {reused}");
+        let expected = format!(
+            "${{{{ steps.test.outputs.{name} || (!contains(format(' {{0}} ', needs.rust-plan.outputs.reused), ' rust-lane-local-mode-root.test-1 ') && '{fallback}' || '') }}}}"
+        );
+        assert_eq!(reused, expected, "{name}");
         let plain = outputs(false)?[name]
             .as_str()
             .unwrap_or_default()
             .to_owned();
-        assert!(plain.contains(" || '"), "{name}: {plain}");
+        assert_eq!(
+            plain,
+            format!("${{{{ steps.test.outputs.{name} || '{fallback}' }}}}"),
+            "{name}"
+        );
     }
     Ok(())
 }

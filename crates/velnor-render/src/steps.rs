@@ -69,6 +69,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
+    crate::verdict_steps::qualify_shared(&mut steps);
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
     crate::shared_runs::mark(job, &mut steps);

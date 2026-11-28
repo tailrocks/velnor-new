@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use serde_json::{Value as Json, json};
 use velnor_model::{
     Job, REUSE_OUTPUT, REUSE_RUN_OUTPUT, REUSE_STEP, REUSED_OUTPUT, Reuse, ReuseStep, Step,
@@ -104,6 +106,10 @@ fn contains(plan: &str, id: &str) -> String {
     format!("contains(format(' {{0}} ', needs.{plan}.outputs.{REUSED_OUTPUT}), ' {id} ')")
 }
 
+pub(crate) fn reused_term(reuse: &Reuse) -> String {
+    contains(reuse.plan.as_str(), &reuse.id)
+}
+
 pub(crate) fn skipped(reuse: &Reuse, replanned: bool) -> String {
     skip_term(reuse.plan.as_str(), &reuse.id, replanned)
 }
@@ -188,10 +194,21 @@ pub(crate) fn with_twin(step: &Step, mut body: RenderedStep) -> Vec<RenderedStep
     let Some(reuse) = &step.reuse else {
         return vec![body];
     };
+    let root = step
+        .manifest
+        .as_ref()
+        .map_or(".", |manifest| {
+            manifest
+                .as_str()
+                .rsplit_once('/')
+                .map_or(".", |(directory, _)| directory)
+        })
+        .to_owned();
     body.reuse = Some(RenderedReuse {
         id: reuse.id.clone(),
         plan: reuse.plan.to_string(),
         build_only: false,
+        root: root.clone(),
     });
     if !matches!(&step.kind, StepKind::Cargo(command) if command.reports_tests()) {
         return vec![body];
@@ -203,13 +220,81 @@ pub(crate) fn with_twin(step: &Step, mut body: RenderedStep) -> Vec<RenderedStep
         id: reuse.id.clone(),
         plan: reuse.plan.to_string(),
         build_only: true,
+        root,
     });
     twin.run = body.run.as_deref().map(build_only);
     vec![twin, body]
 }
 
+const BUILD_ONLY_SUFFIX: &str = " (build only)";
+
+pub(crate) fn qualify_shared(steps: &mut [RenderedStep]) {
+    let base = |step: &RenderedStep| {
+        let name = step.name.as_str();
+        name.strip_suffix(BUILD_ONLY_SUFFIX)
+            .unwrap_or(name)
+            .to_owned()
+    };
+    let reusable =
+        |step: &&RenderedStep| step.reuse.as_ref().is_some_and(|reuse| !reuse.build_only);
+    let shared: BTreeSet<String> = steps
+        .iter()
+        .filter(reusable)
+        .filter(|step| {
+            steps
+                .iter()
+                .filter(reusable)
+                .filter(|other| other.name == step.name)
+                .count()
+                > 1
+        })
+        .map(|step| step.name.clone())
+        .collect();
+    for step in steps.iter_mut() {
+        let Some(reuse) = &step.reuse else { continue };
+        let name = base(step);
+        if shared.contains(&name) {
+            let suffix = if reuse.build_only {
+                BUILD_ONLY_SUFFIX
+            } else {
+                ""
+            };
+            step.name = format!("{name} ({}){suffix}", reuse.root);
+        }
+    }
+}
+
+fn shell_words(line: &str) -> Vec<&str> {
+    let mut words = Vec::new();
+    let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    for (at, c) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match (quote, c) {
+            (None | Some('"'), '\\') => escaped = true,
+            (Some(open), _) if c == open => quote = None,
+            (None, '\'' | '"') => quote = Some(c),
+            (None, ' ') => {
+                if start < at {
+                    words.push(&line[start..at]);
+                }
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < line.len() {
+        words.push(&line[start..]);
+    }
+    words
+}
+
 fn build_only(run: &str) -> String {
-    let words: Vec<&str> = run.split(' ').collect();
+    let words = shell_words(run);
     let at = words
         .iter()
         .position(|word| word.starts_with("cargo"))

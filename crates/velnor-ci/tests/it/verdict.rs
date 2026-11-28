@@ -44,6 +44,23 @@ fn a_green_pull_request_run_of_the_same_tree_and_plan_is_reused() {
 }
 
 #[test]
+fn the_queue_ref_ends_in_the_base_commit_and_the_pull_request_head_comes_from_the_pull_request() {
+    assert_ne!(BASE, HEAD);
+    let result = World::new().run();
+    assert_eq!(result.outputs["reuse"], "true", "{}", result.stdout());
+    for read in [
+        path("/pulls/7"),
+        path(&format!("/compare/{BASE}...{HEAD}?per_page=1")),
+    ] {
+        assert!(
+            result.requests.contains(&read),
+            "{read}: {:?}",
+            result.requests
+        );
+    }
+}
+
+#[test]
 fn only_what_the_pull_request_run_passed_is_reused() {
     let mut world = World::new();
     world.routes.insert(
@@ -199,7 +216,7 @@ fn an_event_other_than_merge_group_never_reuses() {
 
 #[test]
 fn a_queue_entry_is_judged_by_the_rules_of_its_own_target_branch() {
-    let head_ref = format!("gh-readonly-queue/release/1.x/pr-7-{HEAD}");
+    let head_ref = format!("gh-readonly-queue/release/1.x/pr-7-{BASE}");
     let mut released = World::new();
     released
         .overrides

@@ -6,6 +6,7 @@ use std::process::{Command, Output};
 use serde_json::{Value, json};
 
 const SPEC: &str = "--plan rust-plan --job rust-plan=always --job rust=always --job lint-alint=always --reuse lint-alint --reuse-tests rust=root:rust.test,rust.test-features-x --tests rust=root";
+const SIBLING_SPEC: &str = " --job lane=always --tests lane=root";
 const RUN_URL: &str = "https://github.com/tailrocks/velnor-new/actions/runs/100";
 
 struct Gate {
@@ -15,6 +16,7 @@ struct Gate {
     alint: &'static str,
     counted: Option<(&'static str, &'static str)>,
     raw: Option<Value>,
+    sibling: Option<Value>,
 }
 
 impl Gate {
@@ -26,6 +28,7 @@ impl Gate {
             alint: "skipped",
             counted: None,
             raw: None,
+            sibling: None,
         }
     }
 
@@ -38,7 +41,7 @@ impl Gate {
                 },
             )
         });
-        let needs: Value = json!({
+        let mut needs: Value = json!({
             "rust-plan": {"result": "success", "outputs": {
                 "rust_root_tests": "run",
                 "reuse": self.reuse,
@@ -48,9 +51,17 @@ impl Gate {
             "rust": {"result": "success", "outputs": rust_outputs},
             "lint-alint": {"result": self.alint},
         });
+        if let Some(outputs) = &self.sibling {
+            needs["lane"] = json!({"result": "success", "outputs": outputs});
+        }
+        let spec = if self.sibling.is_some() {
+            format!("{SPEC}{SIBLING_SPEC}")
+        } else {
+            SPEC.to_owned()
+        };
         Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["gate", "--spec-env", "GATE_SPEC"])
-            .env("GATE_SPEC", SPEC)
+            .env("GATE_SPEC", spec)
             .env("NEEDS_JSON", needs.to_string())
             .env("GITHUB_EVENT_NAME", self.event)
             .output()
@@ -213,4 +224,47 @@ fn a_reused_job_that_ran_anyway_and_counted_tests_still_pass() {
         ..Gate::passing()
     };
     assert!(passes(&gate));
+}
+
+const ZEROS: &str = r#"{"tests_run": "0", "tests_listed": "0", "tests_by_package": "{}"}"#;
+
+fn zeros() -> Value {
+    serde_json::from_str(ZEROS).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_reused_lane_is_covered_whatever_a_sibling_lane_with_zero_counts_reports() {
+    let gate = Gate {
+        sibling: Some(zeros()),
+        ..Gate::passing()
+    };
+    assert!(passes(&gate));
+}
+
+#[test]
+fn zero_counts_of_every_lane_are_still_refused_when_nothing_was_reused() {
+    let gate = Gate {
+        sibling: Some(zeros()),
+        raw: Some(zeros()),
+        ..Gate::passing()
+    };
+    assert!(!gate.run().status.success());
+}
+
+#[test]
+fn a_lane_skipped_for_unselected_packages_reports_zeros_and_passes_beside_a_counted_lane() {
+    let counted = Gate {
+        sibling: Some(zeros()),
+        counted: Some(("3", "velnor-ci=3/3")),
+        reuse: "false",
+        reused: "",
+        alint: "success",
+        ..Gate::passing()
+    };
+    assert!(passes(&counted));
+    let absent = Gate {
+        sibling: Some(json!({})),
+        ..counted
+    };
+    assert!(!absent.run().status.success());
 }

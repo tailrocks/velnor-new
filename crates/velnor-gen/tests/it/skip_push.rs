@@ -7,6 +7,7 @@ use velnor_model::RepoView;
 
 mod reuse_counts;
 mod reuse_hardening;
+mod reuse_roots;
 mod reuse_verdict;
 
 use crate::facts::TestResult;
