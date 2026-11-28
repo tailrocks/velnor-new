@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 use velnor_model::RepoPath;
+use velnor_workflows::{reads_secret_in_condition, reads_secret_in_text};
 
 use super::{JobAuthorityError, inventory::Job, triggers};
 use crate::workflow_triggers::parse_workflow;
@@ -22,6 +23,7 @@ pub(super) fn inventory_jobs(
     let contexts = triggers::contexts(on, default_branch).map_err(&fail)?;
     let declared = jobs_of(&document).map_err(&fail)?;
     let workflow_permissions = document.get("permissions");
+    let workflow_reads_secret = document.get("env").is_some_and(reads_secret);
     let mut jobs = Vec::new();
     let mut omitted = Vec::new();
     let uncovered = triggers::uncovered(on);
@@ -37,7 +39,7 @@ pub(super) fn inventory_jobs(
         }
         let permissions = permissions_of(job.get("permissions").or(workflow_permissions))
             .map_err(|reason| fail(format!("job {key}: {reason}")))?;
-        if needs_publication_authority(job, &permissions) {
+        if workflow_reads_secret || needs_publication_authority(job, &permissions) {
             omitted.push(format!(
                 "job-authority: {path} job {key} is left out of the inventory: it writes, uses secrets or names an environment, which the verification role refuses"
             ));
@@ -76,11 +78,21 @@ fn permissions_of(value: Option<&Value>) -> Result<BTreeMap<String, String>, Str
 }
 
 fn needs_publication_authority(job: &Value, permissions: &BTreeMap<String, String>) -> bool {
-    let text = job.to_string();
     permissions.values().any(|level| level == "write")
         || job.get("environment").is_some()
-        || text.contains("secrets.")
-        || text.contains("secrets[")
+        || reads_secret(job)
+}
+
+fn reads_secret(value: &Value) -> bool {
+    match value {
+        Value::String(text) => reads_secret_in_text(text),
+        Value::Array(items) => items.iter().any(reads_secret),
+        Value::Object(map) => map.iter().any(|(key, value)| match value {
+            Value::String(text) if key == "if" => reads_secret_in_condition(text),
+            _ => reads_secret(value),
+        }),
+        _ => false,
+    }
 }
 
 fn needs_of(job: &Value) -> Vec<String> {

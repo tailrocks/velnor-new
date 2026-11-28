@@ -13,7 +13,7 @@ use velnor_model::{
     HelperRelease, JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoFacts,
     RepoPath, RepoView,
 };
-use velnor_rust::detect;
+use velnor_rust::{LOCK_PATH, RunningGenerator, check_generator_binary, detect};
 
 pub use error::JobAuthorityError;
 use inventory::{Inventory, Workflow};
@@ -23,53 +23,84 @@ use crate::GenerateError;
 #[derive(Debug)]
 pub struct Identity {
     pub source_sha: String,
-    pub artifact_sha256: String,
+    pub executable_sha256: String,
 }
 
-const ARTIFACT_PLATFORM: Platform = Platform::LinuxArm64;
-
-fn identity(helper: &HelperRelease, running: &str) -> Result<Identity, JobAuthorityError> {
-    if helper.action().as_str() != running {
-        return Err(JobAuthorityError::CommitMismatch {
-            running: running.to_owned(),
-            pinned: helper.action().to_string(),
-        });
+impl Identity {
+    #[must_use]
+    pub fn lines(&self) -> String {
+        format!("{}\n{}\n", self.source_sha, self.executable_sha256)
     }
-    let artifact = helper
-        .generator_digests()
-        .and_then(|digests| digests.get(&ARTIFACT_PLATFORM))
-        .ok_or(JobAuthorityError::NoGeneratorDigest)?;
-    Ok(Identity {
-        source_sha: helper.action().to_string(),
-        artifact_sha256: artifact.to_string(),
-    })
 }
 
-pub fn identity_of(view: &RepoView, running: &str) -> Result<Option<Identity>, GenerateError> {
+fn pinned(helper: Option<&HelperRelease>) -> Result<String, JobAuthorityError> {
+    helper
+        .map(|helper| helper.action().to_string())
+        .ok_or(JobAuthorityError::NotPinned)
+}
+
+pub fn identity_of(
+    view: &RepoView,
+    running: RunningGenerator<'_>,
+) -> Result<Option<Identity>, GenerateError> {
     if !view.files.contains_key(&JOB_AUTHORITY_CONFIG_PATH) {
         return Ok(None);
     }
     let facts = detect(view)?;
-    let helper = facts
-        .helper
-        .as_ref()
-        .ok_or(GenerateError::HelperNotPinned)?;
-    identity(helper, running)
-        .map(Some)
-        .map_err(GenerateError::JobAuthority)
+    let source_sha = pinned(facts.helper.as_ref()).map_err(GenerateError::JobAuthority)?;
+    let identity = written_by(view, running, source_sha).map_err(GenerateError::JobAuthority)?;
+    Ok(Some(identity))
+}
+
+fn written_by(
+    view: &RepoView,
+    running: RunningGenerator<'_>,
+    source_sha: String,
+) -> Result<Identity, JobAuthorityError> {
+    if running.commit != source_sha {
+        return Err(JobAuthorityError::CommitMismatch {
+            running: running.commit.to_owned(),
+            pinned: source_sha,
+        });
+    }
+    if !matches!(
+        running.platform,
+        Some(Platform::LinuxX64 | Platform::LinuxArm64)
+    ) {
+        return Err(JobAuthorityError::NotLinux(
+            running.platform.map(Platform::file_suffix),
+        ));
+    }
+    let executable_sha256 = running.sha256.ok_or(JobAuthorityError::NoDigest)?;
+    let lock = view
+        .files
+        .get(&LOCK_PATH)
+        .ok_or(JobAuthorityError::NotPinned)?;
+    check_generator_binary(lock, running).map_err(JobAuthorityError::Lock)?;
+    Ok(Identity {
+        source_sha,
+        executable_sha256: executable_sha256.to_owned(),
+    })
+}
+
+pub fn inventory_summary(
+    path: &RepoPath,
+    text: &str,
+    default_branch: &str,
+) -> Result<(usize, Vec<String>), JobAuthorityError> {
+    jobs::inventory_jobs(path, text, default_branch).map(|(jobs, notes)| (jobs.len(), notes))
 }
 
 pub(crate) fn emit(
     view: &RepoView,
     facts: &RepoFacts,
     helper: Option<&HelperRelease>,
-    running: &str,
     files: &mut BTreeMap<RepoPath, String>,
 ) -> Result<Vec<String>, JobAuthorityError> {
     let Some(paths) = config::workflows(view)? else {
         return Ok(Vec::new());
     };
-    let identity = identity(helper.ok_or(JobAuthorityError::NoGeneratorDigest)?, running)?;
+    let source_sha = pinned(helper)?;
     let mut workflows = Vec::new();
     let mut notes = Vec::new();
     for path in paths {
@@ -80,7 +111,7 @@ pub(crate) fn emit(
         notes.extend(omitted);
         workflows.push(Workflow::new(&path, text, jobs));
     }
-    let inventory = Inventory::new(identity.source_sha, workflows)?;
+    let inventory = Inventory::new(source_sha, workflows)?;
     files.insert(JOB_AUTHORITY_INVENTORY_PATH, inventory.render()?);
     Ok(notes)
 }

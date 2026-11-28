@@ -5,13 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use serde_json::Value;
-use velnor_gen::{
-    Drift, JobAuthorityIdentity, drift, expected_with_notes, expected_with_notes_as,
-    job_authority_identity,
+use velnor_gen::{Drift, drift, expected_with_notes, job_authority_identity};
+use velnor_model::{
+    JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoPath, RepoView,
 };
-use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, RepoPath, RepoView};
 use velnor_rust::LOCK_PATH;
 
+use super::job_authority_identity::{digest, running};
 use crate::facts::TestResult;
 use crate::golden::update_requested;
 use crate::lock::COMMIT_FILE;
@@ -20,10 +20,9 @@ use crate::private_sources::SECTION;
 use crate::release_fixture::release_view;
 use crate::yaml_tree::document;
 
-const CI: &str = ".github/workflows/ci.yml";
-const GATED: &str = ".github/workflows/gated.yml";
-const HELPER: &str = "0.1.110";
-const OTHER: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(super) const CI: &str = ".github/workflows/ci.yml";
+pub(super) const GATED: &str = ".github/workflows/gated.yml";
+pub(super) const HELPER: &str = "0.1.111";
 
 const GATED_JOBS: &str = r#"
 [[workflow]]
@@ -59,11 +58,11 @@ name = "Gate"
 run = "echo ok"
 "#;
 
-fn pinned() -> &'static str {
+pub(super) fn pinned() -> &'static str {
     COMMIT_FILE.trim()
 }
 
-fn enabled(
+pub(super) fn enabled(
     rust_ci: &str,
     workflows: Option<&str>,
     listed: &[&str],
@@ -91,14 +90,14 @@ fn enabled(
     Ok(view)
 }
 
-fn gated(extra: &str) -> String {
+pub(super) fn gated(extra: &str) -> String {
     GATED_JOBS.replace("{extra}", extra)
 }
 
-type Generated = (BTreeMap<RepoPath, String>, Vec<String>);
+pub(super) type Generated = (BTreeMap<RepoPath, String>, Vec<String>);
 
-fn generated(view: &RepoView) -> Result<Generated, Box<dyn Error>> {
-    Ok(expected_with_notes_as(view, pinned())?)
+pub(super) fn generated(view: &RepoView) -> Result<Generated, Box<dyn Error>> {
+    Ok(expected_with_notes(view)?)
 }
 
 fn inventory(files: &BTreeMap<RepoPath, String>) -> Result<Value, Box<dyn Error>> {
@@ -143,45 +142,6 @@ fn inventory_repository_mode_has_literal_branch_filters() -> TestResult {
         }
     }
     assert_eq!(seen, ["merge_group", "push"].map(str::to_owned).into());
-    Ok(())
-}
-
-#[test]
-fn only_the_pinned_release_writes_the_inventory() -> TestResult {
-    let view = enabled("full_run = \"off\"\n", None, &[CI])?;
-    let (files, _) = generated(&view)?;
-    assert_eq!(inventory(&files)?["generator_source_sha"], pinned());
-    let lock: toml::Table = toml::from_str(&String::from_utf8(view.files[&LOCK_PATH].clone())?)?;
-    let identity = job_authority_identity(&view, pinned())?.ok_or("no identity")?;
-    assert_eq!(identity.source_sha, pinned());
-    assert_eq!(
-        identity.artifact_sha256,
-        lock["velnor-gen"]["linux-arm64"].as_str().ok_or("digest")?
-    );
-    for running in ["unknown", OTHER] {
-        let refusals: [(&str, Result<(), String>); 2] = [
-            (
-                "generate",
-                expected_with_notes_as(&view, running)
-                    .map(|_| ())
-                    .map_err(|error| error.to_string()),
-            ),
-            (
-                "identity",
-                job_authority_identity(&view, running)
-                    .map(|_: Option<JobAuthorityIdentity>| ())
-                    .map_err(|error| error.to_string()),
-            ),
-        ];
-        for (what, result) in refusals {
-            let message = result.err().ok_or_else(|| format!("{what} {running}"))?;
-            assert!(
-                message.contains(running) && message.contains(pinned()),
-                "{what} {running}: {message}"
-            );
-        }
-    }
-    assert!(expected_with_notes(&view).is_err());
     Ok(())
 }
 
@@ -298,16 +258,15 @@ fn schedule_and_workflow_dispatch_are_named_in_a_note_and_not_in_the_inventory()
 fn the_fixture_the_host_connects_with_is_what_velnor_gen_writes() -> TestResult {
     let view = enabled("full_run = \"off\"\n", None, &[CI])?;
     let (files, _) = generated(&view)?;
-    let identity = job_authority_identity(&view, pinned())?.ok_or("no identity")?;
+    let digest = digest(&view, "linux-arm64")?;
+    let running = running(Some(Platform::LinuxArm64), &digest);
+    let identity = job_authority_identity(&view, running)?.ok_or("no identity")?;
     let wanted = [
         (
             "inventory.json",
             files[&JOB_AUTHORITY_INVENTORY_PATH].clone(),
         ),
-        (
-            "identity.txt",
-            format!("{}\n{}\n", identity.source_sha, identity.artifact_sha256),
-        ),
+        ("identity.txt", identity.lines()),
     ];
     let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../velnor-runner-cli/tests/data/job-authority");

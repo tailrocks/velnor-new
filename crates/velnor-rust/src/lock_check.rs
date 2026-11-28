@@ -78,6 +78,19 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     Ok(())
 }
 
+pub fn check_generator_binary(
+    bytes: &[u8],
+    running: RunningGenerator<'_>,
+) -> Result<(), LockError> {
+    check_generator_entry(bytes, running)?;
+    binary_entry(&parse(bytes)?)?.map(drop).ok_or_else(|| {
+        LockError::new(format!(
+            "the lock lists no velnor-gen binary digests; {}",
+            repin_hint()
+        ))
+    })
+}
+
 type BinaryEntry<'a> = (String, &'a BTreeMap<String, String>);
 
 fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {

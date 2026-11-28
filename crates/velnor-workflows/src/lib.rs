@@ -26,6 +26,7 @@ mod matrix_runner;
 mod plan;
 mod raw;
 mod secret_events;
+mod secret_reads;
 mod triggers;
 mod trusted;
 mod workflow_run;
@@ -41,4 +42,5 @@ pub use plan::{
     LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
     TrustedPool, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };
+pub use secret_reads::{reads_secret_in_condition, reads_secret_in_text};
 pub use wrappers::{Invoked, invoked};

@@ -130,8 +130,10 @@ pub(super) fn valid_permission(value: &str) -> bool {
     matches!(
         value,
         "actions"
+            | "artifact-metadata"
             | "attestations"
             | "checks"
+            | "code-quality"
             | "contents"
             | "deployments"
             | "discussions"
@@ -144,6 +146,7 @@ pub(super) fn valid_permission(value: &str) -> bool {
             | "repository-projects"
             | "security-events"
             | "statuses"
+            | "vulnerability-alerts"
     )
 }
 

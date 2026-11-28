@@ -17,7 +17,9 @@ use crate::io::unique_id;
 use crate::lock_archive::archive_lock_at;
 use crate::release_symlink::git;
 
+mod job_authority_identity;
 mod job_authority_inventory;
+mod job_authority_secrets;
 
 const WORKFLOW: &str = ".github/workflows/ci.yml";
 const CARGO: &str = "#!/bin/sh\ncat \"$(dirname \"$0\")/metadata.json\"\n";

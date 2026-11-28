@@ -6,6 +6,8 @@ use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, RepoPath, RepoView};
 
 use super::JobAuthorityError;
 
+const MAX_WORKFLOWS: usize = 32;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Raw {
@@ -19,6 +21,12 @@ pub(super) fn workflows(view: &RepoView) -> Result<Option<Vec<RepoPath>>, JobAut
     let invalid = |reason: String| JobAuthorityError::Config(reason);
     let text = std::str::from_utf8(bytes).map_err(|_| invalid("not UTF-8 text".to_owned()))?;
     let raw: Raw = toml::from_str(text).map_err(|error| invalid(error.message().to_owned()))?;
+    if raw.workflows.len() > MAX_WORKFLOWS {
+        return Err(JobAuthorityError::TooManyWorkflows {
+            listed: raw.workflows.len(),
+            limit: MAX_WORKFLOWS,
+        });
+    }
     let mut paths: Vec<RepoPath> = Vec::with_capacity(raw.workflows.len());
     for value in raw.workflows {
         let path = RepoPath::new(value.as_str())

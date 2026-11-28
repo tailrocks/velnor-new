@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{METADATA_PATH, metadata_file};
 
-use crate::{GenerateError, expected_with_notes_as};
+use crate::{GenerateError, expected_with_notes};
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
@@ -30,10 +30,4 @@ pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Gen
 #[must_use]
 pub fn build_commit() -> &'static str {
     option_env!("VELNOR_COMMIT").unwrap_or("unknown")
-}
-
-pub fn expected_with_notes(
-    view: &RepoView,
-) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
-    expected_with_notes_as(view, build_commit())
 }

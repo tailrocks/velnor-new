@@ -30,7 +30,7 @@ use crate::cli::{Cli, Command, ReleaseCommand};
 use crate::{Drift, JobAuthorityIdentity, check_tag, job_authority_identity, notes, plan_generate};
 pub use check::{Cargo, check_metadata};
 pub use error::Error;
-use pin::{check_lock, pin_helper};
+use pin::{check_lock, pin_helper, with_running};
 pub use pin::{lock_root, retry_download, write_lock};
 pub use read::{add_manifests, read_files, view_of};
 use read::{read_tracked, read_view, regular_file};
@@ -133,7 +133,7 @@ pub fn main() -> Exit {
                 }
             }
             if let Some(identity) = identity {
-                println!("{}\n{}", identity.source_sha, identity.artifact_sha256);
+                print!("{}", identity.lines());
             }
             Exit::SUCCESS
         }
@@ -197,8 +197,10 @@ fn execute(cli: &Cli) -> Result<(Vec<Drift>, Option<JobAuthorityIdentity>), Erro
         return Err(Error::Foreign(path.clone()));
     }
     let identity = if cli.command == Command::Generate {
+        let identity = with_running(|running| job_authority_identity(&view, running))?
+            .map_err(Error::Generate)?;
         apply(&root, &expected, &drifts)?;
-        job_authority_identity(&view, crate::build_commit()).map_err(Error::Generate)?
+        identity
     } else {
         None
     };

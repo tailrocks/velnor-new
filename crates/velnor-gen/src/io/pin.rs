@@ -107,13 +107,9 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
     replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())
 }
 
-/// `check`: the lock's `[velnor-gen]` entry must agree with the lock and with this binary; with
-/// `online`, the whole lock must also match what its release publishes.
-pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
-    let Some(path) = regular_file(root, &LOCK_PATH)? else {
-        return Ok(());
-    };
-    let bytes = fs::read(&path).map_err(|e| Error::File(path.clone(), e))?;
+pub(super) fn with_running<T>(
+    use_running: impl FnOnce(RunningGenerator<'_>) -> T,
+) -> Result<T, Error> {
     let commit = crate::build_commit();
     let sha256 = if commit == "unknown" {
         None
@@ -122,13 +118,22 @@ pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
         let image = fs::read(&exe).map_err(|e| Error::File(exe.clone(), e))?;
         Some(sha256_hex(&image))
     };
-    let running = RunningGenerator {
+    Ok(use_running(RunningGenerator {
         version: env!("CARGO_PKG_VERSION"),
         commit,
         platform: running_platform(),
         sha256: sha256.as_deref(),
+    }))
+}
+
+/// `check`: the lock's `[velnor-gen]` entry must agree with the lock and with this binary; with
+/// `online`, the whole lock must also match what its release publishes.
+pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
+    let Some(path) = regular_file(root, &LOCK_PATH)? else {
+        return Ok(());
     };
-    check_generator_entry(&bytes, running).map_err(Error::Lock)?;
+    let bytes = fs::read(&path).map_err(|e| Error::File(path.clone(), e))?;
+    with_running(|running| check_generator_entry(&bytes, running))?.map_err(Error::Lock)?;
     if online {
         let version = lock_version(&bytes).map_err(Error::Lock)?;
         let sums = download(root, &sums_url(&version))?;

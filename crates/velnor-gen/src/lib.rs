@@ -23,15 +23,14 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use entry::{
-    build_commit, expected_files, expected_with_notes, generated_files, generated_with_notes,
-};
+pub use entry::{build_commit, expected_files, generated_files, generated_with_notes};
 pub use error::{ExternalWorkflowError, GenerateError};
 pub use external::external_skips;
 pub use helper_gate::require_compatible;
 pub use image_error::ImageError;
 pub use job_authority::{
     Identity as JobAuthorityIdentity, JobAuthorityError, identity_of as job_authority_identity,
+    inventory_summary as job_authority_summary,
 };
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use tag::check_tag;
@@ -56,9 +55,8 @@ pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
-pub fn expected_with_notes_as(
+pub fn expected_with_notes(
     view: &RepoView,
-    running: &str,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
     let excluded = velnor_rust::excluded_lock_findings(view)?;
@@ -94,7 +92,7 @@ pub fn expected_with_notes_as(
     } else {
         (Vec::new(), Vec::new())
     };
-    let inventory_notes = job_authority::emit(view, &facts, helper, running, &mut files)
+    let inventory_notes = job_authority::emit(view, &facts, helper, &mut files)
         .map_err(GenerateError::JobAuthority)?;
     let mut notes = advice::expected_notes(&facts);
     notes.extend(facts.private_suggestion);

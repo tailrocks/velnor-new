@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "generator_source_sha": "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36",
-  "inventory_sha256": "f74fcca090bc30618de6792a9dd8cf8ab73784399bdae5cf1d29a5a521d01abf",
+  "inventory_sha256": "3cf290a3599393cbaba074a5912ff00b52715b6a95c7590e998b7070010b526d",
   "workflows": [
     {
       "path": ".github/workflows/ci.yml",
-      "content_sha256": "9076dd0f8fd29d683d7200676f1042f63dfd752b8ae4795b26f7d10d7fbdacb8",
+      "content_sha256": "333519a745f9960354d5cb61731a5b3f0e8d64500feb41b6a432d6f9e67a3f34",
       "calls": [],
       "jobs": [
         {
