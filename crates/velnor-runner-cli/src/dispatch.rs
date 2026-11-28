@@ -17,6 +17,7 @@ use crate::state_directory::user_home;
 mod connect;
 mod connect_authority;
 mod connect_config;
+mod connect_error;
 #[cfg(test)]
 mod connect_tests;
 mod connection_state;

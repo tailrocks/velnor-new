@@ -46,6 +46,10 @@ path = "tests/launch_mode_public.rs"
 name = "home_resolution_public"
 path = "tests/home_resolution_public.rs"
 
+[[test]]
+name = "outdated_policy_public"
+path = "tests/outdated_policy_public.rs"
+
 [[bin]]
 name = "velnor-host"
 path = "src/main.rs"

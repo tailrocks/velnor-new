@@ -32,7 +32,7 @@ pub(super) enum Schema {
 
 pub(super) struct Case {
     pub(super) jit_claim: Option<crate::journal::RunnerJitClaim>,
-    directory: tempfile::TempDir,
+    pub(super) directory: tempfile::TempDir,
     pub(super) fixture: FixtureDocker,
     pub(super) docker: Docker,
     pub(super) journal: Journal,

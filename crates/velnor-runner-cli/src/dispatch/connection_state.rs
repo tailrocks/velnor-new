@@ -35,7 +35,7 @@ pub(super) fn read_host(state: &Path) -> Result<Option<HostConfig>, ConnectError
     }
     HostConfig::parse(&raw)
         .map(Some)
-        .map_err(|_| ConnectError::Config)
+        .map_err(ConnectError::from_config)
 }
 
 pub(super) fn store_token<R, F>(

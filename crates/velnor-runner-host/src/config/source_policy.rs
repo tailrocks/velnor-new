@@ -107,7 +107,6 @@ impl SourcePolicy {
             return if self.branches.is_empty()
                 && self.tag_prefixes.is_empty()
                 && self.pull_request_rules.is_empty()
-                && !has_event(WorkflowEvent::PullRequest)
             {
                 Ok(())
             } else {

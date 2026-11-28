@@ -26,7 +26,7 @@ pub(super) fn apply(
         let policy_json = read_authority_input(path)?;
         candidate = candidate
             .with_job_authority_policy_json(&connection.connection_id, &policy_json)
-            .map_err(|_| ConnectError::Config)?;
+            .map_err(ConnectError::from_config)?;
     } else if let Some(path) = request.job_authority_inventory {
         let (Some(source_sha), Some(artifact_sha256), Some(generation)) = (
             request.job_authority_generator_source_sha,
