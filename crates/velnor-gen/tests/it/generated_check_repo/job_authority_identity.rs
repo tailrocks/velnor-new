@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::fmt::Write as _;
 use std::os::unix::fs::PermissionsExt;
 
 use velnor_gen::{
@@ -12,7 +13,7 @@ use velnor_gen::{
 use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoPath, RepoView};
 use velnor_rust::{LOCK_PATH, RunningGenerator};
 
-use super::job_authority_inventory::{CI, HELPER, enabled, pinned};
+use super::job_authority_inventory::{CI, GATED, HELPER, enabled, pinned};
 use super::{Fixture, fixture, git, text};
 use crate::facts::TestResult;
 use crate::lock_archive::archive_lock_at;
@@ -143,6 +144,33 @@ fn more_workflows_than_the_host_accepts_are_refused_and_the_limit_itself_is_not(
         at,
         GenerateError::JobAuthority(JobAuthorityError::NotGenerated(_))
     ));
+    Ok(())
+}
+
+fn jobs_listed(count: usize) -> Result<RepoView, Box<dyn Error>> {
+    let mut workflows = "[[workflow]]\nfile = \"gated\"\nname = \"Gated\"\n\n[workflow.on.push]\nbranches = [\"main\"]\n".to_owned();
+    for index in 0..count {
+        write!(
+            workflows,
+            "\n[[workflow.job]]\nid = \"j{index:04}\"\npermissions = {{ contents = \"read\" }}\n\n[[workflow.job.step]]\nname = \"Run\"\nrun = \"echo ok\"\n"
+        )?;
+    }
+    enabled("full_run = \"off\"\n", Some(&workflows), &[GATED])
+}
+
+#[test]
+fn more_jobs_than_the_host_accepts_are_refused_and_the_limit_itself_is_not() -> TestResult {
+    let limit = velnor_model::JOB_AUTHORITY_MAX_JOBS;
+    let over = expected_with_notes(&jobs_listed(limit + 1)?)
+        .err()
+        .ok_or("accepted")?;
+    assert!(matches!(
+        over,
+        GenerateError::JobAuthority(JobAuthorityError::TooManyJobs { listed, limit: max })
+            if listed == limit + 1 && max == limit
+    ));
+    let (files, _) = expected_with_notes(&jobs_listed(limit)?)?;
+    assert!(files.contains_key(&JOB_AUTHORITY_INVENTORY_PATH));
     Ok(())
 }
 

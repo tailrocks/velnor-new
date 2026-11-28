@@ -20,7 +20,7 @@ pub(crate) struct TestInventoryContext {
 struct TestInventoryJob {
     root_path: String,
     workflow_path: String,
-    job_key: &'static str,
+    job_key: String,
     role: &'static str,
     contexts: Vec<TestInventoryContext>,
     permissions_declared: bool,
@@ -56,13 +56,14 @@ struct TestInventoryEnvelope<'a> {
 }
 
 pub(super) fn inventory_json_for_contexts(contexts: &[TestInventoryContext]) -> TestResult<String> {
-    inventory_json_of(contexts, &BTreeMap::from([("contents", "read")]), 1)
+    inventory_json_of(contexts, &BTreeMap::from([("contents", "read")]), 1, 1)
 }
 
 pub(super) fn inventory_json_of(
     contexts: &[TestInventoryContext],
     permissions: &BTreeMap<&'static str, &'static str>,
     count: usize,
+    job_total: usize,
 ) -> TestResult<String> {
     let workflows: Vec<TestInventoryWorkflow> = (0..count)
         .map(|index| {
@@ -75,20 +76,27 @@ pub(super) fn inventory_json_of(
                 path: path.clone(),
                 content_sha256: "a".repeat(64),
                 calls: Vec::new(),
-                jobs: vec![TestInventoryJob {
-                    root_path: path.clone(),
-                    workflow_path: path,
-                    job_key: "build",
-                    role: "verification",
-                    contexts: contexts.to_vec(),
-                    permissions_declared: true,
-                    permissions: permissions.clone(),
-                    secrets: Vec::new(),
-                    environments: Vec::new(),
-                    condition_sha256: None,
-                    concurrency: None,
-                    needs: Vec::new(),
-                }],
+                jobs: (index..job_total)
+                    .step_by(count)
+                    .map(|job| TestInventoryJob {
+                        root_path: path.clone(),
+                        workflow_path: path.clone(),
+                        job_key: if job == 0 {
+                            "build".to_owned()
+                        } else {
+                            format!("build{job:04}")
+                        },
+                        role: "verification",
+                        contexts: contexts.to_vec(),
+                        permissions_declared: true,
+                        permissions: permissions.clone(),
+                        secrets: Vec::new(),
+                        environments: Vec::new(),
+                        condition_sha256: None,
+                        concurrency: None,
+                        needs: Vec::new(),
+                    })
+                    .collect(),
             }
         })
         .collect();

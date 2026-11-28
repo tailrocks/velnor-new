@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use serde_json::Value;
-use velnor_gen::{Drift, drift, expected_with_notes, job_authority_identity};
+use velnor_gen::{Drift, drift, expected_over, expected_with_notes, job_authority_identity};
 use velnor_model::{
     JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoPath, RepoView,
 };
-use velnor_rust::LOCK_PATH;
+use velnor_rust::{LOCK_PATH, sha256_hex};
 
 use super::job_authority_identity::{digest, running};
 use crate::facts::TestResult;
@@ -176,6 +176,46 @@ fn check_tracks_the_committed_inventory_byte_for_byte() -> TestResult {
     assert!(
         stale.contains(&Drift::Stale(JOB_AUTHORITY_INVENTORY_PATH)),
         "{stale:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_inventory_hashes_the_committed_bytes_of_a_crlf_workflow() -> TestResult {
+    let view = enabled("full_run = \"off\"\n", None, &[CI])?;
+    let (files, _) = generated(&view)?;
+    let lf = &files[&RepoPath::new(CI)?];
+    let crlf = lf.replace('\n', "\r\n").into_bytes();
+    let mut on_disk = BTreeMap::from([(RepoPath::new(CI)?, crlf.clone())]);
+    let (files, _) = expected_over(&view, &on_disk)?;
+    let hashed = |files: &BTreeMap<RepoPath, String>| -> Result<String, Box<dyn Error>> {
+        Ok(inventory(files)?["workflows"][0]["content_sha256"]
+            .as_str()
+            .ok_or("content_sha256")?
+            .to_owned())
+    };
+    assert_eq!(hashed(&files)?, sha256_hex(&crlf));
+    assert_ne!(hashed(&files)?, sha256_hex(lf.as_bytes()));
+    on_disk.insert(
+        JOB_AUTHORITY_INVENTORY_PATH,
+        files[&JOB_AUTHORITY_INVENTORY_PATH].clone().into_bytes(),
+    );
+    let none = BTreeSet::new();
+    let ours = |drifts: Vec<Drift>| -> Vec<Drift> {
+        drifts
+            .into_iter()
+            .filter(|drift| {
+                let path = drift.path();
+                *path == JOB_AUTHORITY_INVENTORY_PATH || path.as_str() == CI
+            })
+            .collect()
+    };
+    assert_eq!(ours(drift(&files, &on_disk, &none)), Vec::<Drift>::new());
+    let (lf_files, _) = generated(&view)?;
+    let changed = drift(&lf_files, &on_disk, &none);
+    assert!(
+        changed.contains(&Drift::Changed(JOB_AUTHORITY_INVENTORY_PATH)),
+        "{changed:?}"
     );
     Ok(())
 }

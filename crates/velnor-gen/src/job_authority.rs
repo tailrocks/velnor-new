@@ -10,9 +10,10 @@ mod triggers;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    HelperRelease, JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoFacts,
-    RepoPath, RepoView,
+    HelperRelease, JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, JOB_AUTHORITY_MAX_JOBS,
+    Platform, RepoFacts, RepoPath, RepoView,
 };
+use velnor_render::lf_normalized;
 use velnor_rust::{LOCK_PATH, RunningGenerator, check_generator_binary, detect};
 
 pub use error::JobAuthorityError;
@@ -87,6 +88,7 @@ pub(crate) fn emit(
     view: &RepoView,
     facts: &RepoFacts,
     helper: Option<&HelperRelease>,
+    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
     files: &mut BTreeMap<RepoPath, String>,
 ) -> Result<Vec<String>, JobAuthorityError> {
     let Some(paths) = config::workflows(view)? else {
@@ -101,7 +103,18 @@ pub(crate) fn emit(
             .ok_or_else(|| JobAuthorityError::NotGenerated(path.clone()))?;
         let (jobs, omitted) = jobs::inventory_jobs(&path, text, &facts.config.default_branch)?;
         notes.extend(omitted);
-        workflows.push(Workflow::new(&path, text, jobs));
+        let committed = on_disk
+            .get(&path)
+            .filter(|have| lf_normalized(have).as_ref() == text.as_bytes())
+            .map_or_else(|| text.as_bytes(), Vec::as_slice);
+        workflows.push(Workflow::new(&path, committed, jobs));
+    }
+    let listed: usize = workflows.iter().map(Workflow::job_count).sum();
+    if listed > JOB_AUTHORITY_MAX_JOBS {
+        return Err(JobAuthorityError::TooManyJobs {
+            listed,
+            limit: JOB_AUTHORITY_MAX_JOBS,
+        });
     }
     let inventory = Inventory::new(source_sha, workflows)?;
     files.insert(JOB_AUTHORITY_INVENTORY_PATH, inventory.render()?);

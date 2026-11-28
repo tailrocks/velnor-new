@@ -17,6 +17,7 @@ pub const JOB_AUTHORITY_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/j
 pub const JOB_AUTHORITY_INVENTORY_PATH: RepoPath =
     RepoPath::from_static(".velnor/job-authority-inventory.json");
 pub const JOB_AUTHORITY_MAX_WORKFLOWS: usize = 32;
+pub const JOB_AUTHORITY_MAX_JOBS: usize = 512;
 pub const RELEASE_PLZ_FILE: &str = "release-plz.toml";
 /// Recorded sample checkouts: data under this folder, never roots of the checkout that holds it.
 pub const SAMPLES: &str = "generator/samples";

@@ -15,6 +15,7 @@ pub enum JobAuthorityError {
     NotLinux(Option<&'static str>),
     Lock(LockError),
     TooManyWorkflows { listed: usize, limit: usize },
+    TooManyJobs { listed: usize, limit: usize },
     CommitMismatch { running: String, pinned: String },
     Workflow(RepoPath, String),
     Render(String),
@@ -48,6 +49,10 @@ impl fmt::Display for JobAuthorityError {
             Self::TooManyWorkflows { listed, limit } => write!(
                 f,
                 "{JOB_AUTHORITY_CONFIG_PATH} lists {listed} workflows, but velnor-host accepts at most {limit}"
+            ),
+            Self::TooManyJobs { listed, limit } => write!(
+                f,
+                "the listed workflows hold {listed} jobs, but velnor-host accepts at most {limit} in the job-authority inventory"
             ),
             Self::CommitMismatch { running, pinned } => write!(
                 f,

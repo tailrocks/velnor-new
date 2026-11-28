@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{METADATA_PATH, metadata_file};
 
-use crate::{GenerateError, expected_with_notes};
+use crate::{GenerateError, expected_over, expected_with_notes};
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
@@ -15,7 +15,14 @@ pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Ge
 pub fn generated_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
-    let (mut files, notes) = expected_with_notes(view)?;
+    generated_over(view, &BTreeMap::new())
+}
+
+pub(crate) fn generated_over(
+    view: &RepoView,
+    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
+    let (mut files, notes) = expected_over(view, on_disk)?;
     files.insert(
         METADATA_PATH,
         metadata_file(view).map_err(GenerateError::Metadata)?,

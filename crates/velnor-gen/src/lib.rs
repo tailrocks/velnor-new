@@ -57,6 +57,13 @@ pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 pub fn expected_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
+    expected_over(view, &BTreeMap::new())
+}
+
+pub fn expected_over(
+    view: &RepoView,
+    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
     let excluded = velnor_rust::excluded_lock_findings(view)?;
     if let Some(finding) = excluded.iter().find(|finding| finding.refusal) {
@@ -91,7 +98,7 @@ pub fn expected_with_notes(
     } else {
         (Vec::new(), Vec::new())
     };
-    let inventory_notes = job_authority::emit(view, &facts, helper, &mut files)
+    let inventory_notes = job_authority::emit(view, &facts, helper, on_disk, &mut files)
         .map_err(GenerateError::JobAuthority)?;
     let mut notes = advice::expected_notes(&facts);
     notes.extend(facts.private_suggestion);
@@ -117,7 +124,7 @@ pub fn plan_generate(
     engine_configured: bool,
     out: &mut dyn Write,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
-    let (expected, notes) = generated_with_notes(view)?;
+    let (expected, notes) = entry::generated_over(view, on_disk)?;
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }

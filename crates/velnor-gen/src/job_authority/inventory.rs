@@ -102,10 +102,14 @@ impl Job {
 }
 
 impl Workflow {
-    pub(super) fn new(path: &RepoPath, text: &str, jobs: Vec<Job>) -> Self {
+    pub(super) fn job_count(&self) -> usize {
+        self.jobs.len()
+    }
+
+    pub(super) fn new(path: &RepoPath, committed: &[u8], jobs: Vec<Job>) -> Self {
         Self {
             path: path.to_string(),
-            content_sha256: sha256_hex(text.as_bytes()),
+            content_sha256: sha256_hex(committed),
             calls: Vec::new(),
             jobs,
         }
