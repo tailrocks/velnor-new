@@ -88,6 +88,7 @@ impl HostConfig {
     }
 
     pub fn parse_draft(text: &str) -> Result<Self, HostError> {
+        job_authority::require_current_toml_policies(text)?;
         let mut config: Self = toml::from_str(text).map_err(|_| HostError::Config)?;
         for connection in &mut config.connections {
             connection.canonicalize()?;

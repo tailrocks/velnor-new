@@ -144,7 +144,7 @@ fn public_repository_mode_matches_the_workflow_base_branches() -> TestResult<()>
     Ok(())
 }
 
-const BRANCH_HOST_TOML: &str = "schema = 2\n\
+const HOST_TOML_HEAD: &str = "schema = 2\n\
 [[connections]]\n\
 connection_id = \"lab\"\n\
 repository_id = 42\n\
@@ -153,13 +153,18 @@ credential_ref = \"keychain:com.tailrocks.velnor.host/lab\"\n\
 [connections.scale_set]\n\
 name = \"velnor-mac\"\n\
 labels = [\"velnor\", \"velnor-mac\"]\n\
-[connections.source_policy]\n\
-mode = \"branch_restricted\"\n\
+[connections.source_policy]\n";
+const BRANCH_POLICY_TOML: &str = "mode = \"branch_restricted\"\n\
 branches = [\"main\"]\n\
 tag_prefixes = []\n\
 events = [\"pull_request\"]\n\
-pull_request_rules = [{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }]\n\
-[host]\n\
+pull_request_rules = [{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }]\n";
+const REPOSITORY_POLICY_TOML: &str = "mode = \"repository\"\n\
+branches = []\n\
+tag_prefixes = []\n\
+events = [\"pull_request\"]\n\
+pull_request_rules = []\n";
+const HOST_TOML_TAIL: &str = "[host]\n\
 launch_mode = \"rust-runner\"\n\
 max_jobs = 1\n\
 [host.resources]\n\
@@ -172,6 +177,10 @@ operational_memory_reserve_bytes = 1073741824\n\
 context = \"orbstack\"\n\
 platform = \"linux/arm64\"\n\
 endpoint = \"unix:///var/run/docker.sock\"\n";
+
+fn host_toml(policy: &str) -> String {
+    format!("{HOST_TOML_HEAD}{policy}{HOST_TOML_TAIL}")
+}
 
 fn reseal(policy_json: &str) -> TestResult<String> {
     let hash_start = policy_json
@@ -206,7 +215,7 @@ fn same_repository_admission(policy_json: &str) -> TestResult<String> {
 #[test]
 fn public_branch_restricted_connection_refuses_a_rule_free_pull_request_context() -> TestResult<()>
 {
-    let config = HostConfig::parse_draft(BRANCH_HOST_TOML)?;
+    let config = HostConfig::parse_draft(&host_toml(BRANCH_POLICY_TOML))?;
     let id = ConnectionId::parse("lab")?;
     let connection = config.connection(&id).ok_or("connection lab")?;
     let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
@@ -249,4 +258,77 @@ fn public_repository_mode_pull_request_policy_stays_rule_free() {
         ),
         Err(HostError::Config)
     ));
+}
+
+fn repository_config_and_policy() -> TestResult<(HostConfig, ConnectionId, String)> {
+    let config = HostConfig::parse_draft(&host_toml(REPOSITORY_POLICY_TOML))?;
+    let id = ConnectionId::parse("lab")?;
+    let connection = config.connection(&id).ok_or("connection lab")?;
+    let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+        event: "pull_request",
+        branch_filters: Vec::new(),
+        tag_filters: Vec::new(),
+        pull_request_base_branches: vec!["main"],
+    }])?;
+    let genuine =
+        build_job_authority_policy_json(connection, &inventory, SOURCE_SHA, &"d".repeat(64), 1)?;
+    Ok((config, id, genuine))
+}
+
+#[test]
+fn public_repository_mode_refuses_a_trusted_publication_pull_request_context() -> TestResult<()> {
+    let (config, id, genuine) = repository_config_and_policy()?;
+    assert!(
+        config
+            .with_job_authority_policy_json(&id, &reseal(&genuine)?)
+            .is_ok()
+    );
+    let trusted = genuine
+        .replace(
+            "\"role\":\"verification\"",
+            "\"role\":\"trusted_publication\"",
+        )
+        .replace(
+            "\"condition_sha256\":null",
+            &format!("\"condition_sha256\":\"{}\"", "a".repeat(64)),
+        )
+        .replace(
+            "\"concurrency\":null",
+            "\"concurrency\":{\"scope\":\"job\",\"group\":\"g\",\"cancel_in_progress\":\"false\"}",
+        );
+    assert_ne!(trusted, genuine);
+    assert_eq!(
+        config
+            .with_job_authority_policy_json(&id, &reseal(&trusted)?)
+            .err(),
+        Some(HostError::Config)
+    );
+    Ok(())
+}
+
+#[test]
+fn public_outdated_job_authority_policy_asks_for_regeneration() -> TestResult<()> {
+    let (config, id, genuine) = repository_config_and_policy()?;
+    let outdated = genuine.replace("\"schema_version\":2", "\"schema_version\":1");
+    assert_ne!(outdated, genuine);
+    assert_eq!(
+        config
+            .with_job_authority_policy_json(&id, &reseal(&outdated)?)
+            .err(),
+        Some(HostError::JobAuthorityPolicyOutdated)
+    );
+    assert!(
+        HostError::JobAuthorityPolicyOutdated
+            .to_string()
+            .contains("regenerate the job-authority policy")
+    );
+    let persisted = format!(
+        "{}[[job_authority_policies]]\nschema_version = 1\npull_request_rules = []\n",
+        host_toml(REPOSITORY_POLICY_TOML)
+    );
+    assert_eq!(
+        HostConfig::parse_draft(&persisted).err(),
+        Some(HostError::JobAuthorityPolicyOutdated)
+    );
+    Ok(())
 }

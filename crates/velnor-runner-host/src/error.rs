@@ -171,6 +171,11 @@ pub enum HostError {
     #[error("invalid config")]
     Config,
 
+    #[error(
+        "the job-authority policy is from an older schema; regenerate the job-authority policy"
+    )]
+    JobAuthorityPolicyOutdated,
+
     #[error("scale set selector does not match the runner platform")]
     PlatformSelector,
 
@@ -290,6 +295,7 @@ impl HostError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
+            Self::JobAuthorityPolicyOutdated => "job_authority_policy_outdated",
             Self::PlatformSelector => "platform_selector",
             Self::DeveloperImages => "developer_images",
             Self::Path => "path",

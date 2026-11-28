@@ -3,6 +3,7 @@
 
 mod host_config;
 mod inventory_bridge;
+mod schema_probe;
 
 mod validate;
 
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{ConnectionId, PullRequestRule, WorkflowEvent};
+pub(crate) use schema_probe::{require_current_json_policy, require_current_toml_policies};
 pub(crate) use validate::validate_policies;
 
 pub(crate) struct JobAuthorityLookup<'a> {
@@ -24,7 +26,7 @@ pub(crate) struct JobAuthorityLookup<'a> {
     pub(crate) pull_request: Option<&'a PullRequestRule>,
 }
 
-const POLICY_SCHEMA: u32 = 1;
+const POLICY_SCHEMA: u32 = 2;
 const MAX_POLICIES: usize = 32;
 const MAX_WORKFLOWS: usize = 32;
 const MAX_JOBS: usize = 512;

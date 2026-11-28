@@ -234,7 +234,7 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
                             .iter()
                             .filter(|context| context.event == WorkflowEvent::PullRequest)
                             .any(|context| match &context.pull_request {
-                                Some(PullRequestAdmission::SameRepository { .. }) => false,
+                                Some(PullRequestAdmission::SameRepository { .. }) => true,
                                 Some(PullRequestAdmission::Rules(rules)) => {
                                     rules.iter().any(|rule| {
                                         rule.number.is_none()

@@ -202,7 +202,14 @@ pub(super) fn merge_groups(test: &str) -> TestResult<()> {
     Ok(())
 }
 
-pub(super) fn repository_pull_requests(test: &str) -> TestResult<()> {
+#[test]
+fn rust_runner_controller_admits_same_repository_pull_requests_and_refuses_forks() -> TestResult<()>
+{
+    if let Some(root) = super::child_root() {
+        return super::child::run(&root);
+    }
+    let test =
+        "source::rust_runner_controller_admits_same_repository_pull_requests_and_refuses_forks";
     let mut world = World::new("T2c", 1, true)?;
     world.write_host_toml_text(&repository_pull_request_host_toml(&world.root)?)?;
     world.queue_message(41, &[pull_offer(1, 4001, 7, None)])?;

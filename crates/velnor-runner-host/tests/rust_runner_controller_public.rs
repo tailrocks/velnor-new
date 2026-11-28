@@ -73,17 +73,6 @@ fn rust_runner_controller_never_acquires_unapproved_source() -> TestResult<()> {
 }
 
 #[test]
-fn rust_runner_controller_admits_same_repository_pull_requests_and_refuses_forks() -> TestResult<()>
-{
-    match child_root() {
-        Some(root) => child::run(&root),
-        None => source::repository_pull_requests(
-            "rust_runner_controller_admits_same_repository_pull_requests_and_refuses_forks",
-        ),
-    }
-}
-
-#[test]
 fn rust_runner_controller_holds_slot_until_cleanup_proven() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),

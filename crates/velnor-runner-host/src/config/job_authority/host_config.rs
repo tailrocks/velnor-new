@@ -23,6 +23,7 @@ impl super::super::HostConfig {
             return Err(HostError::Config);
         }
 
+        super::require_current_json_policy(policy_json)?;
         let mut policy: ApprovedJobAuthorityPolicy =
             serde_json::from_str(policy_json).map_err(|_| HostError::Config)?;
         policy.canonicalize();

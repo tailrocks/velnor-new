@@ -45,7 +45,7 @@ fn document(calls: &Value, jobs: &[Value]) -> Value {
 
 fn unsealed(calls: &Value, jobs: &[Value]) -> Value {
     json!({
-        "schema_version": 1, "connection_id": "local", "binding_sha256": CONTENT,
+        "schema_version": 2, "connection_id": "local", "binding_sha256": CONTENT,
         "generation": 1, "policy_sha256": CONTENT,
         "generator": {"source_sha": SHA, "artifact_sha256": CONTENT},
         "workflows": [{
