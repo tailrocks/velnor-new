@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::parse;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::rust_runner::machine::failure;
-use crate::rust_runner::{GIB, GUEST_CAP_RECORD, RustRunnerLauncher, orb, shape};
+use crate::rust_runner::{GIB, GUEST_CAP_RECORD, GUEST_GEN, RustRunnerLauncher, orb, shape};
 
 const CAP_PROBE_FILE: &str = "/var/lib/velnor/.cap-probe";
-const CAP_PROBE: &str = r#"fallocate -l "$1" -- "$2"; status=$?; rm -f -- "$2"; exit $status"#;
-const RECORD_WRITER: &str = r#"printf '%s\n' "$1" > "$2.new" && mv -f "$2.new" "$2""#;
-const QUOTA_REFUSALS: [&str; 2] = ["No space left on device", "Disk quota exceeded"];
+const CAP_PROBE: &str = r#"rm -f -- "$2"; (set -C; : > "$2") || exit 1; fallocate -l "$1" -- "$2"; status=$?; rm -f -- "$2"; exit $status"#;
+const RECORD_WRITER: &str =
+    r#"rm -f -- "$2.new" && (set -C; printf '%s\n' "$1" > "$2.new") && mv -fT -- "$2.new" "$2""#;
+const NO_SPACE: &str = "No space left on device";
+const QUOTA_EXCEEDED: &str = "Disk quota exceeded";
 
 impl RustRunnerLauncher {
     fn cap_record(&self) -> Result<String, HostError> {
@@ -27,15 +30,29 @@ impl RustRunnerLauncher {
         if recorded.success() && recorded.text.trim() == record {
             return Ok(());
         }
-        let over_cap = self.disk_cap_bytes().saturating_add(GIB).to_string();
-        let attempt = self.read(&["sh", "-c", CAP_PROBE, "sh", &over_cap, CAP_PROBE_FILE])?;
-        let enforced = !attempt.success()
-            && QUOTA_REFUSALS
-                .iter()
-                .any(|refusal| attempt.stderr.contains(refusal));
-        if !enforced {
+        let over_cap = self.disk_cap_bytes().saturating_add(GIB);
+        let attempt = self.read(&[
+            "sh",
+            "-c",
+            CAP_PROBE,
+            "sh",
+            &over_cap.to_string(),
+            CAP_PROBE_FILE,
+        ])?;
+        let quota = attempt.stderr.contains(QUOTA_EXCEEDED);
+        if attempt.success() || !(quota || attempt.stderr.contains(NO_SPACE)) {
             return Err(failure(RustRunnerFailure::CapProbe));
         }
+        if !quota && !self.has_room_for(over_cap)? {
+            return Err(failure(RustRunnerFailure::MachineShape));
+        }
         self.apply(&["sh", "-c", RECORD_WRITER, "sh", &record, GUEST_CAP_RECORD])
+    }
+
+    fn has_room_for(&self, probe: u64) -> Result<bool, HostError> {
+        let usage = self.read(&["btrfs", "filesystem", "usage", "-b", GUEST_GEN])?;
+        Ok(usage.success()
+            && parse::free_bytes(&usage.text)
+                .is_some_and(|free| free >= probe.saturating_add(probe)))
     }
 }

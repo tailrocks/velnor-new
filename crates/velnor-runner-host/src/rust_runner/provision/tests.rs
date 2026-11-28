@@ -4,12 +4,13 @@
 use std::collections::HashMap;
 
 use super::identity::{Databases, is_sole_identity, sudo_refused};
+use super::inside::refused_mounts;
 use super::job_dirs::removal_verdict;
 use super::parse::{self, Entry};
-use super::user::USER_HOME;
 use super::{ANCESTORS, CLOSED_DIRECTORIES, DIRECTORY, Layout, OPEN_DIRECTORIES, classify};
 use crate::error::RustRunnerFailure;
 use crate::rust_runner::GuestUser;
+use crate::rust_runner::shape::USER_HOME;
 
 fn entry(uid: u32, mode: u32, kind: &str) -> Entry {
     Entry {
@@ -134,7 +135,7 @@ fn command_lines_drop_blank_rows() {
 #[test]
 fn a_removal_that_fails_or_leaves_a_path_wedges_the_slot_and_an_orb_failure_does_not() {
     assert_eq!(removal_verdict(Some(0)), Ok(()));
-    for code in [70, 71] {
+    for code in [70, 71, 72] {
         assert_eq!(
             removal_verdict(Some(code)),
             Err(RustRunnerFailure::JobDirsWedged),
@@ -162,6 +163,8 @@ fn only_a_nologin_job_user_with_nonzero_ids_parses() {
         line("0", "1000", "/usr/sbin/nologin"),
         line("1000", "0", "/usr/sbin/nologin"),
         line("500", "501", "/bin/bash"),
+        "velnor-job:x:500:501::/etc:/usr/sbin/nologin\n".to_owned(),
+        "velnor-job:x:500:501::/:/usr/sbin/nologin\n".to_owned(),
         format!("other:x:500:501::{USER_HOME}:/usr/sbin/nologin\n"),
         format!(
             "{}root:x:0:0:root:/root:/bin/bash\n",
@@ -246,6 +249,20 @@ fn a_reserved_uid_or_gid_is_refused_although_nothing_else_holds_it() {
 }
 
 #[test]
+fn the_free_space_of_a_filesystem_usage_report_is_read_strictly() {
+    let report = "Overall:\n    Device size:\t\t 4000\n    Free (estimated):\t\t     3758255222784\t(min: 5)\n";
+    assert_eq!(parse::free_bytes(report), Some(3_758_255_222_784));
+    for bad in [
+        "",
+        "Free (estimated):\n",
+        "Free (estimated): lots\n",
+        "Free (statfs, df): 5\n",
+    ] {
+        assert_eq!(parse::free_bytes(bad), None, "{bad}");
+    }
+}
+
+#[test]
 fn only_the_exact_denial_of_sudo_counts() {
     assert!(sudo_refused(
         "User velnor-job is not allowed to run sudo on box.\n"
@@ -259,4 +276,19 @@ fn only_the_exact_denial_of_sudo_counts() {
     ] {
         assert!(!sudo_refused(report), "{report}");
     }
+}
+
+#[test]
+fn only_a_mount_inside_a_job_directory_may_sit_under_the_layout() {
+    let table = "/ btrfs\n/proc proc\n/var/lib/velnor btrfs\n/var/lib/velnor/tools btrfs\n/srv/velnor ext4\n/srv/velnor/gen/work btrfs\n/srv/velnor/gen/work/12 btrfs\n/srv/velnor/gen/work/12/tools btrfs\n/srv/velnor/gen/stage/9 tmpfs\n/var/lib/velnor-host tmpfs\n/mnt/x fuse.sshfs\n";
+    assert_eq!(
+        refused_mounts(table),
+        [
+            "/var/lib/velnor",
+            "/var/lib/velnor/tools",
+            "/srv/velnor",
+            "/srv/velnor/gen/work",
+            "/mnt/x"
+        ]
+    );
 }

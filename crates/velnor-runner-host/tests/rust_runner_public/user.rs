@@ -76,8 +76,13 @@ fn refused_guest_user(fixture: &Fixture) -> bool {
 
 type Account = (&'static str, &'static str, &'static str);
 
-fn unsound_ids() -> [Account; 7] {
+fn unsound_ids() -> [Account; 8] {
     [
+        (
+            "a home that is not the job home",
+            "velnor-job:x:777:778::/etc:/usr/sbin/nologin\n",
+            GOOD_GROUP,
+        ),
         (
             "uid 0",
             concat!(
@@ -175,7 +180,11 @@ fn unsound_accounts() -> Vec<Account> {
 
 #[test]
 fn rust_runner_refuses_a_job_user_that_could_do_more_than_run_jobs() -> Check {
-    let settings: [(&str, &str); 6] = [
+    let settings: [(&str, &str); 7] = [
+        (
+            "a system file group-owned by its gid",
+            "FAKE_GUEST_OWNED=/etc/shadow\n",
+        ),
         ("an extra group id", "FAKE_GUEST_GROUPS=500 27\n"),
         ("sudo", "FAKE_GUEST_GROUP_NAMES=velnor-job sudo\n"),
         ("adm", "FAKE_GUEST_GROUP_NAMES=velnor-job adm\n"),
@@ -235,5 +244,15 @@ fn rust_runner_refuses_a_job_user_with_any_sudo_privilege() -> Check {
         "# note\n#include /etc/other\nubuntu ALL=(ALL) NOPASSWD:ALL\n%sudo ALL=(ALL) ALL\n#778 ALL=(ALL) ALL\n",
     )?;
     other.launcher().ensure_machine()?;
+    Ok(())
+}
+
+#[test]
+fn rust_runner_accepts_the_files_a_job_leaves_where_jobs_write() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.configure(&format!(
+        "FAKE_GUEST_OWNED={HOME}/.cache;/srv/velnor/gen/work/1/out;/tmp/x;/var/tmp/y\n"
+    ))?;
+    fixture.launcher().ensure_machine()?;
     Ok(())
 }

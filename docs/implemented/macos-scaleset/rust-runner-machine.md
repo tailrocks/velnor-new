@@ -22,10 +22,10 @@ Inside the machine, as root, on every call of `ensure_machine`:
 
 - `fs.protected_hardlinks=1` and `fs.protected_symlinks=1`.
 - `nft`, `ip` and `btrfs` exist. The host installs `nftables` and `btrfs-progs` when one is missing and refuses the machine when a tool is still missing (`btrfs` clears the read-only flag of a subvolume in the startup sweep).
-- `/mnt/mac` does not exist, and `find /opt/orbstack-guest -type s` prints nothing.
-- `/opt/orbstack-guest/bin/mac uname` fails.
-- There is no mount of type `virtiofs`, `9p`, `fuse` or `fuse.*`. A machine created with a `--mount`, or one whose mount is still applied after its configuration dropped it, is refused.
-- The btrfs qgroup of the subvolume that holds `/srv/velnor/gen` has `max_referenced` equal to the cap.
+- There is no mount of type `virtiofs`, `9p`, `fuse` or `fuse.*`, and no mount of any type at or under `/var/lib/velnor` or `/srv/velnor`, except at or under a job directory (`gen/work/<n>`, `gen/stage/<n>`; the sweep and the removal handle those, see [Job directories](#job-directories)). A machine created with a `--mount`, one whose mount is still applied after its configuration dropped it, and one with a btrfs bind mount over the layout are refused. This check runs first, before any repair of the layout, so a refused machine is left as found.
+- `/mnt/mac` does not exist, and `find -H /opt/orbstack-guest -type s` prints nothing (`-H` follows a symlinked `/opt/orbstack-guest`).
+- `/opt/orbstack-guest/bin/mac uname` fails. The host runs it in one `sh -c` that prints a marker after the refusal and takes the refusal as proved only when that command exits 0 and printed the marker. An `orb` failure (a stopped machine, a transport error) prints no marker and proves nothing.
+- `/var/lib/velnor`, `/srv/velnor`, `gen`, `gen/work` and `gen/stage` are each in the btrfs subvolume that `gen`'s mount belongs to (`btrfs inspect-internal rootid` equals the mount's `subvolid`), and the qgroup of that subvolume has `max_referenced` equal to the cap. The subvolume of a path is not the subvolume of its mount: a nested subvolume at `gen` has its own, unlimited qgroup, so the host reads the id of each path itself and refuses the machine (`MachineShape`) when any differs.
 
 ## What the isolation flags do
 
@@ -52,9 +52,9 @@ The cap is `store_budget_gib + max_jobs * (job_limit_gib + job_slack_gib)`. With
 
 OrbStack enforces `--disk` as `max_referenced` on the qgroup of the machine's subvolume (`/sys/fs/btrfs/<fsid>/qgroups/0_<subvolid>/max_referenced`). `ensure_machine` reads that value on every call and requires it to equal the cap, so a machine whose cap differs from the configuration, or has none, is refused.
 
-What the qgroup counts is the data referenced by that subvolume. It does not count the data of a nested btrfs subvolume: any user can create one, and its qgroup has no limit. The cap therefore bounds the machine only together with the sandbox's own controls (the ioctl mask that refuses subvolume creation, the `st_dev` tripwire and the free-space floor of the sandbox). The sandbox is not part of the host, and this page makes no claim for it.
+What the qgroup counts is the data referenced by that subvolume. It does not count the data of a nested btrfs subvolume: any user can create one, and its qgroup has no limit. The host refuses a machine whose five layout paths are not all in the capped subvolume, but a job can still create a nested subvolume below `gen/work/<n>`. The cap therefore bounds the machine only together with the sandbox's own controls (the ioctl mask that refuses subvolume creation, the `st_dev` tripwire and the free-space floor of the sandbox). The sandbox is not part of the host, and this page makes no claim for it.
 
-The host records `orbstack=<version> cap=<bytes>` in `/var/lib/velnor/cap-probe` inside the machine. When that record differs, it runs a probe that asks `fallocate` for one GiB more than the cap, on `/var/lib/velnor/.cap-probe` (outside every root a job sees). The probe and the removal of its file run in one root `sh -c`, so the file is gone whatever the result. The probe passes only when `fallocate` fails and its stderr (the host keeps the stderr of every guest command it reads) says `No space left on device` or `Disk quota exceeded`; any other failure (a missing `fallocate`, an unsupported call, an `orb` error) refuses the machine. It then rewrites the record. An OrbStack update, or a resized machine, therefore reruns the probe.
+The host records `orbstack=<version> cap=<bytes>` in `/var/lib/velnor/cap-probe` inside the machine. When that record differs, it runs a probe that asks `fallocate` for one GiB more than the cap, on `/var/lib/velnor/.cap-probe` (outside every root a job sees). The probe and the removal of its file run in one root `sh -c`, so the file is gone whatever the result. The probe removes a symlink at its path first and creates the file exclusively, and the record is written the same way (a new file, then `mv -fT`), so neither follows a link planted at `.cap-probe` or `cap-probe.new`. The probe passes only when `fallocate` fails and its stderr (the host keeps the stderr of every guest command it reads) says `Disk quota exceeded`, or says `No space left on device` while `btrfs filesystem usage -b` reports `Free (estimated)` of at least twice the probe size: a full disk fails the same way and proves nothing about the cap, so an `ENOSPC` on a disk without that room refuses the machine (`MachineShape`). Any other failure (a missing `fallocate`, an unsupported call, an `orb` error) refuses it (`CapProbe`). It then rewrites the record. An OrbStack update, or a resized machine, therefore reruns the probe.
 
 ## Layout
 
@@ -88,12 +88,15 @@ useradd --system --user-group --no-create-home --home-dir <home>/velnor-job --sh
 
 - the uid and the gid are not 0 and the gid is not 27 (the `sudo` group);
 - its only group is its own (`id -G` is its gid, `id -Gn` is `velnor-job`), so it is in none of `sudo`, `adm` or `orbstack`;
-- its shell is `/usr/sbin/nologin` and its home is an absolute path;
+- its shell is `/usr/sbin/nologin` and its home is exactly `<home>/velnor-job`;
+- nothing outside that home owns it: `find / -xdev` for files of its uid or gid prints nothing, except under `/srv/velnor/gen`, `/tmp` and `/var/tmp` where jobs write. This refuses a gid that is the renamed `shadow` group (it owns `/etc/shadow`) or a uid that owns system files;
 - the uid is its alone: `getent passwd <uid>` and the full `getent passwd` name only `velnor-job` for that uid;
 - the gid is its alone: `getent group <gid>` names only `velnor-job` with no member, and no other group and no other account (as primary gid) uses it; this refuses a uid or gid shared with the default user or with `sudo`, which file permissions would treat as the same identity;
 - `sudo -n -l -U velnor-job` reports `User velnor-job is not allowed to run sudo on <host>.` and nothing else, with status 0. The host asks sudo for the resolved policy instead of searching the sudoers files for a name, so `ALL ALL=...`, `#<uid>`, `%#<gid>` and group rules count. A missing `sudo`, an error or any other report refuses the account.
 
 An existing user that fails one of these is refused, not edited.
+
+A machine whose root was ever compromised must be deleted, not re-checked. Every check here proves what is true now; none can prove that nothing was changed earlier (a replaced binary or library, a planted unit or kernel module). After a suspected escape, run `orb delete velnor`.
 
 ## Runner binary
 
@@ -111,7 +114,11 @@ The host store (the `Shared/velnor` folder of the macOS `Users` directory by def
 
 A job's work and stage dirs are inside the machine: the host removes `/srv/velnor/gen/work/<reservation>` and `/srv/velnor/gen/stage/<reservation>` inside the machine, as root, with `rm -rf`. It does not use `--one-file-system`, because that would leave a nested btrfs subvolume (which a job can create) and wedge every later cleanup. The removal checks that both paths are gone.
 
-One root `sh -c` removes both paths and checks they are gone, and its exit status tells a failed removal (70) or a leftover path (71) apart from an `orb` failure, which is retried like any other held proof. When the removal fails or a path is still there afterwards, the host returns `JobDirsWedged` and quarantines the slot: it is not proven again, its runner stays registered, and it keeps its place among the `max_jobs` slots, so the machine admits one job fewer. Nothing retries it. Remove the directories by hand in the machine and restart the daemon; the startup sweep runs one root command that first clears the read-only flag of every btrfs subvolume under `work` and `stage` (`btrfs property set -ts <subvol> ro false`), then removes every entry and lists what is left. A leftover whose name is a reservation number is quarantined at startup like one at runtime: it holds a slot, the controller starts and no new job reuses its number. A leftover with any other name is not a reservation and fails the sweep with `JobDirsWedged`.
+Before it removes anything, the removal runs `findmnt` and refuses (exit 72) a directory with a mount at or below it. The sweep does the same for every entry of `work` and `stage`: an entry with a mount at or below it is left untouched and listed, so it is quarantined. `--one-file-system` and `find -xdev` are not used for this: the `st_dev` of a bind mount of a directory in the same subvolume equals its parent's, so they would not see it, and they stop at every nested subvolume (`rm` prints `skipping ... on a different device`), which would leave the subvolumes a job created. The `findmnt` check is the guard.
+
+One root `sh -c` removes both paths and checks they are gone, and its exit status tells a failed removal (70), a leftover path (71) or a mount (72) apart from an `orb` failure, which is retried like any other held proof. When the removal fails, a mount is found or a path is still there afterwards, the host returns `JobDirsWedged` and quarantines the slot: it is not proven again, its runner stays registered, and it keeps its place among the `max_jobs` slots, so the machine admits one job fewer. Nothing retries it. Remove the directories by hand in the machine and restart the daemon; the startup sweep runs one root command that first clears the read-only flag of every btrfs subvolume under `work` and `stage` (`btrfs property set -ts <subvol> ro false`), then removes every entry and lists what is left. A leftover whose name is a reservation number is quarantined at startup like one at runtime: it holds a slot, the controller starts and no new job reuses its number. A leftover with any other name is not a reservation and fails the sweep with `JobDirsWedged`.
+
+A new job takes the number after the last one handed out, skipping numbers in use or quarantined and wrapping to the lowest free number after `18446744073709551615`, so a leftover directory with that number cannot stall allocation. A quarantined slot does not count as running work: when `host.toml` changes, the daemon exits to reload it as soon as no job runs, and the new controller quarantines the same slots again at startup. Admission is `max_jobs` minus the quarantined slots.
 
 ## Guest user and job limit
 

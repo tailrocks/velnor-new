@@ -40,6 +40,7 @@ pub(super) fn orb_version(output: &str) -> Option<String> {
 }
 
 pub(super) const GUEST_USER: &str = "velnor-job";
+pub(super) const USER_HOME: &str = concat!("/home", "/velnor-job");
 const NOLOGIN: &str = "/usr/sbin/nologin";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,12 +87,11 @@ impl GuestUser {
         let _gecos = fields.next()?;
         let home = fields.next()?;
         let shell = fields.next()?;
-        let clean = home.starts_with('/') && home.bytes().all(|byte| byte.is_ascii_graphic());
         (name == GUEST_USER
             && uid != 0
             && gid != 0
             && shell == NOLOGIN
-            && clean
+            && home == USER_HOME
             && fields.next().is_none()
             && lines.next().is_none())
         .then(|| Self {

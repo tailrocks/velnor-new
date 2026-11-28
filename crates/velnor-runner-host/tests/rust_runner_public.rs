@@ -3,6 +3,8 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/hostile.rs"]
+mod hostile;
 #[path = "rust_runner_public/inside.rs"]
 mod inside;
 #[path = "rust_runner_public/launch.rs"]

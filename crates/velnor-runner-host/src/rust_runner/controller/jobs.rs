@@ -37,12 +37,6 @@ async fn supervise(
 }
 
 impl Run<'_> {
-    pub(super) fn allocate_reservation(&mut self) -> Option<ReservationId> {
-        let reservation = ReservationId::new(self.next_reservation)?;
-        self.next_reservation = self.next_reservation.checked_add(1)?;
-        Some(reservation)
-    }
-
     pub(super) fn runner_name(&self, connection: usize, reservation: ReservationId) -> String {
         let scale_set = self
             .connections

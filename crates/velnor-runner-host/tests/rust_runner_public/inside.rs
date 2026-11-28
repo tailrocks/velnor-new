@@ -44,7 +44,7 @@ fn rust_runner_refuses_a_machine_without_nft_ip_or_btrfs() -> Check {
 
 #[test]
 fn rust_runner_refuses_a_machine_that_still_reaches_the_mac() -> Check {
-    let rows: [Row; 11] = [
+    let rows: [Row; 14] = [
         ("a /mnt/mac directory", |f| {
             std::fs::create_dir(f.guest("mnt/mac"))?;
             Ok(())
@@ -72,11 +72,29 @@ fn rust_runner_refuses_a_machine_that_still_reaches_the_mac() -> Check {
         ("the former host share still mounted", |f| {
             plant(f, "FAKE_GUEST_MOUNTS=/var/lib/velnor-host virtiofs")
         }),
+        (
+            "a symlinked /opt/orbstack-guest with a socket behind it",
+            |f| {
+                std::fs::remove_dir_all(f.guest("opt/orbstack-guest"))?;
+                std::os::unix::fs::symlink("/nowhere", f.guest("opt/orbstack-guest"))?;
+                plant(f, "FAKE_GUEST_SOCKETS=/opt/orbstack-guest/run/hcontrol")
+            },
+        ),
+        ("an orb failure instead of the mac refusal", |f| {
+            plant(f, "FAKE_GUEST_MAC_TRANSPORT=1")
+        }),
+        ("a mac probe that prints no marker", |f| {
+            plant(f, "FAKE_GUEST_MAC_SILENT=1")
+        }),
         ("a qgroup limit above the cap", |f| {
             plant(f, &format!("FAKE_GUEST_QGROUP={}", CAP_BYTES + 1))
         }),
         ("no qgroup limit", |f| plant(f, "FAKE_GUEST_QGROUP=0")),
     ];
+    assert_shape_refused(&rows)
+}
+
+fn assert_shape_refused(rows: &[Row]) -> Check {
     let mut accepted = Vec::new();
     for (name, mutate) in rows {
         let fixture = Fixture::ready()?;
@@ -86,7 +104,7 @@ fn rust_runner_refuses_a_machine_that_still_reaches_the_mac() -> Check {
                 RustRunnerFailure::MachineShape,
             ));
         if !refused || fixture.guest("var/lib/velnor/bin/velnor-runner").exists() {
-            accepted.push(name);
+            accepted.push(*name);
         }
     }
     assert!(accepted.is_empty(), "accepted: {accepted:?}");
@@ -94,11 +112,39 @@ fn rust_runner_refuses_a_machine_that_still_reaches_the_mac() -> Check {
 }
 
 #[test]
+fn rust_runner_refuses_a_layout_that_is_mounted_over_or_split_from_the_capped_subvolume() -> Check {
+    let rows: [Row; 7] = [
+        ("a btrfs bind mount in the store", |f| {
+            plant(f, "FAKE_GUEST_MOUNTS=/var/lib/velnor/tools btrfs")
+        }),
+        ("a btrfs bind mount over gen", |f| {
+            plant(f, "FAKE_GUEST_MOUNTS=/srv/velnor/gen btrfs")
+        }),
+        ("a nested subvolume at the store", |f| {
+            plant(f, "FAKE_GUEST_NESTED=/var/lib/velnor")
+        }),
+        ("a nested subvolume at /srv/velnor", |f| {
+            plant(f, "FAKE_GUEST_NESTED=/srv/velnor")
+        }),
+        ("a nested subvolume at gen", |f| {
+            plant(f, "FAKE_GUEST_NESTED=/srv/velnor/gen")
+        }),
+        ("a nested subvolume at gen/work", |f| {
+            plant(f, "FAKE_GUEST_NESTED=/srv/velnor/gen/work")
+        }),
+        ("a nested subvolume at gen/stage", |f| {
+            plant(f, "FAKE_GUEST_NESTED=/srv/velnor/gen/stage")
+        }),
+    ];
+    assert_shape_refused(&rows)
+}
+
+#[test]
 fn rust_runner_accepts_the_mounts_and_quota_of_a_confined_machine() -> Check {
     let fixture = Fixture::ready()?;
     plant(
         &fixture,
-        "FAKE_GUEST_MOUNTS=/sys/fs/fuse/connections fusectl;/dev/fuse devtmpfs",
+        "FAKE_GUEST_MOUNTS=/sys/fs/fuse/connections fusectl;/dev/fuse devtmpfs;/srv/velnor/gen/work/12/tools btrfs;/srv/velnor/gen/stage/12 btrfs",
     )?;
     fixture.launcher().ensure_machine()?;
     Ok(())

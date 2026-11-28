@@ -56,3 +56,10 @@ pub(super) fn digest(output: &str) -> Option<String> {
     (token.len() == 64 && token.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .then(|| token.to_ascii_lowercase())
 }
+
+pub(super) fn free_bytes(output: &str) -> Option<u64> {
+    let (_, rest) = output
+        .lines()
+        .find_map(|line| line.trim().split_once("Free (estimated):"))?;
+    rest.split_whitespace().next()?.parse().ok()
+}

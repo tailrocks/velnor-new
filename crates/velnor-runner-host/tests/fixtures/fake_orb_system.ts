@@ -161,12 +161,19 @@ export function systemCommand(guest: Guest, rest: string[]): number | undefined 
       return apt(guest, rest);
     case "findmnt":
       return findmnt(guest);
-    case "/opt/orbstack-guest/bin/mac":
-      complain("dial: no such file or directory\n");
-      return guest.setting("FAKE_GUEST_MAC_WORKS") === "" ? 1 : 0;
     default:
       return undefined;
   }
+}
+
+function macRefusal(guest: Guest): number {
+  if (guest.setting("FAKE_GUEST_MAC_TRANSPORT") !== "") {
+    complain("orb: machine is not running\n");
+    return 1;
+  }
+  if (guest.setting("FAKE_GUEST_MAC_WORKS") !== "") return 1;
+  if (guest.setting("FAKE_GUEST_MAC_SILENT") === "") say("velnor-mac-refused\n");
+  return 0;
 }
 
 export function shapeScript(guest: Guest, script: string, args: string[]): number | undefined {
@@ -174,7 +181,11 @@ export function shapeScript(guest: Guest, script: string, args: string[]): numbe
     return args.every((tool) => present(real(guest, `/usr/sbin/${tool}`))) ? 0 : 1;
   }
   if (script.includes("test ! -e")) return present(real(guest, args[0])) ? 1 : 0;
+  if (script.includes("echo velnor-mac-refused")) return macRefusal(guest);
   if (script.includes("max_referenced")) {
+    if (script.includes("inspect-internal rootid") && args.some((path) => list(guest, "FAKE_GUEST_NESTED").includes(path))) {
+      return 2;
+    }
     say(`${guest.setting("FAKE_GUEST_QGROUP") || guest.setting("FAKE_GUEST_CAP_BYTES")}\n`);
     return 0;
   }

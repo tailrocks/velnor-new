@@ -103,6 +103,7 @@ fn classify(entries: &HashMap<String, Entry>) -> Layout {
 
 impl RustRunnerLauncher {
     pub(super) fn provision(&self, runner_digest: &str) -> Result<GuestUser, HostError> {
+        self.require_no_mounts()?;
         self.ensure_layout()?;
         self.require_btrfs()?;
         self.require_protected_links()?;

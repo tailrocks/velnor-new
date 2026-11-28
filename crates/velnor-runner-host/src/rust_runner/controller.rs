@@ -219,11 +219,7 @@ async fn run_with_health(
         connections,
         slots,
         taken: BTreeSet::new(),
-        next_reservation: wedged
-            .iter()
-            .map(|reservation| reservation.get())
-            .max()
-            .map_or(1, |last| last.saturating_add(1)),
+        next_reservation: 1,
         tasks: JoinSet::new(),
         machine_ok: true,
         machine_checking: false,
@@ -260,7 +256,7 @@ impl Run<'_> {
                 _ = polls.tick() => {}
                 _ = tick.tick() => {
                     self.on_tick()?;
-                    if self.config_changed() && self.slots.is_empty() && self.idle() {
+                    if self.config_changed() && self.slots.only_quarantined() && self.idle() {
                         self.close_sessions().await;
                         return Ok(RustRunnerExit::ConfigChanged);
                     }

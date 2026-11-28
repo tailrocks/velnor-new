@@ -63,6 +63,9 @@ pub(super) struct Slot {
     pub(super) phase: Phase,
 }
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct Slots {
     capacity: u32,
     entries: BTreeMap<ReservationId, Slot>,
@@ -81,8 +84,24 @@ impl Slots {
             .saturating_sub(u32::try_from(self.entries.len()).unwrap_or(u32::MAX))
     }
 
-    pub(super) fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+    pub(super) fn only_quarantined(&self) -> bool {
+        self.entries
+            .values()
+            .all(|slot| matches!(slot.phase, Phase::Quarantined))
+    }
+
+    pub(super) fn next_free(&self, from: u64) -> Option<ReservationId> {
+        let mut candidate = from.max(1);
+        while let Some(taken) =
+            ReservationId::new(candidate).filter(|id| self.entries.contains_key(id))
+        {
+            match taken.get().checked_add(1) {
+                Some(next) => candidate = next,
+                None if from > 1 => return self.next_free(1),
+                None => return None,
+            }
+        }
+        ReservationId::new(candidate)
     }
 
     pub(super) fn take(

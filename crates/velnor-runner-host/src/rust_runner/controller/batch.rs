@@ -197,11 +197,12 @@ impl Run<'_> {
             self.advance(connection);
             return;
         }
-        let Some(reservation) = self.allocate_reservation() else {
+        let Some(reservation) = self.slots.next_free(self.next_reservation) else {
             self.defer(connection);
             self.advance(connection);
             return;
         };
+        self.next_reservation = reservation.get().checked_add(1).unwrap_or(1);
         if !self.slots.take(reservation, connection, grant) {
             self.defer(connection);
             self.advance(connection);

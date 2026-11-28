@@ -85,6 +85,7 @@ function sha256(guest: Guest, path: string): number {
 function fallocate(guest: Guest, body: string, size: number, path: string): number {
   const cap = Number(guest.setting("FAKE_GUEST_CAP_BYTES") || "0");
   const refused = guest.setting("FAKE_GUEST_NO_CAP") === "" && size > cap;
+  if (body.includes("set -C")) rmSync(real(guest, path), { force: true });
   writeFileSync(real(guest, path), "");
   if (refused) {
     complain(`fallocate: fallocate failed: ${guest.setting("FAKE_GUEST_CAP_ERROR") || "No space left on device"}\n`);
@@ -105,7 +106,15 @@ function stage(guest: Guest, path: string): number {
   return 0;
 }
 
-function cleanup(guest: Guest, paths: string[]): number {
+function mounted(guest: Guest, path: string): boolean {
+  return list(guest, "FAKE_GUEST_MOUNTS").some((mount) => {
+    const target = mount.split(" ")[0];
+    return target === path || target.startsWith(`${path}/`);
+  });
+}
+
+function cleanup(guest: Guest, body: string, paths: string[]): number {
+  if (body.includes('mounted "$dir"') && paths.some((path) => mounted(guest, path))) return 72;
   if (guest.setting("FAKE_GUEST_WEDGE") !== "") return 70;
   for (const path of paths) purge(real(guest, path));
   return paths.some((path) => existsSync(real(guest, path))) ? 71 : 0;
@@ -118,7 +127,8 @@ function sweep(guest: Guest, body: string, dirs: string[]): number {
   const left = new Set<string>();
   for (const dir of dirs) {
     for (const name of readdirSync(real(guest, dir))) {
-      if (wedged || (readonly.includes(name) && !cleared)) left.add(name);
+      if (body.includes('mounted "$entry"') && mounted(guest, `${dir}/${name}`)) left.add(name);
+      else if (wedged || (readonly.includes(name) && !cleared)) left.add(name);
       else purge(`${real(guest, dir)}/${name}`);
     }
   }
@@ -126,14 +136,24 @@ function sweep(guest: Guest, body: string, dirs: string[]): number {
   return 0;
 }
 
+function owned(guest: Guest, body: string, home: string): number {
+  const pruned = [home, ...Array.from(body.matchAll(/-path (\/\S+)/g), (found) => found[1])];
+  for (const path of list(guest, "FAKE_GUEST_OWNED")) {
+    if (!pruned.some((root) => path === root || path.startsWith(`${root}/`))) say(`${path}\n`);
+  }
+  return 0;
+}
+
 function script(guest: Guest, rest: string[]): number | undefined {
   const [, , body, , ...args] = rest;
   if (body.includes("fallocate -l")) return fallocate(guest, body, Number(args[0]), args[1]);
   if (body.includes("set -e; umask 077")) return stage(guest, args[0]);
-  if (body.includes("rm -rf -- \"$@\" || exit")) return cleanup(guest, args);
+  if (body.includes("rm -rf -- \"$@\" || exit")) return cleanup(guest, body, args);
+  if (body.includes("-group")) return owned(guest, body, args[0]);
   if (body.includes("-mindepth")) return sweep(guest, body, args);
   if (body.includes("printf")) {
     const target = real(guest, args[1]);
+    if (body.includes("set -C")) rmSync(`${target}.new`, { force: true });
     writeFileSync(`${target}.new`, `${args[0]}\n`);
     renameSync(`${target}.new`, target);
     return 0;
@@ -161,6 +181,9 @@ export function guestCommand(guest: Guest, rest: string[]): number | undefined {
       return remove(guest, rest.slice(1));
     case "find":
       return findSockets(guest, rest.slice(1));
+    case "btrfs":
+      say(`    Free (estimated):\t\t ${guest.setting("FAKE_GUEST_FREE") || String(2 ** 50)}\t(min: 0)\n`);
+      return 0;
     case "cat":
       try {
         say(readFileSync(real(guest, rest[1]), "utf8"));
@@ -214,7 +237,10 @@ function remove(guest: Guest, args: string[]): number {
 }
 
 function findSockets(guest: Guest, args: string[]): number {
-  if (args[1] !== "-type") return 64;
+  const follows = args[0] === "-H";
+  const [root, flag] = follows ? [args[1], args[2]] : [args[0], args[1]];
+  if (flag !== "-type") return 64;
+  if (!follows && lstatSync(real(guest, root), { throwIfNoEntry: false })?.isSymbolicLink()) return 0;
   for (const socket of list(guest, "FAKE_GUEST_SOCKETS")) say(`${socket}\n`);
   return 0;
 }

@@ -7,14 +7,12 @@ use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, fchmod, flock, fstat, openat, unlinkat,
-};
+use rustix::fs::{AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, openat, unlinkat};
 use rustix::io::Errno;
 use rustix::path::Arg;
 use rustix::process::geteuid;
 
-use self::remove::BOUNDS;
+use self::remove::bounds_on;
 use super::OBSOLETE_DIRECTORIES;
 use super::machine::failure;
 use crate::error::{HostError, RustRunnerFailure};
@@ -88,10 +86,15 @@ impl Store {
 
     fn remove_tree(&self, name: &str) -> Result<(), HostError> {
         let stored = || failure(RustRunnerFailure::HostStore);
+        let device = fstat(&self.root)
+            .map(|stat| remove::device_of(&stat))
+            .map_err(|_| stored())?;
         let tree = match openat(&self.root, name, directory_flags(), Mode::empty()) {
             Ok(tree) => tree,
             Err(Errno::NOENT) => return Ok(()),
             Err(Errno::ACCESS) => {
+                remove::require_device(&self.root, name, device)
+                    .map_err(|error| failure(error.failure()))?;
                 remove::make_owner_accessible(&self.root, name).map_err(|_| stored())?;
                 openat(&self.root, name, directory_flags(), Mode::empty()).map_err(|_| stored())?
             }
@@ -100,8 +103,7 @@ impl Store {
             }
             Err(_) => return Err(stored()),
         };
-        fchmod(&tree, Mode::RWXU).map_err(|_| stored())?;
-        remove::contents(&tree, BOUNDS).map_err(|error| failure(error.failure()))?;
+        remove::contents(&tree, bounds_on(device)).map_err(|error| failure(error.failure()))?;
         unlinkat(&self.root, name, AtFlags::REMOVEDIR).map_err(|_| stored())
     }
 }
