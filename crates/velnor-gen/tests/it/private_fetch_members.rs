@@ -125,6 +125,13 @@ fn a_member_list_too_long_for_a_github_expression_fetches_every_member() -> Test
                 .as_str()
                 .unwrap_or_default();
             assert!(listed.len() <= 21_000, "{} characters", listed.len());
+            let condition = step["if"].as_str().unwrap_or_default();
+            assert!(
+                condition.encode_utf16().count() <= 21_000,
+                "{}: {} condition characters",
+                step["name"],
+                condition.encode_utf16().count()
+            );
         }
         assert_eq!(
             fetched(&steps, selecting(PULL_REQUEST, "no_member_at_all"))?,
