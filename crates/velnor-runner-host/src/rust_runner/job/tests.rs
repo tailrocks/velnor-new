@@ -11,6 +11,7 @@ fn every_kind_the_sandbox_records_is_a_breach_and_an_unknown_one_is_not() {
         ("machine_full", JobBreach::MachineFull),
         ("processes", JobBreach::Processes),
         ("memory", JobBreach::Memory),
+        ("killed", JobBreach::Killed),
     ] {
         let record = format!("{{\"breach\":\"{kind}\"}}");
         assert_eq!(

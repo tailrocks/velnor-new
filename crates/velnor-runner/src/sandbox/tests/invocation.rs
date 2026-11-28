@@ -120,6 +120,7 @@ fn a_breach_names_its_kind_for_the_host_record() {
         (Breach::MachineFull, "machine_full"),
         (Breach::Processes, "processes"),
         (Breach::Memory, "memory"),
+        (Breach::Killed, "killed"),
     ];
     for (breach, kind) in kinds {
         assert_eq!(breach.kind(), kind);

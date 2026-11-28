@@ -227,3 +227,31 @@ pub(crate) fn nothing_left(sandbox: &Sandbox) -> bool {
 }
 
 pub(crate) const BTRFS_IOCTL: &str = "import ctypes, os, struct, sys\nlibc = ctypes.CDLL(None, use_errno=True)\nfd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)\nbuffer = ctypes.create_string_buffer(struct.pack('q4088s', 0, sys.argv[3].encode()))\nstatus = libc.ioctl(fd, ctypes.c_ulong(int(sys.argv[2], 16)), buffer)\nprint('created' if status == 0 else ctypes.get_errno())\n";
+
+pub(crate) fn breach_record(sandbox: &Sandbox) -> String {
+    std::fs::read_to_string(run_dir(sandbox).join("breach.json")).unwrap_or_default()
+}
+
+pub(crate) fn killed_with(sandbox: &Sandbox, script: &[&str], message: &str, kind: &str) {
+    let output = sandbox.run(script);
+    let log = text(&output);
+    assert_eq!(output.status.code(), Some(125), "{log}");
+    assert!(log.contains(message), "{log}");
+    assert!(
+        !log.contains("survived"),
+        "the script outlived the kill: {log}"
+    );
+    assert_eq!(
+        breach_record(sandbox).trim(),
+        format!("{{\"breach\":\"{kind}\"}}")
+    );
+    assert!(
+        nothing_left(sandbox),
+        "the killed job left files or its cgroup"
+    );
+    assert!(cleanup(sandbox).status.success());
+    assert!(
+        !run_dir(sandbox).exists(),
+        "the breach record outlived the cleanup"
+    );
+}

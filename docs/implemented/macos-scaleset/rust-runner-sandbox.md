@@ -21,7 +21,7 @@ With `--stdin-frames` the host streams two frames over `orb` standard input to t
 
 ## Resource breaches
 
-A breach (any of the kills below) ends the job with exit code 125 and the `velnor:` message on standard error. The parent then writes the typed record `{"breach":"<kind>"}` (`disk`, `foreign_device`, `machine_full` or `processes`) to `/run/velnor/jobs/<id>/breach.json`. The host reads it only after an exit 125 and treats the job as breached, which is a job failure and not a runner failure: the runner-health breaker (three consecutive failed exits close admission) counts only exits without a record.
+A breach (any of the kills below) ends the job with exit code 125 and the `velnor:` message on standard error. The parent then writes the typed record `{"breach":"<kind>"}` (`disk`, `foreign_device`, `machine_full`, `processes`, `memory` or `killed`) to `/run/velnor/jobs/<id>/breach.json`. `memory` is a process that the kernel killed at `memory.max`; `killed` is a command that ended with exit 137 without the parent having asked for it, which only a process of the job can cause because the command runs as pid 2 next to the job's own processes. The host reads it only after an exit 125 and treats the job as breached, which is a job failure and not a runner failure: the runner-health breaker (three consecutive failed exits close admission) counts only exits without a record.
 
 ## Network
 

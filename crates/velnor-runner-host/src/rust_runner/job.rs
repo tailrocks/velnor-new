@@ -27,6 +27,7 @@ pub(crate) enum JobBreach {
     MachineFull,
     Processes,
     Memory,
+    Killed,
 }
 
 #[derive(serde::Deserialize)]

@@ -5,6 +5,7 @@ use super::machine::failure;
 use super::{RustRunnerLauncher, orb};
 use crate::error::{HostError, RustRunnerFailure};
 
+const HOME_ROOT: &str = "/home";
 const PROBE: &str = r#"echo "$(id -u) $(id -g) $HOME""#;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +22,17 @@ fn parse(output: &str) -> Option<GuestUser> {
         gid: fields.next()?.parse().ok()?,
         home: fields.next()?.to_owned(),
     };
-    fields.next().is_none().then_some(user)
+    (fields.next().is_none() && usable(&user)).then_some(user)
+}
+
+fn usable(user: &GuestUser) -> bool {
+    user.uid != 0
+        && user.gid != 0
+        && user
+            .home
+            .strip_prefix(HOME_ROOT)
+            .and_then(|rest| rest.strip_prefix('/'))
+            .is_some_and(|name| !name.is_empty() && !name.contains("..") && !name.ends_with('/'))
 }
 
 impl RustRunnerLauncher {

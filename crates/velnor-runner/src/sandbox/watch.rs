@@ -22,6 +22,7 @@ pub(super) enum Breach {
     MachineFull,
     Processes,
     Memory,
+    Killed,
 }
 
 impl Breach {
@@ -32,6 +33,7 @@ impl Breach {
             Self::MachineFull => "machine_full",
             Self::Processes => "processes",
             Self::Memory => "memory",
+            Self::Killed => "killed",
         }
     }
 
@@ -46,6 +48,7 @@ impl Breach {
             Self::Memory => {
                 "velnor: job was killed for using more memory than its limit".to_owned()
             }
+            Self::Killed => "velnor: the job killed the process the sandbox waits for".to_owned(),
         }
     }
 }

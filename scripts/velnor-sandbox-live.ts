@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const PROTECTED = ["velnor", "jackin-e2e-subscription", "ruxel-proof"];
+const THROWAWAY = /^velnor-(live|u[a-z0-9]+)-[a-z0-9]+$/;
 const MISE_VERSION = "v2026.11.10";
 const MISE_ARCHIVE = `mise-${MISE_VERSION}-linux-arm64.tar.gz`;
 const MISE_SHA256 = "af305e1efc58433a79b893738bfbf11b4b1662bdea9f0ea71f2ecab990058ad6";
@@ -70,8 +71,8 @@ async function text(command: string[]): Promise<string> {
 
 async function main(): Promise<void> {
   const machine = Bun.argv[2];
-  if (machine === undefined || PROTECTED.includes(machine)) {
-    throw new Error("usage: bun scripts/velnor-sandbox-live.ts <throwaway isolated machine>");
+  if (machine === undefined || PROTECTED.includes(machine) || !THROWAWAY.test(machine)) {
+    throw new Error("usage: bun scripts/velnor-sandbox-live.ts velnor-live-<suffix> (a throwaway machine made with orb create --isolated --isolate-network --disk 8G -a arm64 ubuntu <name>)");
   }
   const listed: Array<{ name: string }> = JSON.parse(await text(["orb", "list", "-f", "json"]));
   if (!listed.some((entry) => entry.name === machine)) {

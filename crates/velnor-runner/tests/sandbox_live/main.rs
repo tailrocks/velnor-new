@@ -9,6 +9,7 @@ mod identity;
 mod isolation;
 mod limits;
 mod network;
+mod processes;
 mod start;
 mod stores;
 mod support;

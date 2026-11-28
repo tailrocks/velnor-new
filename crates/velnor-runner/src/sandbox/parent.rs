@@ -22,6 +22,8 @@ const NSENTER: &str = "/usr/bin/nsenter";
 const UNSHARE: &str = "/usr/bin/unshare";
 const KILLED_BASE: u8 = 128;
 const BREACH_EXIT: u8 = 125;
+const SIGKILL_EXIT: i32 = 137;
+const SIGKILL: i32 = 9;
 
 pub(super) fn chain(layout: &Layout, runner: &Path, command: &[String]) -> Result<Vec<String>> {
     let mut argv: Vec<String> = ["--pdeathsig", "KILL", "--", NSENTER]
@@ -52,6 +54,10 @@ pub(super) fn chain(layout: &Layout, runner: &Path, command: &[String]) -> Resul
     argv.push("--".to_owned());
     argv.extend(command.iter().cloned());
     Ok(argv)
+}
+
+fn killed(status: ExitStatus) -> bool {
+    status.code() == Some(SIGKILL_EXIT) || status.signal() == Some(SIGKILL)
 }
 
 fn exit_code(status: ExitStatus) -> ExitCode {
@@ -131,6 +137,8 @@ async fn launch(
                 if breach.is_none() {
                     breach = if cgroup.killed_for_memory() {
                         Some(Breach::Memory)
+                    } else if !asked && killed(status) {
+                        Some(Breach::Killed)
                     } else {
                         tokio::task::block_in_place(|| watch.settle(layout, cgroup, &limits))
                     };

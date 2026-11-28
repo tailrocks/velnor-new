@@ -84,11 +84,21 @@ async fn rust_runner_runs_each_job_as_the_user_ensure_machine_reported()
             "{expected}: {log:?}"
         );
     }
-    fixture.configure("FAKE_ORB_USER=501 501 /home/runner extra\n")?;
-    assert_eq!(
-        launcher.ensure_machine().err(),
-        Some(HostError::RustRunner(RustRunnerFailure::GuestUser))
-    );
+    for unusable in [
+        format!("501 501 {HOME_ROOT}/runner extra"),
+        format!("0 0 {HOME_ROOT}/runner"),
+        format!("501 0 {HOME_ROOT}/runner"),
+        "501 501 /etc".to_owned(),
+        format!("501 501 {HOME_ROOT}/"),
+        format!("501 501 {HOME_ROOT}/../etc"),
+    ] {
+        fixture.configure(&format!("FAKE_ORB_USER={unusable}\n"))?;
+        assert_eq!(
+            launcher.ensure_machine().err(),
+            Some(HostError::RustRunner(RustRunnerFailure::GuestUser)),
+            "{unusable}"
+        );
+    }
     Ok(())
 }
 
