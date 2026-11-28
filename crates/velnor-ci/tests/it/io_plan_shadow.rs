@@ -98,6 +98,9 @@ fn a_standard_library_import_of_env_does_not_shadow_a_build_output_include() {
         "use std::env;\n",
         "use std::{env, concat};\n",
         "use ::core::concat as concat;\n",
+        "use ::std::env;\n",
+        "use std::{env, concat as c};\n",
+        "use std::include_str as include_str;\n",
     ]
     .into_iter()
     .enumerate()
@@ -115,7 +118,7 @@ fn a_standard_library_import_of_env_does_not_shadow_a_build_output_include() {
 #[test]
 fn an_import_that_only_passes_through_a_module_named_env_does_not_shadow() {
     let include = format!(
-        "use velnor_local::io::env::{{Engine, Environment}};\n{OUT_DIR_INCLUDE}include_str!(\"../../shared/h.txt\");\n"
+        "use helpers::io::env::{{Engine, Environment}};\n{OUT_DIR_INCLUDE}include_str!(\"../../shared/h.txt\");\n"
     );
     assert_eq!(
         planned("shadow-path-a", &include, None, "notes/x.md"),
@@ -125,4 +128,57 @@ fn an_import_that_only_passes_through_a_module_named_env_does_not_shadow() {
         planned("shadow-path-b", &include, None, "shared/h.txt"),
         "Cargo.toml: some\n  b input:shared/h.txt\ntools/Cargo.toml: none\n"
     );
+}
+
+#[test]
+fn a_standard_library_import_bound_to_another_macro_name_reads_any_file() {
+    for (at, text) in [
+        "use core::include_str as env;\n",
+        "use std::include_str as env;\n",
+        "use ::core::include_str as env;\n",
+        "use std::{include_str as env};\n",
+        "use std::include as concat;\n",
+        "use std::concat as include_str;\n",
+        "use alloc::{env, concat as include};\n",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        reads_any_file(
+            &format!("shadow-rename-{at}"),
+            OUT_DIR_INCLUDE,
+            Some(("b/src/uses.rs", text)),
+        );
+    }
+}
+
+#[test]
+fn a_qualified_include_macro_outside_the_standard_library_reads_any_file() {
+    for (at, path) in ["helper", "crate::helper", "self", "std::helper", "a::std"]
+        .into_iter()
+        .enumerate()
+    {
+        let include = format!("{path}::include_str!(concat!(env!(\"OUT_DIR\"), \"/gen.rs\"));\n");
+        reads_any_file(&format!("shadow-qualified-{at}"), &include, None);
+    }
+}
+
+#[test]
+fn a_qualified_include_macro_of_the_standard_library_does_not_shadow() {
+    for (at, path) in ["std", "core", "alloc", "::std", "::core"]
+        .into_iter()
+        .enumerate()
+    {
+        let include = format!("{path}::include_str!(concat!(env!(\"OUT_DIR\"), \"/gen.rs\"));\n");
+        assert_eq!(
+            planned(
+                &format!("shadow-qualified-std-{at}"),
+                &include,
+                None,
+                "notes/x.md"
+            ),
+            NOTHING,
+            "{path}"
+        );
+    }
 }

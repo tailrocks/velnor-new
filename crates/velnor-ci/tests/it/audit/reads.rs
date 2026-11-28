@@ -102,6 +102,30 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
 }
 
 #[test]
+fn an_include_that_reads_a_repository_file_the_lock_does_not_list_fails_the_audit() {
+    let repo = workspace_below_the_root();
+    repo.write(
+        "rust/app/src/lib.rs",
+        "pub const G: &str = include_str!(\"../../../shared/greeting.txt\");\n",
+    );
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    unit(
+        &repo,
+        &format!("{target}/deps/app-0000000000000001.d"),
+        "out.d: app/src/lib.rs app/src/../../../shared/greeting.txt\n",
+    );
+    repo.git(&["add", "--all"]);
+    let refused = audit(&repo, &[]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let complaint = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        complaint.contains("reads it does not list:%0Ashared/greeting.txt%09app"),
+        "{complaint}"
+    );
+}
+
+#[test]
 fn a_tracked_path_the_lock_cannot_hold_is_an_error_that_names_it() {
     let repo = workspace_below_the_root();
     repo.write("shared/a\tb.txt", "");

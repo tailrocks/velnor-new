@@ -54,7 +54,6 @@ impl Context {
         self.values.insert(key.to_owned(), value.to_owned());
     }
 
-    /// Reads the job `env:` block as rendered, so `env.NAME` holds what the block says.
     pub(crate) fn load_env(&mut self, job: &str) {
         let block = job.split("\n    env:\n").nth(1).unwrap_or_default();
         for line in block.lines().take_while(|line| line.starts_with("      ")) {
