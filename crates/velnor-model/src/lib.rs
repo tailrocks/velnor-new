@@ -24,6 +24,7 @@ mod public_sources;
 mod release_asset;
 mod repo;
 mod repo_config;
+mod reuse;
 mod runner_protocol;
 mod sealed;
 mod selection;
@@ -79,9 +80,10 @@ pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_UNITS, CI_AUTO_LABEL, CI_RUN_LABEL,
     CargoCommand, Concurrency, EMPTY_PACKAGE_MAP, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
     MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun,
-    PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
-    TOOLS_ANCHOR_OUTPUT, Triggers, When, WorkflowPlan,
+    PullRequestType, REUSE_OUTPUT, REUSE_RUN_OUTPUT, REUSE_STEP, REUSED_OUTPUT, Step, TEST_STEP,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT, Triggers, When,
+    WorkflowPlan,
 };
 pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
@@ -90,11 +92,12 @@ pub use repo::{
     DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, RustCiConfig,
-    RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind,
-    TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
-    UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, ReusePrVerdict,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
+    TargetKind, TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest,
+    Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
+pub use reuse::{Reuse, ReuseStep};
 pub use runner_protocol::RUNNER_PROTOCOL_VERSION;
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{

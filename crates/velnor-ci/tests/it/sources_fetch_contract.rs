@@ -62,6 +62,7 @@ pub(crate) fn plan(
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,
+            reuse: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             steps: vec![Step {
@@ -76,6 +77,7 @@ pub(crate) fn plan(
                 when: When::FetchSources,
                 pr: PrRun::Always,
                 skip_after_merge_group: None,
+                reuse: None,
                 skip_when_cold: false,
                 private_repo: false,
                 hosted_only: false,

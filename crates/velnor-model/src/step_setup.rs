@@ -77,6 +77,7 @@ impl StepKind {
             | Self::Ansible { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
+            | Self::Reuse(_)
             | Self::MergeQueueCheck => false,
         }
     }

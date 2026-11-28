@@ -100,8 +100,8 @@ pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES,
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedTrusted, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION,
-    Value, check_rules,
+    RenderedReuse, RenderedStep, RenderedTrusted, RenderedWorkflow, Rule, RuleViolation,
+    SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::ShellcheckMarks;
@@ -118,13 +118,13 @@ pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<Rul
 
 #[must_use]
 pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
-    RenderedWorkflow {
-        jobs: plan
-            .jobs
-            .iter()
-            .map(|job| rendered_job(job, plan))
-            .collect(),
-    }
+    let mut jobs: Vec<_> = plan
+        .jobs
+        .iter()
+        .map(|job| rendered_job(job, plan))
+        .collect();
+    verdict_steps::fill_reusable(&plan.jobs, &mut jobs);
+    RenderedWorkflow { jobs }
 }
 
 pub fn render_workflow(
@@ -147,3 +147,4 @@ pub fn render_workflow(
 }
 
 mod report;
+mod verdict_steps;

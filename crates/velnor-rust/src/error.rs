@@ -58,6 +58,7 @@ pub enum Reason {
     },
     UnknownInputPackage(String),
     UnknownNextestHarness(String),
+    ReuseWithoutPlanJob,
     AmbiguousNextestHarness(String),
     UntrackedManifest,
     LockLine(usize),

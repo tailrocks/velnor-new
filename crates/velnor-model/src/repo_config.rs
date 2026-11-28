@@ -58,6 +58,7 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
+    pub reuse_pr_verdict: ReusePrVerdict,
     pub test_setup: Vec<TestSetup>,
     pub check_configurations: Vec<crate::CheckConfigurations>,
     pub test_lanes: Vec<TestLane>,
@@ -282,6 +283,18 @@ impl From<bool> for PushAfterMergeGroup {
         } else {
             Self::Run
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReusePrVerdict {
+    Off,
+    On,
+}
+
+impl From<bool> for ReusePrVerdict {
+    fn from(reuse: bool) -> Self {
+        if reuse { Self::On } else { Self::Off }
     }
 }
 

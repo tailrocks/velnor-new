@@ -120,6 +120,7 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
         });
     }
     crate::docs_post_merge::apply(facts, jobs);
+    crate::verdict_reuse::apply(facts, jobs);
 }
 
 fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
@@ -328,6 +329,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         skip_after_merge_group: None,
+        reuse: None,
         plan_outputs: Vec::new(),
         group_outputs: Vec::new(),
         reports_ignored: facts
@@ -363,6 +365,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         target_dir: None,
         when: When::Success,
         skip_after_merge_group: None,
+        reuse: None,
         skip_when_cold: false,
         private_repo: false,
         pr: PrRun::Always,

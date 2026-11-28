@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use super::{
-    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, cargo_step,
-    merge_group_skipped, sources_step, trimmed_lane,
+    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, Value,
+    cargo_step, merge_group_skipped, sources_step, trimmed_lane,
 };
+use crate::plan_modes::plan_modes;
 use velnor_model::{RepoPath, SetupOrder};
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
@@ -132,6 +133,11 @@ pub(super) fn extra_conditions(step: &Step, setup: Setup, after: &[String]) -> V
             .as_ref()
             .map(|from| merge_group_skipped(from, setup)),
     );
+    extra.extend(
+        step.reuse
+            .as_ref()
+            .map(|reuse| crate::verdict_steps::skipped(reuse, setup == Setup::Replanned)),
+    );
     extra
 }
 
@@ -173,4 +179,27 @@ pub(super) fn after_setup(
 
 pub(super) fn setup_not_failed(id: &str) -> String {
     format!("steps.{id}.outcome != 'failure' && steps.{id}.outcome != 'cancelled'")
+}
+
+pub(super) fn report_env(
+    step: &Step,
+    body: &mut RenderedStep,
+    (job_name, privacy_gate): (Option<&str>, Option<&velnor_model::Gate>),
+    setup: Setup,
+) {
+    if !matches!(step.kind, StepKind::ReportCaches { .. }) {
+        return;
+    }
+    if let Some(name) = job_name {
+        body.env.push((
+            "VELNOR_REPORT_JOB_NAME".to_owned(),
+            Value::Text(name.to_owned()),
+        ));
+    }
+    if let Some(gate) = privacy_gate {
+        body.env.push((
+            "VELNOR_REPORT_PLAN_MODE".to_owned(),
+            Value::Expr(plan_modes(gate, setup)),
+        ));
+    }
 }

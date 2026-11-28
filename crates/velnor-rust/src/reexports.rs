@@ -78,5 +78,6 @@ pub use crate::verdict::{
     verdict,
 };
 pub use crate::verdict_plan::{Need, PlanOutput};
+pub use crate::verdict_reuse::check_reuse;
 pub use crate::weaken::introduced;
 pub use velnor_cache_rules::DEFAULT_CACHE_BUDGET_BYTES;

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, RustSelection,
@@ -23,6 +23,28 @@ fn tests_lane(job: &Job) -> Vec<RootSlug> {
                 step.reads.as_ref().map(|plan| plan.slug.clone())
             }
             _ => None,
+        })
+        .collect()
+}
+
+fn reusable_tests(job: &Job) -> BTreeMap<RootSlug, Vec<String>> {
+    let mut lanes: BTreeMap<RootSlug, Vec<Option<&str>>> = BTreeMap::new();
+    for step in &job.steps {
+        if let (StepKind::Cargo(command), Some(plan)) = (&step.kind, &step.reads)
+            && command.reports_tests()
+        {
+            lanes
+                .entry(plan.slug.clone())
+                .or_default()
+                .push(step.reuse.as_ref().map(|reuse| reuse.id.as_str()));
+        }
+    }
+    lanes
+        .into_iter()
+        .filter_map(|(slug, ids)| {
+            let ids: Option<Vec<String>> =
+                ids.into_iter().map(|id| id.map(str::to_owned)).collect();
+            Some((slug, ids?))
         })
         .collect()
 }
@@ -95,9 +117,9 @@ pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {
         jobs: jobs
             .iter()
             .map(|job| VerdictJob {
-                id: job.id.clone(),
-                when: conditions(job),
-                tests: tests_lane(job),
+                reusable: job.reuse.is_some(),
+                reusable_tests: reusable_tests(job),
+                ..VerdictJob::new(job.id.clone(), conditions(job), tests_lane(job))
             })
             .collect(),
     }

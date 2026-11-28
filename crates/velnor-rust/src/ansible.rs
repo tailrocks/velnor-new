@@ -204,11 +204,11 @@ fn record_ansible(facts: &RepoFacts, plan: &mut WorkflowPlan, ansible: &Job) {
             needs_max_bytes: size,
         } = &mut step.kind
         {
-            spec.jobs.push(VerdictJob {
-                id: ansible.id.clone(),
-                when: when.clone(),
-                tests: Vec::new(),
-            });
+            spec.jobs.push(VerdictJob::new(
+                ansible.id.clone(),
+                when.clone(),
+                Vec::new(),
+            ));
             *size = size.saturating_add(addition);
         }
     }

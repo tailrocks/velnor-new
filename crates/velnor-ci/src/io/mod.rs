@@ -101,6 +101,7 @@ mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
+mod verdict;
 mod version;
 mod write_request;
 
@@ -134,9 +135,8 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
-use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
-use crate::test_groups;
+use crate::{lane_guard, test_groups};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
@@ -232,6 +232,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::VerifyListed(args)) => release::run_verify_listed(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
+        Command::Verdict(command) => verdict::run(&command),
         Command::MergeQueueCheck => Ok(merge_queue::run()),
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),

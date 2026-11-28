@@ -95,15 +95,19 @@ struct RawInput {
     packages: Vec<String>,
 }
 
+fn raw_config(bytes: &[u8]) -> Result<RawConfig, Reason> {
+    let table = table(bytes)?;
+    if let Some(key) = table.keys().find(|key| !KEYS.contains(&key.as_str())) {
+        return Err(Reason::UnknownKey(key.clone()));
+    }
+    table
+        .try_into()
+        .map_err(|error: toml::de::Error| Reason::Syntax(error.message().to_owned()))
+}
+
 pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
-    let table = table(bytes).map_err(invalid)?;
-    if let Some(key) = table.keys().find(|key| !KEYS.contains(&key.as_str())) {
-        return Err(invalid(Reason::UnknownKey(key.clone())));
-    }
-    let raw: RawConfig = table
-        .try_into()
-        .map_err(|error: toml::de::Error| invalid(Reason::Syntax(error.message().to_owned())))?;
+    let raw = raw_config(bytes).map_err(invalid)?;
     let defaults = RustCiConfig::default();
     let timeout_minutes =
         timeout(raw.timeout_minutes, defaults.timeout_minutes).map_err(invalid)?;
@@ -165,6 +169,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         mbx_remote,
         mbx,
+        reuse_pr_verdict: crate::config_ci::reuse_pr_verdict(raw.ci.as_ref()),
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
         crates_mirror: runners.crates_mirror,
         hosted_runners: runners.hosted,
