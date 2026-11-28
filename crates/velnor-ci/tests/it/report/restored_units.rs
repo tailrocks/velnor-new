@@ -138,6 +138,7 @@ fn a_record_that_is_not_ours_or_is_damaged_reads_as_absent() {
         present: hashes(["0123456789abcdef", "fedcba9876543210"]),
         missing_input: hashes(["00000000deadbeef", "00000000cafebabe"]),
         restored: hashes(["0123456789abcdef", "00000000deadbeef"]),
+        head: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
     };
     assert_eq!(decode(&encode(&units)), Some(units));
     assert_eq!(
@@ -148,9 +149,13 @@ fn a_record_that_is_not_ours_or_is_damaged_reads_as_absent() {
         "",
         "other 2\n0123456789abcdef\n",
         "velnor-restored-units 1\n0123456789abcdef\n",
-        "velnor-restored-units 3\nnot-a-hash\n",
-        "velnor-restored-units 3\nmissing-input not-a-hash\n",
-        "velnor-restored-units 3\nrestored not-a-hash\n",
+        "velnor-restored-units 4\nnot-a-hash\n",
+        "velnor-restored-units 4\nmissing-input not-a-hash\n",
+        "velnor-restored-units 4\nrestored not-a-hash\n",
+        "velnor-restored-units 4 not-a-commit\n0123456789abcdef\n",
+        "velnor-restored-units 40123456789abcdef0123456789abcdef01234567\n",
+        "velnor-restored-units 3\nrestored 0123456789abcdef\n",
+        "velnor-restored-units 3 0123456789abcdef0123456789abcdef01234567\nrestored 0123456789abcdef\n",
         "velnor-restored-units 2\n0123456789abcdef\n",
         "velnor-restored-units 2\nmissing-input not-a-hash\n",
     ] {

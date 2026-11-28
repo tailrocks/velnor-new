@@ -9,7 +9,7 @@ use crate::cargo_package::PackageIdentity;
 use crate::report::LaneMetrics;
 use crate::telemetry::{Compilation, Invocation};
 
-const HEADER: &str = "velnor-restored-units 3";
+const HEADER: &str = "velnor-restored-units 4";
 const MISSING_INPUT: &str = "missing-input ";
 const RESTORED: &str = "restored ";
 
@@ -18,6 +18,7 @@ pub struct RestoredUnits {
     pub present: BTreeSet<String>,
     pub missing_input: BTreeSet<String>,
     pub restored: BTreeSet<String>,
+    pub head: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -30,7 +31,10 @@ pub enum Manifest {
 
 #[must_use]
 pub fn encode(units: &RestoredUnits) -> String {
-    let mut text = format!("{HEADER}\n");
+    let mut text = units.head.as_ref().map_or_else(
+        || format!("{HEADER}\n"),
+        |head| format!("{HEADER} {head}\n"),
+    );
     for hash in &units.present {
         text.push_str(hash);
         text.push('\n');
@@ -51,10 +55,18 @@ pub fn encode(units: &RestoredUnits) -> String {
 #[must_use]
 pub fn decode(text: &str) -> Option<RestoredUnits> {
     let mut lines = text.lines();
-    if lines.next()? != HEADER {
-        return None;
-    }
-    let mut units = RestoredUnits::default();
+    let head = match lines.next()?.strip_prefix(HEADER)? {
+        "" => None,
+        rest => Some(
+            rest.strip_prefix(' ')
+                .filter(|head| is_commit(head))?
+                .to_owned(),
+        ),
+    };
+    let mut units = RestoredUnits {
+        head,
+        ..RestoredUnits::default()
+    };
     for line in lines {
         match (
             line.strip_prefix(MISSING_INPUT),
@@ -67,6 +79,10 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
         };
     }
     Some(units)
+}
+
+fn is_commit(text: &str) -> bool {
+    matches!(text.len(), 40 | 64) && text.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

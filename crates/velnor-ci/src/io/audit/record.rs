@@ -134,9 +134,7 @@ impl Audit<'_> {
                 file.display()
             )));
         };
-        let restored = indices
-            .iter()
-            .any(|index| self.restored[*index].contains(hash));
+        let restored = self.restored_unit(indices, hash);
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
         let Some((source, _)) = self.dep_info(
@@ -164,6 +162,12 @@ impl Audit<'_> {
             });
         }
         Ok(())
+    }
+
+    pub(in crate::io) fn restored_unit(&self, indices: &[usize], hash: &str) -> bool {
+        indices
+            .iter()
+            .any(|index| self.restored[*index].contains(hash))
     }
 
     pub(super) fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {

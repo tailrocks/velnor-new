@@ -43,6 +43,9 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
                     found.missing_input.insert(hash);
                 }
             }
+            UnitFile::Script { hash, .. } | UnitFile::BuildOutput { hash, .. } => {
+                found.restored.insert(hash);
+            }
             _ => {}
         }
     }
@@ -119,13 +122,18 @@ fn cargo_unpacks(path: &Path) -> bool {
 pub(super) fn record(
     target: &Path,
     prefix: &str,
+    head: Option<String>,
     units: Option<&RestoredUnits>,
 ) -> Result<(), CiError> {
     let Some(units) = units else {
         return Ok(());
     };
     let file = target.join(restored_units_file(prefix));
-    fs::write(&file, crate::restored_units::encode(units))
+    let bound = RestoredUnits {
+        head,
+        ..units.clone()
+    };
+    fs::write(&file, crate::restored_units::encode(&bound))
         .map_err(|e| CiError::new(format!("cannot record restored units: {e}")))
 }
 
@@ -138,4 +146,10 @@ pub(super) fn read(target: &Path, prefix: &str) -> (Manifest, Option<RestoredUni
         Err(error) if error.kind() == ErrorKind::NotFound => (Manifest::Absent, None),
         Err(_) => (Manifest::Unreadable, None),
     }
+}
+
+pub(super) fn head(root: &Path) -> Option<String> {
+    let output = super::inputs::git(root, &["rev-parse", "--verify", "HEAD"], None).ok()?;
+    let head = String::from_utf8(output).ok()?;
+    Some(head.trim().to_owned())
 }

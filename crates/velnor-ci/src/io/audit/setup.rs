@@ -83,27 +83,32 @@ pub(super) fn restored_hashes(
     workspaces: &[Workspace],
     shared: &[Vec<usize>],
     groups: &[PathBuf],
-    prefix: &str,
-) -> Vec<BTreeSet<String>> {
-    let hashes = |target: &Path| {
+    head: Option<&str>,
+) -> Result<Vec<BTreeSet<String>>, CiError> {
+    let hashes = |target: &Path, prefix: &str| {
         crate::io::restored_units::read(target, prefix)
             .1
+            .filter(|units| head.is_some() && units.head.as_deref() == head)
             .map_or_else(BTreeSet::new, |units| units.restored)
     };
+    let prefixes = workspaces
+        .iter()
+        .map(|workspace| crate::io::input_scopes::git_prefix(&workspace.root))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut restored: Vec<BTreeSet<String>> = workspaces
         .iter()
-        .map(|workspace| hashes(&workspace.target_directory))
+        .zip(&prefixes)
+        .map(|(workspace, prefix)| hashes(&workspace.target_directory, prefix))
         .collect();
     for (indices, directory) in shared.iter().zip(groups) {
         if indices.len() < 2 {
             continue;
         }
-        let held = hashes(directory);
         for index in indices {
-            restored[*index].extend(held.iter().cloned());
+            restored[*index].extend(hashes(directory, &prefixes[*index]));
         }
     }
-    restored
+    Ok(restored)
 }
 
 pub(super) fn gathered_files(

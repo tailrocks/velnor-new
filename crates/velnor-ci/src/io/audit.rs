@@ -102,8 +102,8 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &workspaces,
         &shared,
         &groups,
-        &super::input_scopes::git_prefix(directory)?,
-    );
+        super::restored_units::head(directory).as_deref(),
+    )?;
     let gathered = setup::gathered_files(&workspaces, &shared, &groups, &chosen)?;
     audit.note_build_outputs(&gathered)?;
     for (unit, file, indices) in gathered {
