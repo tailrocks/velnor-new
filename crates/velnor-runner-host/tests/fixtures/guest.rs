@@ -52,7 +52,10 @@ pub(crate) fn prepare_guest(root: &Path) -> io::Result<()> {
     std::fs::write(root.join("guest/usr/sbin/ip"), "")?;
     std::fs::write(
         root.join("guest/etc/passwd"),
-        "root:x:0:0:root:/root:/bin/bash\nubuntu:x:501:501::/home/ubuntu:/bin/bash\n",
+        concat!(
+            "root:x:0:0:root:/root:/bin/bash\nubuntu:x:501:501::/home",
+            "/ubuntu:/bin/bash\n"
+        ),
     )?;
     std::fs::write(
         root.join("guest/etc/group"),

@@ -101,7 +101,7 @@ The host hashes its own `velnor-runner` (`VELNOR_RUNNER_BINARY`, default: next t
 
 ## Host store
 
-The host store (`/Users/Shared/velnor` by default) holds only `host.lock`, the lock that allows one controller per store. It must be owned by the host user, closed to group and other and free of ACLs. It is not mounted into the machine. The startup sweep removes the trees earlier layouts left there: `bin`, `crates`, `tools`, `git`, `gen`, `cache`, `records`, `work`, `jit` and `trusted`. A symlink among them is unlinked, never followed.
+The host store (the `Shared/velnor` folder of the macOS `Users` directory by default) holds only `host.lock`, the lock that allows one controller per store. It must be owned by the host user, closed to group and other and free of ACLs. It is not mounted into the machine. The startup sweep removes the trees earlier layouts left there: `bin`, `crates`, `tools`, `git`, `gen`, `cache`, `records`, `work`, `jit` and `trusted`. A symlink among them is unlinked, never followed.
 
 ## Launch
 

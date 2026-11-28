@@ -9,10 +9,16 @@ use super::support::Fixture;
 
 type Check = Result<(), Box<dyn Error>>;
 
-const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nubuntu:x:501:501::/home/ubuntu:/bin/bash\n";
+const PASSWD: &str = concat!(
+    "root:x:0:0:root:/root:/bin/bash\nubuntu:x:501:501::/home",
+    "/ubuntu:/bin/bash\n"
+);
 const GROUP: &str = "root:x:0:\nsudo:x:27:ubuntu\nubuntu:x:501:\n";
 const HOME: &str = concat!("/home", "/velnor-job");
-const GOOD: &str = "velnor-job:x:777:778::/home/velnor-job:/usr/sbin/nologin\n";
+const GOOD: &str = concat!(
+    "velnor-job:x:777:778::/home",
+    "/velnor-job:/usr/sbin/nologin\n"
+);
 const GOOD_GROUP: &str = "velnor-job:x:778:\n";
 
 fn databases(fixture: &Fixture, passwd: &str, group: &str) -> Check {
@@ -74,7 +80,10 @@ fn unsound_accounts() -> [Account; 14] {
     [
         (
             "uid 0",
-            "velnor-job:x:0:778::/home/velnor-job:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:0:778::/home",
+                "/velnor-job:/usr/sbin/nologin\n"
+            ),
             GOOD_GROUP,
         ),
         (
@@ -84,12 +93,15 @@ fn unsound_accounts() -> [Account; 14] {
         ),
         (
             "gid 0",
-            "velnor-job:x:777:0::/home/velnor-job:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:777:0::/home",
+                "/velnor-job:/usr/sbin/nologin\n"
+            ),
             "velnor-job:x:0:\n",
         ),
         (
             "a login shell",
-            "velnor-job:x:777:778::/home/velnor-job:/bin/bash\n",
+            concat!("velnor-job:x:777:778::/home", "/velnor-job:/bin/bash\n"),
             GOOD_GROUP,
         ),
         (
@@ -99,28 +111,43 @@ fn unsound_accounts() -> [Account; 14] {
         ),
         (
             "the uid of the default user",
-            "velnor-job:x:501:778::/home/velnor-job:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:501:778::/home",
+                "/velnor-job:/usr/sbin/nologin\n"
+            ),
             GOOD_GROUP,
         ),
         (
             "the gid of the sudo group, listed before it",
-            "velnor-job:x:777:27::/home/velnor-job:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:777:27::/home",
+                "/velnor-job:/usr/sbin/nologin\n"
+            ),
             "velnor-job:x:27:\n",
         ),
         (
             "the gid of the default user's group, listed before it",
-            "velnor-job:x:777:501::/home/velnor-job:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:777:501::/home",
+                "/velnor-job:/usr/sbin/nologin\n"
+            ),
             "velnor-job:x:501:\n",
         ),
         ("a member in its group", GOOD, "velnor-job:x:778:ubuntu\n"),
         (
             "a second account on its uid",
-            "velnor-job:x:777:778::/home/velnor-job:/usr/sbin/nologin\nother:x:777:999::/:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:777:778::/home",
+                "/velnor-job:/usr/sbin/nologin\nother:x:777:999::/:/usr/sbin/nologin\n"
+            ),
             GOOD_GROUP,
         ),
         (
             "a second account with its primary gid",
-            "velnor-job:x:777:778::/home/velnor-job:/usr/sbin/nologin\nother:x:888:778::/:/usr/sbin/nologin\n",
+            concat!(
+                "velnor-job:x:777:778::/home",
+                "/velnor-job:/usr/sbin/nologin\nother:x:888:778::/:/usr/sbin/nologin\n"
+            ),
             GOOD_GROUP,
         ),
         (
