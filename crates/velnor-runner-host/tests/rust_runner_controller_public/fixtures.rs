@@ -199,6 +199,7 @@ fn inventory(merge_group: bool) -> TestResult<String> {
 
 const BRANCH_POLICY: &str = "mode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = [{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }, { base_repository_id = 42, base_branch = \"main\", head_repository_id = 43, head_branch = \"feature\" }]";
 const MERGE_GROUP_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"merge_group\"]\npull_request_rules = []";
+const REPOSITORY_PULL_REQUEST_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = []";
 pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
 pub(super) const HOST_TOML_LIMIT: usize = 1_048_576;
 
@@ -226,6 +227,22 @@ pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<S
 
 pub(super) fn merge_group_host_toml(root: &Path) -> TestResult<String> {
     host_toml_with(root, 1, KEYCHAIN_REFERENCE, "", MERGE_GROUP_POLICY)
+}
+
+pub(super) fn repository_pull_request_host_toml(root: &Path) -> TestResult<String> {
+    host_toml_with(
+        root,
+        1,
+        KEYCHAIN_REFERENCE,
+        "",
+        REPOSITORY_PULL_REQUEST_POLICY,
+    )
+}
+
+pub(super) fn with_head_ref(mut offer: Value, branch: &str) -> Value {
+    offer["branch"] = json!(branch);
+    offer["pr"]["head_ref"] = json!(branch);
+    offer
 }
 
 pub(super) fn padded(text: &str, bytes: usize) -> String {

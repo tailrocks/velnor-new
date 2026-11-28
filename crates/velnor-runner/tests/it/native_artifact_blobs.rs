@@ -288,9 +288,8 @@ async fn a_failing_blob_upload_does_not_print_the_signed_url_query() -> Result<(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_blob_upload_to_a_closed_port_does_not_print_the_signed_url_query() -> Result<()> {
-    let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-    let port = closed.local_addr()?.port();
-    drop(closed);
+    let closed = crate::support::ClosedPort::start()?;
+    let port = closed.port();
     let fake = FakeResults::start().await?;
     fake.script(
         "CreateArtifact",

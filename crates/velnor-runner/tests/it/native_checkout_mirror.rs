@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io::Write;
-use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
@@ -145,7 +144,8 @@ fn mirror_is_keyed_by_host_owner_and_repository() -> Result<()> {
     git(&work, &["init", "-q", "-b", "main"])?;
     let theirs = commit(&work, "theirs")?;
     git(&work, &["push", "-q", &other.to_string_lossy(), "main"])?;
-    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let closed_port = crate::support::ClosedPort::start()?;
+    let closed = closed_port.port();
     let elsewhere = format!("http://127.0.0.1:{closed}");
     let someone = [("tailrocks/velnor-new", "someone/velnor-new")];
     let url = rig.server_url();
@@ -220,7 +220,8 @@ fn persist_credentials_other_than_true_is_accepted_as_false() -> Result<()> {
 #[test]
 fn checkout_fetch_uses_trusted_facts() -> Result<()> {
     let rig = Rig::new()?;
-    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let closed_port = crate::support::ClosedPort::start()?;
+    let closed = closed_port.port();
     let facts = rig.root.join("trusted.json");
     std::fs::write(
         &facts,
@@ -346,7 +347,8 @@ fn a_cancelled_fetch_leaves_no_git_helper_behind() -> Result<()> {
         ),
     )?;
     std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755))?;
-    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let closed_port = crate::support::ClosedPort::start()?;
+    let closed = closed_port.port();
     let job = rig.job(
         "checkout_depth1",
         &rig.head,
