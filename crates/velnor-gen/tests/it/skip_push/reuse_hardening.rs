@@ -22,7 +22,11 @@ fn renamed(kind: &str, name: &str, knob: bool) -> Result<RepoView, Box<dyn std::
 
 #[test]
 fn a_lint_job_named_like_another_job_or_job_id_is_refused_when_reuse_is_on() -> TestResult {
-    for (kind, name) in [("jactionlint", "rust-root"), ("jactionlint", "Alint")] {
+    for (kind, name) in [
+        ("jactionlint", "rust-root"),
+        ("jactionlint", "Alint"),
+        ("jactionlint", "lint-alint"),
+    ] {
         let error = workflow(&renamed(kind, name, true)?)
             .err()
             .ok_or("a job shared its name with another job")?
@@ -65,5 +69,37 @@ fn the_per_root_audit_is_reusable_in_the_event_mode_that_runs_in_both_runs() -> 
                 && item["step"] == name),
         "{list}"
     );
+    Ok(())
+}
+
+fn audit_condition(on_main: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let config = format!("on_main = '{on_main}'\n{KNOB}{LINT}");
+    let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
+    pin_helper(&mut repo, "0.1.117")?;
+    let document = crate::yaml_tree::document(&workflow(&repo)?)?;
+    let all = &document["jobs"];
+    let list = step(&all["rust-plan"], "velnor-ci verdict reuse")?["env"]["VELNOR_REUSABLE"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    Ok((
+        condition(&all["rust-root"], "velnor-ci inputs audit --root .")?,
+        list,
+    ))
+}
+
+#[test]
+fn the_per_root_audit_gets_its_id_in_every_event_mode() -> TestResult {
+    let id = "rust-root.inputs-audit-1";
+    for on_main in ["affected", "everything"] {
+        let (condition, list) = audit_condition(on_main)?;
+        assert!(
+            condition.contains(&format!("!{REUSED}{id} ')")),
+            "{on_main}: {condition}"
+        );
+        assert!(list.contains(id), "{on_main}: {list}");
+    }
     Ok(())
 }

@@ -119,3 +119,30 @@ pub fn check_reuse(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectE
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn audit_when(when: When) -> bool {
+        reusable_audit(&Step {
+            when,
+            ..step(StepKind::InputsAuditRoot(None))
+        })
+    }
+
+    #[test]
+    fn only_the_modes_that_run_the_audit_in_both_runs_make_it_reusable() {
+        assert!(audit_when(When::FullAuditOrPullRequest));
+        assert!(audit_when(When::FullAuditOrPushOrPullRequest));
+        for when in [
+            When::Success,
+            When::FullAudit,
+            When::FullAuditOrPush,
+            When::ScheduledOrPush,
+            When::Scheduled,
+        ] {
+            assert!(!audit_when(when), "{when:?}");
+        }
+    }
+}
