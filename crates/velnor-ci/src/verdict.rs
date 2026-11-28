@@ -14,31 +14,21 @@ pub const FILE_NAME: &str = "verdict.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Runner {
-    pub os: String,
-    pub arch: String,
-    pub environment: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct VerdictMatch {
     pub format: u32,
     pub attempt: u32,
     pub tree: String,
     pub plan: BTreeMap<String, String>,
-    pub runner: Runner,
 }
 
 impl VerdictMatch {
     #[must_use]
-    pub fn new(attempt: u32, tree: String, plan: BTreeMap<String, String>, runner: Runner) -> Self {
+    pub fn new(attempt: u32, tree: String, plan: BTreeMap<String, String>) -> Self {
         Self {
             format: FORMAT,
             attempt,
             tree,
             plan,
-            runner,
         }
     }
 
@@ -85,7 +75,6 @@ impl Reusable {
 pub struct JobEvidence {
     pub name: String,
     pub attempt: u32,
-    pub labels: Vec<String>,
     pub conclusion: Option<String>,
     pub steps: Vec<(String, Option<String>)>,
 }
@@ -120,7 +109,8 @@ pub enum Refusal {
     OtherAttempt { recorded: u32, latest: u32 },
     OtherTree,
     OtherPlan,
-    OtherRunner,
+    NoAttempt,
+    AmbiguousStep { job: String, step: String },
     NothingToReuse,
 }
 
@@ -151,7 +141,11 @@ impl fmt::Display for Refusal {
             ),
             Self::OtherTree => f.write_str("the verdict is for another tree"),
             Self::OtherPlan => f.write_str("the verdict is for another plan"),
-            Self::OtherRunner => f.write_str("the verdict is for another runner"),
+            Self::NoAttempt => f.write_str("the run's jobs report no run attempt"),
+            Self::AmbiguousStep { job, step } => write!(
+                f,
+                "job {job} has more than one step named {step}, so a step conclusion cannot be told apart"
+            ),
             Self::NothingToReuse => f.write_str("no reusable step or job passed in that run"),
         }
     }
@@ -163,40 +157,33 @@ pub struct Reuse {
     pub reused: BTreeSet<String>,
 }
 
-const OS_LABELS: [&str; 3] = ["linux", "macos", "windows"];
-const ARCH_LABELS: [&str; 4] = ["x64", "x86", "arm", "arm64"];
-
 fn passed(conclusion: Option<&String>) -> bool {
     conclusion.map(String::as_str) == Some("success")
 }
 
-fn on_runner(labels: &[String], runner: &Runner) -> bool {
-    let named = |label: &str| labels.iter().any(|name| name.eq_ignore_ascii_case(label));
-    named("self-hosted") == runner.environment.eq_ignore_ascii_case("self-hosted")
-        && OS_LABELS
-            .iter()
-            .filter(|label| named(label))
-            .all(|label| runner.os.eq_ignore_ascii_case(label))
-        && ARCH_LABELS
-            .iter()
-            .filter(|label| named(label))
-            .all(|label| runner.arch.eq_ignore_ascii_case(label))
-}
-
-fn concluded_success(run: &RunEvidence, item: &Reusable, runner: &Runner) -> bool {
+fn concluded_success(run: &RunEvidence, item: &Reusable) -> bool {
     run.jobs.iter().any(|job| {
         job.name == item.job
-            && on_runner(&job.labels, runner)
-            && match &item.step {
-                None => passed(job.conclusion.as_ref()),
-                Some(step) => {
-                    passed(job.conclusion.as_ref())
-                        && job
-                            .steps
-                            .iter()
-                            .any(|(name, conclusion)| name == step && passed(conclusion.as_ref()))
-                }
-            }
+            && passed(job.conclusion.as_ref())
+            && item.step.as_ref().is_none_or(|step| {
+                job.steps
+                    .iter()
+                    .any(|(name, conclusion)| name == step && passed(conclusion.as_ref()))
+            })
+    })
+}
+
+fn ambiguous_step(run: &RunEvidence, reusable: &[Reusable]) -> Option<Refusal> {
+    reusable.iter().find_map(|item| {
+        let step = item.step.as_ref()?;
+        run.jobs
+            .iter()
+            .filter(|job| job.name == item.job)
+            .any(|job| job.steps.iter().filter(|(name, _)| name == step).count() > 1)
+            .then(|| Refusal::AmbiguousStep {
+                job: item.job.clone(),
+                step: step.clone(),
+            })
     })
 }
 
@@ -226,6 +213,9 @@ pub fn decide(
         .as_ref()
         .map_err(|reason| Refusal::NoVerdict(reason.clone()))?;
     let latest = run.jobs.iter().map(|job| job.attempt).max().unwrap_or(0);
+    if latest == 0 {
+        return Err(Refusal::NoAttempt);
+    }
     if recorded.attempt != latest {
         return Err(Refusal::OtherAttempt {
             recorded: recorded.attempt,
@@ -238,12 +228,12 @@ pub fn decide(
     if recorded.plan != own.plan {
         return Err(Refusal::OtherPlan);
     }
-    if recorded.runner != own.runner {
-        return Err(Refusal::OtherRunner);
+    if let Some(refusal) = ambiguous_step(run, reusable) {
+        return Err(refusal);
     }
     let reused: BTreeSet<String> = reusable
         .iter()
-        .filter(|item| concluded_success(run, item, &recorded.runner))
+        .filter(|item| concluded_success(run, item))
         .map(|item| item.id.clone())
         .collect();
     if reused.is_empty() {

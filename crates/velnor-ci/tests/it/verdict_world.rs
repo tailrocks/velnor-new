@@ -38,7 +38,6 @@ impl Reuse {
 pub(crate) struct World {
     pub(crate) checkout: Repo,
     pub(crate) plan: String,
-    pub(crate) arch: String,
     pub(crate) event: String,
     pub(crate) routes: BTreeMap<String, Vec<u8>>,
     pub(crate) overrides: Vec<(String, String)>,
@@ -69,15 +68,12 @@ pub(crate) fn tree(repo: &Repo) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-pub(crate) fn recorded(repo: &Repo, plan: &str, arch: &str) -> String {
+pub(crate) fn recorded(repo: &Repo, plan: &str) -> String {
     let temp = repo.root().join("runner-temp");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .args(["verdict", "record"])
         .env("PLAN_JSON", plan)
-        .env("RUNNER_OS", "macOS")
-        .env("RUNNER_ARCH", arch)
-        .env("RUNNER_ENVIRONMENT", "self-hosted")
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_RUN_ATTEMPT", "1")
         .output()
@@ -89,9 +85,7 @@ pub(crate) fn recorded(repo: &Repo, plan: &str, arch: &str) -> String {
 
 type Job<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)]);
 
-pub(crate) const LABELS: [&str; 3] = ["self-hosted", "macOS", "ARM64"];
-
-pub(crate) fn jobs_on(entries: &[Job<'_>], attempt: u32, labels: &[&str]) -> Vec<u8> {
+pub(crate) fn jobs_on(entries: &[Job<'_>], attempt: u32) -> Vec<u8> {
     let jobs: Vec<Value> = entries
         .iter()
         .map(|(name, conclusion, steps)| {
@@ -100,14 +94,14 @@ pub(crate) fn jobs_on(entries: &[Job<'_>], attempt: u32, labels: &[&str]) -> Vec
                 .map(|(step, outcome)| json!({"name": step, "conclusion": outcome}))
                 .collect();
             json!({"id": 9, "name": name, "conclusion": conclusion, "run_attempt": attempt,
-                "labels": labels, "created_at": "2026-11-20T00:00:00Z", "steps": steps})
+                "created_at": "2026-11-20T00:00:00Z", "steps": steps})
         })
         .collect();
     json_body(&json!({"total_count": jobs.len(), "jobs": jobs}))
 }
 
 pub(crate) fn jobs(entries: &[Job<'_>]) -> Vec<u8> {
-    jobs_on(entries, 1, &LABELS)
+    jobs_on(entries, 1)
 }
 
 impl World {
@@ -116,7 +110,6 @@ impl World {
         let mut world = Self {
             checkout,
             plan: PLAN.to_owned(),
-            arch: "ARM64".to_owned(),
             event: "merge_group".to_owned(),
             routes: BTreeMap::new(),
             overrides: Vec::new(),
@@ -175,10 +168,7 @@ impl World {
             ),
             (
                 path(&format!("/actions/artifacts/{ARTIFACT}/zip")),
-                zip_of(
-                    "verdict.json",
-                    recorded(&self.checkout, PLAN, "ARM64").as_bytes(),
-                ),
+                zip_of("verdict.json", recorded(&self.checkout, PLAN).as_bytes()),
             ),
         ];
         self.routes = routes.into_iter().collect();
@@ -243,9 +233,6 @@ impl World {
             .env("GITHUB_SERVER_URL", "https://github.com")
             .env("GITHUB_OUTPUT", &outputs)
             .env("PLAN_JSON", &self.plan)
-            .env("RUNNER_OS", "macOS")
-            .env("RUNNER_ARCH", &self.arch)
-            .env("RUNNER_ENVIRONMENT", "self-hosted")
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_RUN_ATTEMPT", "1")
             .envs(self.overrides.clone())

@@ -23,15 +23,6 @@ fn plan_json() -> (String, Value) {
     )
 }
 
-fn runner_env() -> [(String, Value); 3] {
-    [
-        ("RUNNER_OS", "${{ runner.os }}"),
-        ("RUNNER_ARCH", "${{ runner.arch }}"),
-        ("RUNNER_ENVIRONMENT", "${{ runner.environment }}"),
-    ]
-    .map(|(name, expression)| (name.to_owned(), Value::Expr(expression.to_owned())))
-}
-
 pub(crate) fn reuse_step(step: &ReuseStep) -> RenderedStep {
     match step {
         ReuseStep::Record => record_step(),
@@ -46,7 +37,7 @@ fn record_step() -> RenderedStep {
         id: Some("verdict_record".to_owned()),
         condition: Some(format!("${{{{ {SAME_REPOSITORY_PULL_REQUEST} }}}}")),
         continue_on_error: true,
-        env: std::iter::once(plan_json()).chain(runner_env()).collect(),
+        env: std::iter::once(plan_json()).collect(),
         run: Some("velnor-ci verdict record".to_owned()),
         ..RenderedStep::default()
     }
@@ -103,7 +94,6 @@ fn decide_step(required: &str) -> RenderedStep {
             plan_json(),
         ]
         .into_iter()
-        .chain(runner_env())
         .collect(),
         run: Some("velnor-ci verdict reuse".to_owned()),
         ..RenderedStep::default()

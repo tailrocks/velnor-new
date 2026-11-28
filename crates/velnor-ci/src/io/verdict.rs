@@ -12,7 +12,7 @@ use super::{EVENT_VARIABLE, api_url, append_outputs, http, read_limited};
 use crate::cli::VerdictCommand;
 use crate::error::CiError;
 use crate::github::Repo;
-use crate::verdict::{ARTIFACT_NAME, FILE_NAME, Reusable, Runner, VerdictMatch};
+use crate::verdict::{ARTIFACT_NAME, FILE_NAME, Reusable, VerdictMatch};
 use crate::verdict_gather::{Artifacts, Context, evaluate};
 
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -48,11 +48,6 @@ fn own() -> Result<VerdictMatch, CiError> {
         attempt,
         String::from_utf8_lossy(&output.stdout).trim().to_owned(),
         VerdictMatch::parse_plan(&required("PLAN_JSON")?)?,
-        Runner {
-            os: required("RUNNER_OS")?,
-            arch: required("RUNNER_ARCH")?,
-            environment: required("RUNNER_ENVIRONMENT")?,
-        },
     ))
 }
 

@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::resolve_wire::zip_of;
 use crate::verdict_world::{
-    BASE, HEAD, LABELS, PLAN, World, checkout, jobs, jobs_on, json_body, path, recorded,
+    BASE, HEAD, PLAN, World, checkout, jobs, jobs_on, json_body, path, recorded, tree,
 };
 
 const RUN_URL: &str = "https://github.com/tailrocks/velnor-new/actions/runs/100";
@@ -31,7 +31,7 @@ fn artifact_zip(world: &mut World, bytes: Vec<u8>) {
 }
 
 #[test]
-fn a_green_pull_request_run_of_the_same_tree_plan_and_runner_is_reused() {
+fn a_green_pull_request_run_of_the_same_tree_and_plan_is_reused() {
     let result = World::new().run();
     assert_eq!(result.outputs["reuse"], "true", "{}", result.stdout());
     assert_eq!(result.outputs["reuse_run"], RUN_URL);
@@ -168,10 +168,7 @@ fn a_verdict_of_another_tree_is_refused() {
     let elsewhere = checkout("other content");
     artifact_zip(
         &mut world,
-        zip_of(
-            "verdict.json",
-            recorded(&elsewhere, PLAN, "ARM64").as_bytes(),
-        ),
+        zip_of("verdict.json", recorded(&elsewhere, PLAN).as_bytes()),
     );
     refused(&world, "the verdict is for another tree");
 }
@@ -181,13 +178,6 @@ fn a_verdict_of_another_plan_is_refused() {
     let mut world = World::new();
     world.plan = r#"{"rust_root_mode":"all","rust_root_tests":"run"}"#.to_owned();
     refused(&world, "the verdict is for another plan");
-}
-
-#[test]
-fn a_verdict_of_another_runner_is_refused() {
-    let mut world = World::new();
-    world.arch = "X64".to_owned();
-    refused(&world, "the verdict is for another runner");
 }
 
 #[test]
@@ -241,7 +231,6 @@ fn a_verdict_of_an_older_attempt_than_the_latest_jobs_is_refused() {
         jobs_on(
             &[("Required", "success", &[]), ("Alint", "success", &[])],
             2,
-            &LABELS,
         ),
     );
     refused(
@@ -250,58 +239,81 @@ fn a_verdict_of_an_older_attempt_than_the_latest_jobs_is_refused() {
     );
 }
 
-fn refused_on(labels: &[&str]) {
-    let entries = [
-        ("Required", "success", &[][..]),
-        ("Alint", "success", &[][..]),
-    ];
+fn jobs_route() -> String {
+    path("/actions/runs/100/jobs?filter=latest&per_page=100&page=1")
+}
+
+#[test]
+fn a_jobs_listing_without_run_attempt_is_refused() {
     let mut world = World::new();
     world.routes.insert(
-        path("/actions/runs/100/jobs?filter=latest&per_page=100&page=1"),
-        jobs_on(&entries, 1, labels),
+        jobs_route(),
+        json_body(&json!({"total_count": 1, "jobs": [
+            {"id": 2, "name": "Alint", "conclusion": "success",
+             "created_at": "2026-11-20T00:00:00Z", "steps": []}]})),
     );
-    refused(&world, "no reusable step or job passed in that run");
+    refused(&world, "cannot read jobs");
 }
 
 #[test]
-fn a_hosted_job_is_not_reused_for_a_self_hosted_verdict() {
-    refused_on(&["ubuntu-latest"]);
-}
-
-#[test]
-fn a_job_that_names_another_os_is_not_reused() {
-    refused_on(&["self-hosted", "Linux", "ARM64"]);
-}
-
-#[test]
-fn a_job_that_names_another_architecture_is_not_reused() {
-    refused_on(&["self-hosted", "macOS", "X64"]);
-}
-
-#[test]
-fn only_the_jobs_that_ran_on_the_recorded_runner_are_reused() {
-    let mut mixed = World::new();
-    mixed.routes.insert(
-        path("/actions/runs/100/jobs?filter=latest&per_page=100&page=1"),
-        json_body(&json!({"total_count": 3, "jobs": [
-            {"id": 1, "name": "Required", "conclusion": "success", "run_attempt": 1,
-             "labels": ["ubuntu-latest"], "created_at": "2026-11-20T00:00:00Z", "steps": []},
-            {"id": 2, "name": "Alint", "conclusion": "success", "run_attempt": 1,
-             "labels": ["self-hosted", "macOS", "ARM64"], "created_at": "2026-11-20T00:00:00Z", "steps": []},
-            {"id": 3, "name": "rust", "conclusion": "success", "run_attempt": 1,
-             "labels": ["ubuntu-latest"], "created_at": "2026-11-20T00:00:00Z",
-             "steps": [{"name": "Format", "conclusion": "success"}]}]})),
+fn a_latest_attempt_of_zero_is_refused_even_for_a_verdict_of_attempt_zero() {
+    let mut world = World::new();
+    let verdict = json!({"format": 2, "attempt": 0, "tree": tree(&world.checkout),
+        "plan": serde_json::from_str::<serde_json::Value>(PLAN).unwrap_or_default()});
+    artifact_zip(
+        &mut world,
+        zip_of("verdict.json", verdict.to_string().as_bytes()),
     );
-    let result = mixed.run();
+    world.routes.insert(
+        jobs_route(),
+        jobs_on(
+            &[("Alint", "success", &[]), ("Required", "success", &[])],
+            0,
+        ),
+    );
+    refused(&world, "the run's jobs report no run attempt");
+}
+
+#[test]
+fn a_reused_job_with_two_steps_of_one_name_is_refused() {
+    for second in ["skipped", "success"] {
+        let mut world = World::new();
+        world.routes.insert(
+            jobs_route(),
+            jobs(&[
+                ("Required", "success", &[]),
+                ("rust", "success", &[("Test", "success"), ("Test", second)]),
+            ]),
+        );
+        refused(&world, "job rust has more than one step named Test");
+    }
+}
+
+#[test]
+fn a_repeated_step_name_in_a_job_nothing_reuses_changes_nothing() {
+    let mut world = World::new();
+    world.routes.insert(
+        jobs_route(),
+        jobs(&[
+            ("Required", "success", &[]),
+            ("Alint", "success", &[]),
+            (
+                "other",
+                "success",
+                &[("Test", "success"), ("Test", "skipped")],
+            ),
+        ]),
+    );
+    let result = world.run();
     assert_eq!(result.outputs["reuse"], "true", "{}", result.stdout());
     assert_eq!(result.reused(), ["lint-alint"]);
 }
 
 #[test]
-fn record_writes_the_tree_plan_and_runner_and_is_repeatable() {
+fn record_writes_the_attempt_tree_and_plan_and_is_repeatable() {
     let world = World::new();
-    let first = recorded(&world.checkout, PLAN, "ARM64");
-    let again = recorded(&world.checkout, PLAN, "ARM64");
+    let first = recorded(&world.checkout, PLAN);
+    let again = recorded(&world.checkout, PLAN);
     assert_eq!(first, again);
     let parsed: serde_json::Value =
         serde_json::from_str(&first).unwrap_or_else(|e| unreachable!("{e}"));
@@ -309,7 +321,7 @@ fn record_writes_the_tree_plan_and_runner_and_is_repeatable() {
     assert_eq!(parsed["attempt"], 1);
     assert_eq!(parsed["tree"], crate::verdict_world::tree(&world.checkout));
     assert_eq!(parsed["plan"]["rust_root_mode"], "some");
-    assert_eq!(parsed["runner"]["arch"], "ARM64");
+    assert!(parsed.get("runner").is_none());
     let temp = world.checkout.root().join("runner-temp/velnor-verdict");
     let files: Vec<_> = std::fs::read_dir(&temp)
         .unwrap_or_else(|e| unreachable!("{e}"))

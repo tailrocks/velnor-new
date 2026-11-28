@@ -262,3 +262,37 @@ fn the_gate_spec_names_what_a_verdict_may_stand_in_for() -> TestResult {
     assert!(!spec.contains("--reuse rust-root"), "{spec}");
     Ok(())
 }
+
+fn with_setup(name: &str, knob: bool) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let config = format!(
+        "pr_ci = \"label\"\n\n[[test_setup]]\nroot = \".\"\nname = \"{name}\"\nrun = \"bash scripts/x.sh\"\nphase = \"build\"\n\n{}{LINT}",
+        if knob { KNOB } else { "" }
+    );
+    let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
+    pin_helper(&mut repo, "0.1.117")?;
+    Ok(repo)
+}
+
+#[test]
+fn a_setup_step_named_like_a_reusable_step_is_refused() -> TestResult {
+    for name in ["Test", "Format"] {
+        let error = workflow(&with_setup(name, true)?)
+            .err()
+            .ok_or("a setup step lent its name to a reusable step")?
+            .to_string();
+        assert!(
+            error.contains(&format!("the step \"{name}\" can be reused")),
+            "{name}: {error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_shared_step_name_is_harmless_without_reuse_and_a_distinct_name_passes() -> TestResult {
+    workflow(&with_setup("Test", false)?)?;
+    workflow(&with_setup("Prepare fixtures", true)?)?;
+    Ok(())
+}

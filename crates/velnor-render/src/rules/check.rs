@@ -36,7 +36,7 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
                 step: 0,
                 rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
             });
-            step_violations.chain(runner)
+            step_violations.chain(runner).chain(shared_names(job))
         })
         .collect();
     if violations.is_empty() {
@@ -44,6 +44,26 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
     } else {
         Err(violations)
     }
+}
+
+fn shared_names(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, step)| {
+            let reusable = step.reuse.as_ref().is_some_and(|reuse| !reuse.build_only);
+            let shared = job
+                .steps
+                .iter()
+                .filter(|other| other.name == step.name)
+                .count()
+                > 1;
+            (reusable && shared).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: index,
+                rule: Rule::ReusableStepNameShared(step.name.clone()),
+            })
+        })
 }
 
 fn holds_app_token(job: &RenderedJob) -> bool {

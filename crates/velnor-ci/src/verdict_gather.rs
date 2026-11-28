@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::error::CiError;
 use crate::github::{
-    ApiJobs, ApiPage, ApiRule, GitHub, Repo, compare_path, encode, parse, rules_path, run_jobs_path,
+    ApiPage, ApiRule, GitHub, Repo, compare_path, encode, parse, rules_path, run_jobs_path,
 };
 use crate::merge_group::workflow_file;
 use crate::private_token::parse_queue_ref;
@@ -78,6 +78,26 @@ struct Linked {
     number: u64,
 }
 
+#[derive(Deserialize)]
+struct RunJobs {
+    jobs: Vec<RunJob>,
+}
+
+#[derive(Deserialize)]
+struct RunJob {
+    name: String,
+    run_attempt: u32,
+    conclusion: Option<String>,
+    #[serde(default)]
+    steps: Vec<RunStep>,
+}
+
+#[derive(Deserialize)]
+struct RunStep {
+    name: String,
+    conclusion: Option<String>,
+}
+
 #[must_use]
 pub fn pull_path(repo: &Repo, number: u64) -> String {
     format!("/repos/{repo}/pulls/{number}")
@@ -124,13 +144,12 @@ fn forbids_force_push(github: &dyn GitHub, repo: &Repo, branch: &str) -> Result<
 fn jobs_of(github: &dyn GitHub, repo: &Repo, run: u64) -> Result<Vec<JobEvidence>, Refusal> {
     let mut found = Vec::new();
     for page in 1..=JOB_PAGES {
-        let jobs: ApiJobs = read(github, &run_jobs_path(repo, run, page), "jobs")?;
+        let jobs: RunJobs = read(github, &run_jobs_path(repo, run, page), "jobs")?;
         let last = jobs.jobs.len() < 100;
         found.extend(jobs.jobs.into_iter().map(|job| {
             JobEvidence {
                 name: job.name,
                 attempt: job.run_attempt,
-                labels: job.labels,
                 conclusion: job.conclusion,
                 steps: job
                     .steps

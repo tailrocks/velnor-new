@@ -14,6 +14,7 @@ struct Gate {
     reused: &'static str,
     alint: &'static str,
     counted: Option<(&'static str, &'static str)>,
+    raw: Option<Value>,
 }
 
 impl Gate {
@@ -24,16 +25,19 @@ impl Gate {
             reused: " lint-alint rust.test rust.test-features-x ",
             alint: "skipped",
             counted: None,
+            raw: None,
         }
     }
 
     fn run(&self) -> Output {
-        let rust_outputs = self.counted.map_or_else(
-            || json!({}),
-            |(run, by_package)| {
-                json!({"tests_run": run, "tests_listed": "3", "tests_by_package": by_package})
-            },
-        );
+        let rust_outputs = self.raw.clone().unwrap_or_else(|| {
+            self.counted.map_or_else(
+                || json!({}),
+                |(run, by_package)| {
+                    json!({"tests_run": run, "tests_listed": "3", "tests_by_package": by_package})
+                },
+            )
+        });
         let needs: Value = json!({
             "rust-plan": {"result": "success", "outputs": {
                 "rust_root_tests": "run",
@@ -161,6 +165,42 @@ fn counts_of_a_fully_reused_lane_are_judged_when_present() {
         ..Gate::passing()
     };
     assert!(sound.run().status.success());
+}
+
+#[test]
+fn malformed_or_partial_counts_of_a_fully_reused_lane_refuse() {
+    let cases = [
+        json!({"tests_run": "0"}),
+        json!({"tests_listed": "0"}),
+        json!({"tests_by_package": "velnor-ci=3/3"}),
+        json!({"tests_run": "3", "tests_listed": "3"}),
+        json!({"tests_run": "3", "tests_listed": "3", "tests_by_package": ""}),
+        json!({"tests_run": "0", "tests_listed": "3", "tests_by_package": "garbage"}),
+        json!({"tests_run": "0", "tests_listed": "3", "tests_by_package": "velnor-ci=3/3"}),
+        json!({"tests_ignored": "1"}),
+        json!({"tests_run": "3", "tests_listed": "3", "tests_by_package": "velnor-ci=3/3", "tests_ignored": "x"}),
+    ];
+    for raw in cases {
+        let gate = Gate {
+            raw: Some(raw.clone()),
+            ..Gate::passing()
+        };
+        assert!(!gate.run().status.success(), "{raw}");
+    }
+}
+
+#[test]
+fn counts_that_are_all_missing_or_all_empty_are_covered_by_the_reuse() {
+    for raw in [
+        json!({}),
+        json!({"tests_run": "", "tests_listed": "", "tests_by_package": "", "tests_ignored": ""}),
+    ] {
+        let gate = Gate {
+            raw: Some(raw.clone()),
+            ..Gate::passing()
+        };
+        assert!(passes(&gate), "{raw}");
+    }
 }
 
 #[test]

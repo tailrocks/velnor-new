@@ -84,6 +84,7 @@ pub enum Rule {
     EnvTooLong(usize),
     ExpressionTooLong(usize),
     ImageBoundary(&'static str),
+    ReusableStepNameShared(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +155,10 @@ impl fmt::Display for RuleViolation {
                 "an env value joins its expressions into one of {length} characters, and GitHub fails a step whose expression is over {MAX_EXPRESSION_CHARACTERS}; shorten it or pass a list without per-entry expressions"
             ),
             Rule::ImageBoundary(why) => f.write_str(why),
+            Rule::ReusableStepNameShared(name) => write!(
+                f,
+                "the step {name:?} can be reused from a pull request run, which matches steps by name, and another step of the job has the same name; rename one of them"
+            ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"

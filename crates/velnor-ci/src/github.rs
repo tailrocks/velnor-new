@@ -71,8 +71,6 @@ pub struct ApiJob {
     pub id: u64,
     pub name: String,
     #[serde(default)]
-    pub run_attempt: u32,
-    #[serde(default)]
     pub labels: Vec<String>,
     pub conclusion: Option<String>,
     pub created_at: String,

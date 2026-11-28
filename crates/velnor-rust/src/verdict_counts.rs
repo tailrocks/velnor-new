@@ -2,22 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Need, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    Counted, Need, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
     TESTS_RUN_OUTPUT, TestCounts, parse_package_counts,
 };
 
-pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts> {
-    let need = need?;
+pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Counted {
+    let Some(need) = need else {
+        return Counted::Absent;
+    };
     let named = |name: &str| {
         need.outputs
             .get(&format!("{name}_{slug}"))
             .or_else(|| need.outputs.get(name))
     };
-    let run = named(TESTS_RUN_OUTPUT);
-    let listed = named(TESTS_LISTED_OUTPUT);
+    let outputs = [
+        TESTS_RUN_OUTPUT,
+        TESTS_LISTED_OUTPUT,
+        TESTS_BY_PACKAGE_OUTPUT,
+        TESTS_IGNORED_OUTPUT,
+    ];
+    if outputs
+        .iter()
+        .all(|name| named(name).is_none_or(String::is_empty))
+    {
+        return Counted::Absent;
+    }
+    parsed(named).map_or(Counted::Malformed, Counted::Parsed)
+}
+
+fn parsed<'a>(named: impl Fn(&str) -> Option<&'a String>) -> Option<TestCounts> {
     let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(run?)?;
-    let listed = number(listed?)?;
+    let run = number(named(TESTS_RUN_OUTPUT)?)?;
+    let listed = number(named(TESTS_LISTED_OUTPUT)?)?;
     let summed_run = packages
         .values()
         .try_fold(0u64, |total, package| total.checked_add(package.run))?;

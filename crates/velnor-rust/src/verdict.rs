@@ -119,6 +119,13 @@ pub fn package_token(name: &str) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Counted {
+    Absent,
+    Malformed,
+    Parsed(TestCounts),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub passed: bool,
     pub rows: Vec<(JobId, String, String)>,
@@ -195,7 +202,7 @@ fn judge(
 pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
-    tests: &BTreeMap<(JobId, RootSlug), Option<TestCounts>>,
+    tests: &BTreeMap<(JobId, RootSlug), Counted>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
@@ -232,11 +239,10 @@ pub fn verdict(
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
         {
             let key = (job.clone(), slug.clone());
-            let found = tests.get(&key).cloned().flatten();
-            if found.is_none() && plan.reused_lanes.contains(&key) {
-                covered = true;
-            } else {
-                counts.push(found);
+            match tests.get(&key).cloned().unwrap_or(Counted::Absent) {
+                Counted::Absent if plan.reused_lanes.contains(&key) => covered = true,
+                Counted::Parsed(found) => counts.push(Some(found)),
+                Counted::Absent | Counted::Malformed => counts.push(None),
             }
         }
         if counts.is_empty() && covered {
