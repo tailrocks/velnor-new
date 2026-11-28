@@ -7,7 +7,7 @@ use velnor_model::PackageName;
 
 use crate::coverage::{Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
-use crate::io::audit::Audit;
+use crate::io::audit::{Audit, UnitIdentity};
 
 impl Audit<'_> {
     pub(in crate::io) fn fingerprint(
@@ -22,7 +22,7 @@ impl Audit<'_> {
             if fingerprint.kind == UnitKind::Normal {
                 self.names.insert(
                     (index, configuration.clone(), fingerprint.target.clone()),
-                    (package.clone(), fingerprint.clone()),
+                    hash.clone(),
                 );
             }
             self.fingerprints.insert(
@@ -58,8 +58,13 @@ impl Audit<'_> {
         profile: &str,
         package: &str,
     ) -> Result<(), CiError> {
-        let Some((source, built)) =
-            self.dep_info(workspace, indices[0], file, Some(package), None)?
+        let Some((source, built)) = self.dep_info(
+            workspace,
+            indices[0],
+            file,
+            package,
+            UnitIdentity::BuildScript,
+        )?
         else {
             return Ok(());
         };

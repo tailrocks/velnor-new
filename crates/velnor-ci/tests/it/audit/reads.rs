@@ -30,6 +30,21 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/deps/it-0000000000000003.d"),
         "out.d: lib/tests/it.rs lib/tests/../../../shared/lib-test.txt\n",
     );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/app-0000000000000001/lib-app"),
+        "",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/app-0000000000000002/test-integration-test-it"),
+        "",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/lib-0000000000000003/test-integration-test-it"),
+        "",
+    );
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let root = root.display();
     unit(
@@ -186,6 +201,11 @@ fn a_built_target_that_needs_features_still_credits_its_reads() {
         &repo,
         &format!("{target}/deps/extra-f00000000000000e.d"),
         "out.d: app/src/extra.rs app/src/../../../shared/greeting.txt\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/extra-f00000000000000e/lib-extra"),
+        "",
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");

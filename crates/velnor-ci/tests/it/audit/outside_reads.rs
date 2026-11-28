@@ -37,6 +37,16 @@ fn units() -> Fixture {
     own_units(&repo, TARGET, &[]);
     unit(&repo, APP_OUTPUT, "cargo:rerun-if-changed=build.rs\n");
     super::inventory::build(&repo, APP_OUTPUT, None);
+    unit(
+        &repo,
+        &format!("{TARGET}/.fingerprint/lib-f000000000000005/lib-lib.json"),
+        "{\"deps\":[[0,\"build_script_build\",false,1]]}",
+    );
+    unit(
+        &repo,
+        &format!("{TARGET}/.fingerprint/lib-f000000000000008/run-build-script-build-script-build"),
+        "0100000000000000",
+    );
     let alias = Repo::empty("alias");
     std::os::unix::fs::symlink(repo.root(), alias.root().join("repo"))
         .unwrap_or_else(|e| unreachable!("{e}"));

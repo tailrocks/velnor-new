@@ -42,6 +42,8 @@ const REBUILD: &str = "velnor-ci inputs build -- cargo clippy --workspace --all-
 
 mod dep_info;
 
+pub(super) use dep_info::UnitIdentity;
+
 pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
@@ -50,7 +52,7 @@ pub(super) struct Audit<'a> {
     diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) foreign: BTreeMap<(usize, String, String), String>,
-    pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) names: BTreeMap<(usize, String, String), String>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
     pub(super) placed: BTreeSet<(usize, String)>,
     pub(super) rooted: BTreeSet<(usize, String)>,

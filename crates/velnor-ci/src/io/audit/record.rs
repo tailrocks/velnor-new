@@ -11,7 +11,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
 use super::super::units::{UnitFile, profile};
 use super::freshness::Cause;
-use super::{Audit, REBUILD};
+use super::{Audit, REBUILD, UnitIdentity};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
@@ -96,6 +96,7 @@ impl Audit<'_> {
         stem: &str,
     ) -> Result<(), CiError> {
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
+        let mut unit_hash = None;
         for index in indices {
             let key = (
                 *index,
@@ -103,38 +104,52 @@ impl Audit<'_> {
                 hash.unwrap_or(stem).to_owned(),
             );
             self.present.insert(key.clone());
-            let identity = match hash {
-                Some(_) => self.fingerprints.get(&key),
-                None => self.names.get(&key),
+            let named = match hash {
+                Some(hash) => Some(hash.to_owned()),
+                None => self.names.get(&key).cloned(),
             };
-            if let Some(identity) = identity {
+            let Some(named) = named else {
+                continue;
+            };
+            if let Some(identity) =
+                self.fingerprints
+                    .get(&(*index, configuration.to_owned(), named.clone()))
+            {
                 hits.push((*index, identity.clone()));
+                unit_hash.get_or_insert(named);
             }
         }
         if hash.is_none() && hits.is_empty() {
             return Ok(());
         }
+        let found = match (hits.first(), unit_hash) {
+            (Some((_, (package, _))), Some(named)) => Some((package.clone(), named)),
+            _ => hash.and_then(|hash| {
+                indices.iter().find_map(|index| {
+                    self.foreign
+                        .get(&(*index, configuration.to_owned(), hash.to_owned()))
+                        .map(|package| (package.clone(), hash.to_owned()))
+                })
+            }),
+        };
+        let Some((package, unit_hash)) = found else {
+            return Err(CiError::new(format!(
+                "{} belongs to a unit with no fingerprint, so no build-script run can be matched to it; rebuild every observed target in this checkout through {REBUILD}",
+                file.display()
+            )));
+        };
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
-        let package = hits
-            .first()
-            .map(|(_, (package, _))| package.clone())
-            .or_else(|| {
-                indices.iter().find_map(|index| {
-                    let key = (
-                        *index,
-                        configuration.to_owned(),
-                        hash.unwrap_or(stem).to_owned(),
-                    );
-                    self.foreign.get(&key).cloned()
-                })
-            });
         let Some((source, _)) = self.dep_info(
             &base,
             budget,
             file,
-            package.as_deref(),
-            hash.map(|hash| (configuration, hash)),
+            &package,
+            UnitIdentity::Fingerprint {
+                target: indices[0],
+                configuration,
+                hash: &unit_hash,
+            },
         )?
         else {
             return Ok(());

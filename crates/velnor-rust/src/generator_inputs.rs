@@ -168,8 +168,6 @@ fn locked(facts: &RepoFacts, closure: &[&Node<'_>]) -> Vec<RepoPath> {
         .collect()
 }
 
-/// A lock line with no path (the package-level `.` line, or an unresolved include) says the
-/// crate reads something the lock cannot place, so no path can be proved unread.
 fn has_pathless_line(facts: &RepoFacts, closure: &[&Node<'_>]) -> bool {
     closure_lines(facts, closure).any(|key| key.path().is_none())
 }

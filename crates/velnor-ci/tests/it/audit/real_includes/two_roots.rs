@@ -10,10 +10,10 @@ use super::lock_of;
 use super::oracle::{Layout, Share, build_in};
 use crate::io::Repo;
 
-const READS_OUT_DIR: &str =
+pub(super) const READS_OUT_DIR: &str =
     "pub const O: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/o.txt\"));\n";
 const DECLARES_UNDER_FEATURE: &str = "    if std::env::var_os(\"CARGO_FEATURE_F\").is_some() {\n        println!(\"cargo:rerun-if-changed=build.rs\");\n    }\n";
-const DECLARES: &str = "    println!(\"cargo:rerun-if-changed=build.rs\");\n";
+pub(super) const DECLARES: &str = "    println!(\"cargo:rerun-if-changed=build.rs\");\n";
 
 fn script(body: &str) -> String {
     format!(
@@ -21,7 +21,7 @@ fn script(body: &str) -> String {
     )
 }
 
-fn workspace(repo: &Repo, root: &str, member: &str, manifest: &str) {
+pub(super) fn workspace(repo: &Repo, root: &str, member: &str, manifest: &str) {
     unit(
         repo,
         &format!("{root}/Cargo.toml"),
@@ -35,7 +35,7 @@ fn workspace(repo: &Repo, root: &str, member: &str, manifest: &str) {
     );
 }
 
-fn with_script(repo: &Repo, root: &str, member: &str, manifest: &str, body: &str) {
+pub(super) fn with_script(repo: &Repo, root: &str, member: &str, manifest: &str, body: &str) {
     workspace(
         repo,
         root,
@@ -46,7 +46,7 @@ fn with_script(repo: &Repo, root: &str, member: &str, manifest: &str, body: &str
     unit(repo, &format!("{root}/{member}/src/lib.rs"), READS_OUT_DIR);
 }
 
-fn repo(name: &str) -> Repo {
+pub(super) fn repo(name: &str) -> Repo {
     let repo = Repo::new(name);
     unit(&repo, ".gitignore", "target/\n");
     unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
@@ -68,11 +68,11 @@ fn built_and_audited(repo: &Repo, layout: Layout) -> String {
     lock_of(repo)
 }
 
-fn audit_after(repo: &Repo) -> std::process::Output {
+pub(super) fn audit_after(repo: &Repo) -> std::process::Output {
     audit(repo, &["--write"])
 }
 
-fn remove_named(directory: &Path, name: &str) -> usize {
+pub(super) fn remove_named(directory: &Path, name: &str) -> usize {
     let mut removed = 0;
     for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
         let path = entry.path();
@@ -136,43 +136,6 @@ fn same_package_name(layout: Layout) {
     );
 }
 
-fn three_roots(layout: Layout) {
-    let repo = repo("audit-three-roots");
-    with_script(&repo, "a", "x", "version = \"0.1.0\"\n", DECLARES);
-    with_script(&repo, "b", "x", "version = \"0.2.0\"\n", "");
-    workspace(
-        &repo,
-        "c",
-        "y",
-        "\n[dependencies]\nx = { path = \"../../a/x\" }\nx2 = { package = \"x\", path = \"../../b/x\" }\n",
-    );
-    unit(
-        &repo,
-        "c/y/src/lib.rs",
-        "pub use x::O;\npub use x2::O as O2;\n",
-    );
-    repo.git(&["add", "--all"]);
-    for root in ["a", "b", "c"] {
-        build_in(&repo, root, Share::Zero, layout);
-    }
-    assert!(remove_named(&repo.root().join("c/target"), "root-output") > 0);
-    let written = audit_after(&repo);
-    assert!(
-        written.status.success(),
-        "{}",
-        String::from_utf8_lossy(&written.stderr)
-    );
-    let lock = lock_of(&repo);
-    assert!(
-        lock.lines().any(|line| line == ".\tx\tb/x/Cargo.toml"),
-        "{lock}"
-    );
-    assert!(
-        !lock.lines().any(|line| line == ".\tx\ta/x/Cargo.toml"),
-        "{lock}"
-    );
-}
-
 #[test]
 fn a_package_of_another_root_built_without_its_default_feature_credits_its_dot_line_in_the_legacy_layout()
  {
@@ -195,16 +158,4 @@ fn an_undeclared_build_script_of_one_root_credits_nothing_to_the_same_package_na
 fn an_undeclared_build_script_of_one_root_credits_nothing_to_the_same_package_name_of_another_root_in_the_new_layout()
  {
     same_package_name(Layout::New);
-}
-
-#[test]
-fn an_undeclared_build_script_credits_nothing_to_a_same_named_package_built_in_the_same_target_in_the_legacy_layout()
- {
-    three_roots(Layout::Legacy);
-}
-
-#[test]
-fn an_undeclared_build_script_credits_nothing_to_a_same_named_package_built_in_the_same_target_in_the_new_layout()
- {
-    three_roots(Layout::New);
 }

@@ -19,7 +19,7 @@ pub(super) enum Kind {
 #[derive(Default)]
 pub(super) struct Links {
     wanted: BTreeMap<(usize, String, String), String>,
-    provided: BTreeMap<(String, String), String>,
+    provided: BTreeMap<(usize, String, String), String>,
 }
 
 pub(super) fn kind(name: &str) -> Option<Kind> {
@@ -36,25 +36,21 @@ impl Links {
         &mut self,
         kind: Kind,
         text: &str,
+        target: usize,
         configuration: &str,
         hash: &str,
-        indices: &[usize],
     ) {
         match kind {
             Kind::Run => {
                 self.provided.insert(
-                    (configuration.to_owned(), text.trim().to_owned()),
+                    (target, configuration.to_owned(), text.trim().to_owned()),
                     hash.to_owned(),
                 );
             }
             Kind::Unit => {
                 if let Some(run) = dependency(text) {
-                    for index in indices {
-                        self.wanted.insert(
-                            (*index, configuration.to_owned(), hash.to_owned()),
-                            run.clone(),
-                        );
-                    }
+                    self.wanted
+                        .insert((target, configuration.to_owned(), hash.to_owned()), run);
                 }
             }
         }
@@ -64,9 +60,11 @@ impl Links {
         let Self { wanted, provided } = self;
         wanted
             .into_iter()
-            .filter_map(|((index, configuration, unit), digest)| {
-                let run = provided.get(&(configuration.clone(), digest))?.clone();
-                Some(((index, configuration, unit), run))
+            .filter_map(|((target, configuration, unit), digest)| {
+                let run = provided
+                    .get(&(target, configuration.clone(), digest))?
+                    .clone();
+                Some(((target, configuration, unit), run))
             })
             .collect()
     }
