@@ -1194,6 +1194,11 @@
               ]
             },
             {
+              "name": "serde-saphyr",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "serde_json",
               "kind": "normal",
               "manifest": null,
@@ -1247,6 +1252,11 @@
               "features": [
                 "native-tls"
               ]
+            },
+            {
+              "name": "toml",
+              "kind": "normal",
+              "manifest": null
             },
             {
               "name": "url",
@@ -2366,7 +2376,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "076f2417f5d51db75b7845524801b54b31c118553184539ef42a5ee156ed2506",
+    "crates/velnor-runner/Cargo.toml": "369d0ba9b967154d71b2d78cedfba21dd5186a69769e467e3c0b720d04d34472",
     "crates/velnor-rust/Cargo.toml": "c9be26a0cb2e638e019b6660a3a1204aea86063f479c1ea015724dd6957ba5d8",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"

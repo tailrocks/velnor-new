@@ -155,6 +155,7 @@ impl Job<'_> {
             temp: &self.options.temp,
             github_token: github_token(self.message),
             cancel: limits.cancel.cloned(),
+            expressions: env.clone(),
             timeout: limits.timeout,
             groups: limits.groups,
             results: ResultsScope::from_message(self.message),
