@@ -13,10 +13,26 @@ fn disconnect(state: &std::path::Path) -> std::io::Result<Output> {
         .output()
 }
 
+fn doctor_probe(state: &std::path::Path) -> std::io::Result<Output> {
+    Command::new(env!("CARGO_BIN_EXE_velnor-host"))
+        .arg("--state")
+        .arg(state)
+        .args(["doctor", "--probe"])
+        .env_remove("HOME")
+        .env("VELNOR_ORB", "/nonexistent/orb")
+        .output()
+}
+
 #[test]
-fn a_host_toml_that_cannot_be_read_fails_the_command_before_any_mode_is_chosen()
+fn an_absent_host_toml_keeps_the_official_mode_and_an_unreadable_one_fails_closed()
 -> Result<(), Box<dyn Error>> {
     let state = tempfile::tempdir()?;
+    let absent = doctor_probe(state.path())?;
+    let absent_stderr = String::from_utf8_lossy(&absent.stderr);
+    assert!(
+        !absent_stderr.contains("(rust_runner)"),
+        "a state directory without host.toml is not in rust-runner mode: {absent_stderr}"
+    );
     std::fs::write(state.path().join("host.toml"), "schema = 2\n[[connections")?;
     let malformed = disconnect(state.path())?;
     assert_eq!(malformed.status.code(), Some(1));

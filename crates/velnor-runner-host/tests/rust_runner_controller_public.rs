@@ -180,6 +180,16 @@ controller_test!(
 );
 
 controller_test!(
+    rust_runner_controller_holds_a_recorded_set_the_listing_does_not_show,
+    organization::holds_a_recorded_set_the_listing_does_not_show
+);
+
+controller_test!(
+    rust_runner_controller_holds_a_repository_set_listed_under_another_id_than_its_record,
+    organization::holds_a_repository_set_listed_under_another_id_than_its_record
+);
+
+controller_test!(
     rust_runner_controller_refuses_an_organization_set_with_other_labels,
     organization::refuses_a_set_with_other_labels
 );
@@ -312,6 +322,11 @@ controller_test!(
 controller_test!(
     rust_runner_restarts_when_a_removal_comes_with_another_change,
     retire::restart
+);
+
+controller_test!(
+    rust_runner_serves_a_connection_again_when_its_removal_is_reverted_before_the_close,
+    retire::revert
 );
 
 controller_test!(

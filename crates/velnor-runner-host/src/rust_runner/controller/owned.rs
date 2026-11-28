@@ -93,6 +93,13 @@ pub(in crate::rust_runner) fn read(
         .map_err(|_| HostError::Config)
 }
 
+pub(in crate::rust_runner) fn bound(
+    state: &Path,
+    connection: &ConnectionId,
+) -> Result<Option<i64>, HostError> {
+    Ok(read(state, connection)?.and_then(|record| record.scale_set_id))
+}
+
 pub(in crate::rust_runner) fn write(
     state: &Path,
     connection: &ConnectionId,
@@ -100,10 +107,8 @@ pub(in crate::rust_runner) fn write(
 ) -> Result<(), HostError> {
     let directory = state.join(DIRECTORY);
     std::fs::create_dir_all(&directory).map_err(|_| HostError::Path)?;
-    let staging = directory.join(format!(".{}.tmp", connection.as_str()));
     let text = serde_json::to_vec(owned).map_err(|_| HostError::Path)?;
-    std::fs::write(&staging, text).map_err(|_| HostError::Path)?;
-    std::fs::rename(&staging, record(state, connection)).map_err(|_| HostError::Path)
+    crate::rust_runner::atomic::write(&record(state, connection), &text)
 }
 
 pub(in crate::rust_runner) fn bind(
@@ -171,3 +176,6 @@ pub(in crate::rust_runner) fn transfer(
     }
     forget(state, from)
 }
+
+#[cfg(test)]
+mod tests;

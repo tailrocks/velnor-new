@@ -99,6 +99,9 @@ pub(super) fn open_scale_set(
             view.id
         }
         ScaleSetFound::NotFound => {
+            if owned::bound(state, &binding.connection_id)?.is_some() {
+                return Err(EnsureError::Uncertain.into());
+            }
             owned::write(state, &binding.connection_id, &intent)?;
             let created = match create_runner_scale_set(
                 &mut transport,
@@ -149,9 +152,12 @@ fn adopt(
     scale_set_id: i64,
 ) -> Result<(), ListenFault> {
     let connection = &binding.connection_id;
-    let recorded = owned::read(state, connection)?.and_then(|record| record.scale_set_id);
+    let recorded = owned::bound(state, connection)?;
     if recorded == Some(scale_set_id) {
         return Ok(());
+    }
+    if recorded.is_some() {
+        return Err(EnsureError::Uncertain.into());
     }
     if owned::adoptable(state, connection, intent)? {
         return Ok(owned::bind(state, connection, intent, scale_set_id)?);

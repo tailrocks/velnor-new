@@ -69,7 +69,9 @@ pub enum RustRunnerFailure {
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,
 
-    #[error("velnor-runner in the host store is not an owned, executable file closed to others")]
+    #[error(
+        "velnor-runner in the host store is not an owned, executable regular file that others cannot write"
+    )]
     BinaryUnsafe,
 
     #[error("the processes of the velnor machine could not be listed")]
@@ -118,6 +120,9 @@ pub enum RustRunnerFailure {
 
     #[error("a blocking task of the rust-runner controller did not finish")]
     TaskFailed,
+
+    #[error("the runtime that loads the credential could not be built")]
+    RuntimeUnavailable,
 }
 
 const ERROR_DETAIL_BYTES: u8 = 64;

@@ -115,9 +115,7 @@ fn write(
             .collect(),
     };
     let text = serde_json::to_vec(&census).map_err(|_| HostError::Path)?;
-    let staging = state.join(format!(".{FILE}.tmp"));
-    std::fs::write(&staging, text).map_err(|_| HostError::Path)?;
-    std::fs::rename(&staging, state.join(FILE)).map_err(|_| HostError::Path)
+    super::atomic::write(&state.join(FILE), &text)
 }
 
 fn read(state: &Path) -> Option<Census> {
@@ -225,9 +223,7 @@ pub fn wait_for_rust_runner_connection_admitted(
     let request = request_marker(state, connection_id.as_str());
     let directory = request.parent().ok_or(HostError::Path)?;
     std::fs::create_dir_all(directory).map_err(|_| HostError::Path)?;
-    let staging = directory.join(format!(".{}.tmp", connection_id.as_str()));
-    std::fs::write(&staging, &nonce).map_err(|_| HostError::Path)?;
-    std::fs::rename(&staging, &request).map_err(|_| HostError::Path)?;
+    super::atomic::write(&request, nonce.as_bytes())?;
     Ok(wait_until(timeout, || {
         let Some(current) = host_toml_sha256(state) else {
             return Some(false);

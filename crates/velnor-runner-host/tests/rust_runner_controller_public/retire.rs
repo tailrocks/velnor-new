@@ -117,8 +117,16 @@ pub(super) fn restart(test: &str) -> TestResult<()> {
     world.spawn_controller(test, &[(SUPERVISED, "1")])?;
     world.wait_census("both connections serving", &both, &["lab", "second"]);
 
+    world.script_phase(&json!({
+        "session.delete": {"statuses": [500, 404], "repeat_last": false}
+    }))?;
     world.write_host_toml_text(&narrowed)?;
     world.wait_census("the census of the narrowed config", &narrowed, &["second"]);
+    assert_eq!(
+        session_deletes(&world, "7"),
+        ["500", "404", "204"],
+        "the narrowed config proved lab unserved before its session was closed"
+    );
     world.wait_for_event(
         "the second connection to open a new session",
         60,
@@ -130,6 +138,38 @@ pub(super) fn restart(test: &str) -> TestResult<()> {
                 >= 2
         },
     );
+
+    world.stop()?;
+    assert_eq!(world.finish(20)?, "Ok(Stopped)");
+    Ok(())
+}
+
+pub(super) fn revert(test: &str) -> TestResult<()> {
+    let (lab, second) = (Spec::lab(KEYCHAIN_REFERENCE), Spec::second());
+    let mut world = World::with_extra("R7", 3, false, &[second])?;
+    let both = host_toml_of(&world.root, 3, &[lab, second])?;
+    let narrowed = host_toml_of(&world.root, 2, &[second])?;
+    world.write_host_toml_text(&both)?;
+    world.spawn_controller(test, &[(SUPERVISED, "1")])?;
+    world.wait_census("both connections serving", &both, &["lab", "second"]);
+
+    world.script_phase(&json!({"session.delete": {"statuses": [500], "repeat_last": false}}))?;
+    world.write_host_toml_text(&narrowed)?;
+    world.wait_for_event("the first failed close of lab", 60, |events| {
+        events
+            .iter()
+            .any(|event| event.label == "session.delete" && event.field("set") == "7")
+    });
+    world.write_host_toml_text(&both)?;
+    world.wait_for_event("lab to serve again on a new session", 90, |events| {
+        events
+            .iter()
+            .filter(|event| event.label == "session.create" && event.field("set") == "7")
+            .count()
+            >= 2
+    });
+    world.wait_census("both connections serving again", &both, &["lab", "second"]);
+    assert_eq!(session_deletes(&world, "7")[..2], ["500", "204"]);
 
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Stopped)");

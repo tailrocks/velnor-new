@@ -263,7 +263,7 @@ impl Run<'_> {
                     self.retire_removed();
                     self.on_tick()?;
                     self.close_retired();
-                    if self.config_changed() && self.slots.is_empty() && self.idle() {
+                    if self.restart_due() && self.slots.is_empty() && self.idle() {
                         self.close_sessions().await;
                         return Ok(RustRunnerExit::ConfigChanged);
                     }

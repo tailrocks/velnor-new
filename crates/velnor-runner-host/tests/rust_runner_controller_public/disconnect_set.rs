@@ -24,13 +24,19 @@ fn deletes(world: &World) -> Vec<String> {
         .collect()
 }
 
-fn other_service(world: &World, test: &str, both: &str) -> TestResult<()> {
+fn held_record(
+    world: &World,
+    test: &str,
+    both: &str,
+    field: &str,
+    value: serde_json::Value,
+) -> TestResult<()> {
     let path = world.state.join(RECORD);
     let original = std::fs::read(&path)?;
     let mut record: serde_json::Value = serde_json::from_slice(&original)?;
-    record["server"] = json!("https://other.example.com/");
+    record[field] = value;
     std::fs::write(&path, record.to_string())?;
-    assert_eq!(world.detach(test, "lab", both)?, "Ok(Uncertain)");
+    assert_eq!(world.detach(test, "lab", both)?, "Ok(Uncertain)", "{field}");
     assert!(world.gh("scaleset.delete").is_empty());
     assert!(world.gh("runner.delete").is_empty());
     assert!(set_listed(world)?);
@@ -122,7 +128,14 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     world.wait_census("the config without lab", &only_second, &["second"]);
     world.plant_runner(&runner_name(9999), 7)?;
 
-    other_service(&world, test, &both)?;
+    held_record(
+        &world,
+        test,
+        &both,
+        "server",
+        json!("https://other.example.com/"),
+    )?;
+    held_record(&world, test, &both, "scale_set_id", json!(999_999))?;
     refusals(&world, test, &both)?;
 
     world.configure_orb("FAKE_ORB_FAIL=1\n")?;

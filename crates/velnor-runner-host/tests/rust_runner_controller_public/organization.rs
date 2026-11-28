@@ -17,10 +17,18 @@ fn recorded(world: &World) -> TestResult<Value> {
 }
 
 fn plant_record(world: &World, scale_set_id: Option<i64>) -> TestResult<()> {
+    plant_scoped(
+        world,
+        scale_set_id,
+        &json!({"kind": "organization", "organization": "tailrocks", "runner_group": null}),
+    )
+}
+
+fn plant_scoped(world: &World, scale_set_id: Option<i64>, scope: &Value) -> TestResult<()> {
     let record = json!({
         "name": "velnor-mac",
         "runner_group_id": 1,
-        "scope": {"kind": "organization", "organization": "tailrocks", "runner_group": null},
+        "scope": scope,
         "server": "https://pipelines.example.com/",
         "scale_set_id": scale_set_id,
     });
@@ -31,6 +39,10 @@ fn plant_record(world: &World, scale_set_id: Option<i64>) -> TestResult<()> {
 
 fn started(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> TestResult<()> {
     world.use_organization()?;
+    launched(world, test, existing_labels)
+}
+
+fn launched(world: &mut World, test: &str, existing_labels: Option<&[&str]>) -> TestResult<()> {
     let path = world.github.join("config.json");
     let mut config: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
     config["state"] = json!(world.state);
@@ -192,6 +204,34 @@ pub(super) fn refuses_a_created_set_that_keeps_other_labels(test: &str) -> TestR
         recorded(&world)?["scale_set_id"].is_null(),
         "a created set that persisted other labels was recorded"
     );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn holds_a_recorded_set_the_listing_does_not_show(test: &str) -> TestResult<()> {
+    let mut world = World::new("T12h", 1, false)?;
+    plant_record(&world, Some(9))?;
+    started(&mut world, test, None)?;
+    held(&world, "a recorded set that the listing does not show");
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn holds_a_repository_set_listed_under_another_id_than_its_record(
+    test: &str,
+) -> TestResult<()> {
+    let mut world = World::new("T12i", 1, true)?;
+    plant_scoped(
+        &world,
+        Some(9),
+        &json!({"kind": "repository", "repository_id": 42}),
+    )?;
+    launched(&mut world, test, None)?;
+    held(&world, "a set listed under another id than its record");
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())

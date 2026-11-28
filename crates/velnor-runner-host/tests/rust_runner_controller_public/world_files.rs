@@ -12,6 +12,8 @@ use super::events::wait_for;
 use super::fixtures::{Spec, TestResult, hex_sha256};
 use super::harness::{CHILD_MARKER, World};
 
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub(super) const CENSUS: &str = "rust-runner-census.json";
 pub(super) const TOKEN_A: &str = "0123456789abcdef0123456789abcdef";
 pub(super) const TOKEN_B: &str = "fedcba9876543210fedcba9876543210";
@@ -70,7 +72,15 @@ impl World {
 
     fn mutate_fake(&self, change: impl FnOnce(&mut Value) -> TestResult<()>) -> TestResult<()> {
         let lock = self.github.join(".lock");
+        let deadline = std::time::Instant::now() + LOCK_WAIT;
         while std::fs::create_dir(&lock).is_err() {
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "the fake GitHub kept {} locked for {LOCK_WAIT:?}",
+                    lock.display()
+                )
+                .into());
+            }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let outcome = (|| -> TestResult<()> {

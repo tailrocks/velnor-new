@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 
 use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
-use crate::error::HostError;
+use crate::error::{HostError, RustRunnerFailure};
 use crate::host_controller::connection_pat;
 
 pub struct ConnectionPats(BTreeMap<ConnectionId, Zeroizing<String>>);
@@ -95,7 +95,7 @@ pub fn load_connection_pat(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|_| HostError::Lock)?;
+        .map_err(|_| HostError::RustRunner(RustRunnerFailure::RuntimeUnavailable))?;
     let deadline = tokio::time::Instant::now() + timeout;
     let loaded = runtime.block_on(binding.credential_ref.load_until(deadline));
     runtime.shutdown_background();

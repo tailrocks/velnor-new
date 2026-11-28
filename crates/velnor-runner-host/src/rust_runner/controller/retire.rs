@@ -15,16 +15,34 @@ impl Run<'_> {
         let Some((next, config_sha256)) = controller_config(&self.cx.state) else {
             return;
         };
-        let Some(removed) = removal(&self.config, &next) else {
+        let removed = removed_ids(&self.config, &next);
+        if removed.is_empty() {
             return;
-        };
+        }
         for live in &mut self.connections {
             if live.service == Service::Serving && removed.contains(&live.binding.connection_id) {
                 live.service = Service::Retired;
             }
         }
-        self.config = next;
-        self.cx.config_sha256 = config_sha256;
+        if only_removes(&self.config, &removed, &next) {
+            self.config = next;
+            self.cx.config_sha256 = config_sha256;
+        }
+    }
+
+    pub(super) fn restart_due(&self) -> bool {
+        let retiring = self
+            .connections
+            .iter()
+            .any(|live| live.service == Service::Retired);
+        let stranded = self.connections.iter().any(|live| {
+            live.service != Service::Serving
+                && self
+                    .config
+                    .connection(&live.binding.connection_id)
+                    .is_some()
+        });
+        (self.config_changed() || stranded) && !retiring
     }
 
     pub(super) fn close_retired(&mut self) {
@@ -62,19 +80,19 @@ impl Run<'_> {
     }
 }
 
-fn removal(current: &HostConfig, next: &HostConfig) -> Option<Vec<ConnectionId>> {
-    let removed: Vec<ConnectionId> = current
+fn removed_ids(current: &HostConfig, next: &HostConfig) -> Vec<ConnectionId> {
+    current
         .connections()
         .iter()
         .map(|connection| connection.connection_id.clone())
         .filter(|id| next.connection(id).is_none())
-        .collect();
-    if removed.is_empty() {
-        return None;
-    }
+        .collect()
+}
+
+fn only_removes(current: &HostConfig, removed: &[ConnectionId], next: &HostConfig) -> bool {
     let mut trimmed = current.clone();
-    for id in &removed {
-        trimmed.remove_connection(id).ok()?;
-    }
-    (trimmed == *next).then_some(removed)
+    removed
+        .iter()
+        .all(|id| trimmed.remove_connection(id).is_ok())
+        && trimmed == *next
 }

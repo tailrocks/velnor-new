@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use crate::error::HostError;
 
+mod atomic;
 mod census;
 mod controller;
 mod doctor;
