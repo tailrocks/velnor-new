@@ -10,8 +10,10 @@ use std::sync::atomic::AtomicBool;
 use rustix::fs::{CWD, Mode, OFlags, mkdirat, openat};
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 
+use super::super::Layout;
 use super::super::dirs;
-use super::super::disk::{self, Usage};
+use super::super::disk::{self, Bounds, Usage};
+use super::super::watch::start;
 
 const MIB: usize = 1 << 20;
 
@@ -104,12 +106,26 @@ fn the_walk_counts_down_to_its_depth_cap_and_nothing_below_it() {
     nest(&seen, 40, 4 * MIB);
     nest(&unseen, 60, 4 * MIB);
     let stop = AtomicBool::new(false);
-    let counted = disk::used_within(&[seen.as_path()], 50, &stop);
+    let counted = disk::used_within(
+        &[seen.as_path()],
+        Bounds {
+            depth: 50,
+            entries: 1000,
+        },
+        &stop,
+    );
     assert!(
         counted.bytes >= (4 * MIB) as u64 && !counted.foreign,
         "{counted:?}"
     );
-    let below = disk::used_within(&[unseen.as_path()], 50, &stop);
+    let below = disk::used_within(
+        &[unseen.as_path()],
+        Bounds {
+            depth: 50,
+            entries: 1000,
+        },
+        &stop,
+    );
     assert!(
         below.bytes < MIB as u64 && !below.foreign,
         "the walk went past its depth cap: {below:?}"
@@ -144,6 +160,52 @@ fn the_removal_finishes_a_tree_an_interrupted_run_left_flattened() {
     );
     assert!(!root.exists());
     assert!(dirs::remove(&root).is_ok(), "removing twice must converge");
+}
+
+#[test]
+fn the_walk_stops_at_its_entry_cap_and_keeps_what_it_counted() {
+    let root = scratch("entries");
+    for index in 0..300 {
+        assert!(std::fs::write(root.join(format!("f{index}")), vec![1_u8; 4096]).is_ok());
+    }
+    let stop = AtomicBool::new(false);
+    let capped = disk::used_within(
+        &[root.as_path()],
+        Bounds {
+            depth: 50,
+            entries: 100,
+        },
+        &stop,
+    );
+    let all = disk::used_within(
+        &[root.as_path()],
+        Bounds {
+            depth: 50,
+            entries: 10_000,
+        },
+        &stop,
+    );
+    assert!(
+        capped.bytes > 0 && capped.bytes < all.bytes / 2,
+        "{capped:?} against {all:?}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn dropping_a_started_walk_cancels_it() {
+    let root = scratch("cancel");
+    let layout = Layout {
+        work_dir: root.clone(),
+        stage_dir: root.clone(),
+        ..super::layout()
+    };
+    let walk = start(&layout).expect("a walk starts");
+    let stop = std::sync::Arc::clone(&walk.stop);
+    assert!(!stop.load(std::sync::atomic::Ordering::Relaxed));
+    drop(walk);
+    assert!(stop.load(std::sync::atomic::Ordering::Relaxed));
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

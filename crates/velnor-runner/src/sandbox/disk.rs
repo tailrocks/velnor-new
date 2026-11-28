@@ -16,28 +16,53 @@ pub(super) struct Usage {
     pub(super) foreign: bool,
 }
 
-pub(super) fn used(directories: &[&Path], stop: &AtomicBool) -> Usage {
-    used_within(directories, tree::MAX_DEPTH, stop)
+pub(super) const MAX_ENTRIES: u64 = 4_000_000;
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Bounds {
+    pub(super) depth: usize,
+    pub(super) entries: u64,
 }
 
-pub(super) fn used_within(directories: &[&Path], depth: usize, stop: &AtomicBool) -> Usage {
+pub(super) const BOUNDS: Bounds = Bounds {
+    depth: tree::MAX_DEPTH,
+    entries: MAX_ENTRIES,
+};
+
+pub(super) fn used(directories: &[&Path], stop: &AtomicBool) -> Usage {
+    used_within(directories, BOUNDS, stop)
+}
+
+pub(super) fn used_within(directories: &[&Path], bounds: Bounds, stop: &AtomicBool) -> Usage {
     let mut seen: HashSet<tree::Identity> = HashSet::new();
     let mut usage = Usage::default();
+    let mut visited = 0_u64;
     for directory in directories {
         let mut device = None;
-        tree::walk(directory, depth, |stat| {
+        let mut root = true;
+        tree::walk(directory, bounds.depth, |stat| {
             let identity = tree::identity(stat);
             if *device.get_or_insert(identity.0) != identity.0 {
                 usage.foreign = true;
                 return false;
             }
-            if seen.insert(identity) {
+            visited += 1;
+            let is_root = std::mem::take(&mut root);
+            let new = if is_root || stat.st_nlink > 1 {
+                seen.insert(identity)
+            } else {
+                true
+            };
+            if is_root && !new {
+                return false;
+            }
+            if new {
                 let blocks = u64::try_from(stat.st_blocks).unwrap_or(0);
                 usage.bytes = usage
                     .bytes
                     .saturating_add(blocks.saturating_mul(BLOCK_BYTES));
             }
-            !stop.load(Ordering::Relaxed)
+            visited <= bounds.entries && !stop.load(Ordering::Relaxed)
         });
     }
     usage

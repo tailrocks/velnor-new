@@ -55,10 +55,16 @@ pub(super) struct Limits {
     pub(super) floor_gib: u64,
 }
 
-struct Walk {
+pub(super) struct Walk {
     started: Instant,
-    stop: Arc<AtomicBool>,
+    pub(super) stop: Arc<AtomicBool>,
     result: Receiver<disk::Usage>,
+}
+
+impl Drop for Walk {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 pub(super) struct Watch {
@@ -70,7 +76,7 @@ fn machine_full(floor_gib: u64) -> bool {
     floor_gib > 0 && floor::free_bytes().is_none_or(|free| free < floor_gib.saturating_mul(GIB))
 }
 
-fn start(layout: &Layout) -> Option<Walk> {
+pub(super) fn start(layout: &Layout) -> Option<Walk> {
     let directories: Vec<PathBuf> = vec![layout.work_dir.clone(), layout.stage_dir.clone()];
     let stop = Arc::new(AtomicBool::new(false));
     let walking = Arc::clone(&stop);

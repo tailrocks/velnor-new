@@ -102,7 +102,19 @@ fn a_deleted_shared_mmap_and_a_multiprocessing_lock_do_not_kill_the_job() {
     assert!(succeeded(&output).contains("survived"), "{}", text(&output));
 }
 
-const HIDDEN_BY_CLONE_FILES: &str = "import os, sys, threading, time\ndef hide():\n    os.unshare(os.CLONE_FILES)\n    fd = os.open('hidden', os.O_WRONLY | os.O_CREAT)\n    os.unlink('hidden')\n    os.posix_fallocate(fd, 0, int(sys.argv[1]) << 30)\n    time.sleep(30)\nthreading.Thread(target=hide, daemon=True).start()\ntime.sleep(30)\nprint('survived')\n";
+const STEPS: &str = "import os, time\nkept = []\ndef steps():\n    for index in range(16):\n        fd = os.open('hidden%d' % index, os.O_WRONLY | os.O_CREAT)\n        os.unlink('hidden%d' % index)\n        kept.append(fd)\n        os.posix_fallocate(fd, 0, 512 << 20)\n        time.sleep(0.15)\n";
+
+fn hidden_by_clone_files() -> String {
+    format!(
+        "{STEPS}import threading\ndef hide():\n    os.unshare(os.CLONE_FILES)\n    steps()\n    time.sleep(30)\nthreading.Thread(target=hide, daemon=True).start()\ntime.sleep(30)\nprint('survived')\n"
+    )
+}
+
+fn deep_then_steps() -> String {
+    format!(
+        "{STEPS}import sys\nfor _ in range(int(sys.argv[1])):\n    os.mkdir('d')\n    os.chdir('d')\nsteps()\ntime.sleep(30)\nprint('survived')\n"
+    )
+}
 
 const QGROUP_FREE: &str = "id=$(findmnt -T /srv/velnor/gen -no OPTIONS | tr ',' '\\n' | sed -n 's/^subvolid=//p'); d=$(ls -d /sys/fs/btrfs/*/qgroups/0_$id | head -n 1); echo $(cat $d/max_referenced) $(cat $d/referenced) $(cat $d/rsv_data)";
 
@@ -124,14 +136,12 @@ fn qgroup_free_bytes() -> u64 {
     numbers[0].saturating_sub(numbers[1] + numbers[2])
 }
 
-fn hidden_gib_and_floor() -> (String, String) {
-    let free_gib = qgroup_free_bytes() >> 30;
-    let hidden = free_gib.min(3);
+fn require_two_gib_free() {
+    let free = qgroup_free_bytes() >> 30;
     assert!(
-        hidden >= 2,
-        "the machine has {free_gib} GiB free; the hidden-data rows need at least 2"
+        free >= 2,
+        "the machine has {free} GiB free; the hidden-data rows need at least 2"
     );
-    (hidden.to_string(), (free_gib - hidden + 1).to_string())
 }
 
 fn qgroup_cap_gib() -> u64 {
@@ -147,13 +157,13 @@ const QGROUP_LIMIT: &str = "id=$(findmnt -T /srv/velnor/gen -no OPTIONS | tr ','
 
 #[test]
 fn data_a_clone_files_thread_hides_from_the_walk_is_stopped_by_the_floor_not_the_job_limit() {
-    let (hidden, floor) = hidden_gib_and_floor();
+    require_two_gib_free();
     let sandbox = Sandbox::new("hidden-clone-files")
         .with("--disk-limit-gib", "1")
-        .with("--machine-floor-gib", &floor);
+        .with("--machine-floor-gib", "1");
     killed_with(
         &sandbox,
-        &["/usr/bin/python3", "-c", HIDDEN_BY_CLONE_FILES, &hidden],
+        &["/usr/bin/python3", "-c", &hidden_by_clone_files()],
         "velnor: the machine's disk is nearly full",
         "machine_full",
     );
@@ -161,13 +171,13 @@ fn data_a_clone_files_thread_hides_from_the_walk_is_stopped_by_the_floor_not_the
 
 #[test]
 fn a_tree_nested_past_1024_levels_is_not_counted_and_the_floor_stops_it() {
-    let (hidden, floor) = hidden_gib_and_floor();
+    require_two_gib_free();
     let sandbox = Sandbox::new("deep-1500")
         .with("--disk-limit-gib", "1")
-        .with("--machine-floor-gib", &floor);
+        .with("--machine-floor-gib", "1");
     killed_with(
         &sandbox,
-        &["/usr/bin/python3", "-c", DEEP, "1500", &hidden],
+        &["/usr/bin/python3", "-c", &deep_then_steps(), "1500"],
         "velnor: the machine's disk is nearly full",
         "machine_full",
     );
