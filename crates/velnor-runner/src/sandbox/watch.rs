@@ -89,7 +89,35 @@ fn start(layout: &Layout) -> Option<Walk> {
     })
 }
 
+fn verdict(usage: disk::Usage, limits: &Limits) -> Option<Breach> {
+    if usage.foreign {
+        return Some(Breach::ForeignDevice);
+    }
+    disk::overage(usage, limits.disk_gib).map(|_| Breach::Disk(usage))
+}
+
 impl Watch {
+    pub(super) fn settle(
+        &mut self,
+        layout: &Layout,
+        cgroup: &Cgroup,
+        limits: &Limits,
+    ) -> Option<Breach> {
+        if cgroup.exhausted_processes() {
+            return Some(Breach::Processes);
+        }
+        if machine_full(limits.floor_gib) {
+            return Some(Breach::MachineFull);
+        }
+        let walk = self.walk.take().or_else(|| start(layout))?;
+        let left = WALK_BUDGET.saturating_sub(walk.started.elapsed());
+        if let Ok(usage) = walk.result.recv_timeout(left) {
+            return verdict(usage, limits);
+        }
+        walk.stop.store(true, Ordering::Relaxed);
+        None
+    }
+
     pub(super) fn new() -> Self {
         Self {
             walk: None,
@@ -119,10 +147,7 @@ impl Watch {
             Ok(usage) => {
                 self.next = walk.started + WALK_EVERY;
                 self.walk = None;
-                if usage.foreign {
-                    return Some(Breach::ForeignDevice);
-                }
-                disk::overage(usage, limits.disk_gib).map(|_| Breach::Disk(usage))
+                verdict(usage, limits)
             }
             Err(TryRecvError::Empty) => {
                 if walk.started.elapsed() > WALK_BUDGET {

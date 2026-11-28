@@ -75,6 +75,12 @@ fn a_visible_write_of_1_gib_over_a_1_gib_limit_is_killed() {
 }
 
 #[test]
+fn a_job_that_exits_before_the_first_walk_is_still_checked_against_its_limit() {
+    let sandbox = Sandbox::new("disk-short").with("--disk-limit-gib", "1");
+    killed_for_disk(&sandbox, "fallocate -l 2G \"$PWD/big\"");
+}
+
+#[test]
 fn a_visible_tree_within_1000_levels_is_counted_and_killed_at_the_limit() {
     let sandbox = Sandbox::new("deep-900").with("--disk-limit-gib", "1");
     killed_with(

@@ -128,8 +128,12 @@ async fn launch(
         tokio::select! {
             status = child.wait() => {
                 let status = status.context("wait for the sandbox")?;
-                if breach.is_none() && cgroup.killed_for_memory() {
-                    breach = Some(Breach::Memory);
+                if breach.is_none() {
+                    breach = if cgroup.killed_for_memory() {
+                        Some(Breach::Memory)
+                    } else {
+                        tokio::task::block_in_place(|| watch.settle(layout, cgroup, &limits))
+                    };
                 }
                 return Ok(Finished { status, breach });
             }
