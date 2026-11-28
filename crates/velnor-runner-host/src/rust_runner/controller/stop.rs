@@ -3,8 +3,10 @@
 
 use std::time::Duration;
 
-use super::Run;
+use tokio::task::JoinError;
+
 use super::github::ACQUIRE_BUDGET;
+use super::{Cleanup, Event, Run};
 use crate::launch_blocking::ListenFault;
 
 const JOB_STOP_WAIT: Duration = Duration::from_secs(15);
@@ -15,19 +17,20 @@ const PROOF_RETRY: Duration = Duration::from_secs(1);
 impl Run<'_> {
     pub(super) async fn stop(&mut self) -> Result<(), ListenFault> {
         self.stopping = true;
+        let mut fault: Option<ListenFault> = None;
         self.slots.stop_all();
         let started = tokio::time::Instant::now();
         let jobs_deadline = started + JOB_STOP_WAIT;
         while !self.slots.settled() {
             match tokio::time::timeout_at(jobs_deadline, self.tasks.join_next()).await {
-                Ok(Some(joined)) => self.handle(joined)?,
+                Ok(Some(joined)) => self.settle(joined, &mut fault),
                 Ok(None) | Err(_) => break,
             }
         }
         let acquires_deadline = started + ACQUIRE_BUDGET + ACQUIRE_STOP_SLACK;
         while self.slots.launching() {
             match tokio::time::timeout_at(acquires_deadline, self.tasks.join_next()).await {
-                Ok(Some(joined)) => self.handle(joined)?,
+                Ok(Some(joined)) => self.settle(joined, &mut fault),
                 Ok(None) | Err(_) => break,
             }
         }
@@ -44,11 +47,19 @@ impl Run<'_> {
             tokio::select! {
                 biased;
                 () = tokio::time::sleep_until(proofs_deadline) => break,
-                Some(joined) = self.tasks.join_next() => self.handle(joined)?,
+                Some(joined) = self.tasks.join_next() => self.settle(joined, &mut fault),
                 _ = retry.tick() => self.spawn_due_proofs(),
             }
         }
         self.close_sessions().await;
-        Ok(())
+        self.cleanup = Cleanup::Done;
+        fault.map_or(Ok(()), Err)
+    }
+
+    fn settle(&mut self, joined: Result<Event, JoinError>, fault: &mut Option<ListenFault>) {
+        if let Err(error) = self.handle(joined) {
+            eprintln!("rust-runner stop continues after a handler failure: {error}");
+            fault.get_or_insert(error);
+        }
     }
 }

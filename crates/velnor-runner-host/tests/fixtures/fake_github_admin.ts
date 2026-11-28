@@ -68,6 +68,7 @@ function sessions(path: string): void {
     const refused = refusal("session.refresh");
     const scripted = scriptedReply("session.refreshed");
     record("session.refresh", { id: session[2], status: refused?.status ?? 200 });
+    held("refresh");
     if (refused) reply(refused.status, { message: "refresh refused" });
     reply(200, { sessionId: session[2], messageQueueUrl: config.queue_url, messageQueueAccessToken: `queue-token-${session[2]}-refreshed`, ...scripted?.patch });
   }
@@ -82,9 +83,11 @@ function sessions(path: string): void {
 function jobs(path: string): void {
   if (method === "POST" && /\/acquirejobs$/.test(path)) {
     const requested = JSON.parse(body) as number[];
-    snapshot(record("acquire", { ids: requested.join(",") }));
+    const expired = refusal("acquire.expired");
+    snapshot(record("acquire", { ids: requested.join(","), status: expired?.status ?? 200 }));
     mutate((state) => (state.pending_jit = requested));
     held("acquire");
+    if (expired) reply(expired.status, { message: "expired" });
     const returned = (id: number): number[] => {
       const shape = offers().find((offer) => offer.request_id === id)?.acquire_returns;
       if (shape === "none") return [];

@@ -5,12 +5,14 @@ use std::path::Path;
 
 use crate::error::HostError;
 
-pub fn launch_agent_plist(binary: &Path) -> Result<String, HostError> {
-    let bin = binary
-        .to_str()
-        .filter(|text| text.starts_with('/') && !text.chars().any(xml_forbidden))
-        .ok_or(HostError::Path)?;
-    let bin = xml_text(bin);
+pub fn launch_agent_plist(
+    binary: &Path,
+    orb: &Path,
+    runner_binary: &Path,
+) -> Result<String, HostError> {
+    let bin = absolute_text(binary)?;
+    let orb = absolute_text(orb)?;
+    let runner_binary = absolute_text(runner_binary)?;
     Ok(format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -22,13 +24,30 @@ pub fn launch_agent_plist(binary: &Path) -> Result<String, HostError> {
 <string>run</string>
 </array>
 <key>RunAtLoad</key><true/>
+<key>EnvironmentVariables</key><dict>
+<key>VELNOR_ORB</key><string>{orb}</string>
+<key>VELNOR_RUNNER_BINARY</key><string>{runner_binary}</string>
+</dict>
 </dict></plist>
 "#
     ))
 }
 
-fn xml_forbidden(ch: char) -> bool {
-    matches!(ch, '\0' | '\n' | '\r')
+fn absolute_text(path: &Path) -> Result<String, HostError> {
+    path.to_str()
+        .filter(|text| text.starts_with('/') && is_plist_text(text))
+        .map(xml_text)
+        .ok_or(HostError::Path)
+}
+
+#[must_use]
+pub fn is_plist_text(text: &str) -> bool {
+    text.chars().all(|ch| {
+        matches!(
+            u32::from(ch),
+            0x20..=0xD7FF | 0xE000..=0xFFFD | 0x0001_0000..=0x0010_FFFF
+        )
+    })
 }
 
 fn xml_text(text: &str) -> String {
