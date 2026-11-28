@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{build_only, qualify_shared};
+use super::{build_only, qualify_shared, with_twin};
 use crate::rules::{RenderedJob, RenderedReuse, RenderedStep, RenderedWorkflow, Rule, check_rules};
+use velnor_model::{
+    CargoCommand, FilterRef, JobId, LaneFeatures, PrRun, Reuse, SetupOrder, Step, StepKind, When,
+};
 
 fn reusable(name: &str, root: &str, build_only: bool) -> RenderedStep {
     RenderedStep {
         name: name.to_owned(),
+        run: Some("true".to_owned()),
         reuse: Some(RenderedReuse {
             id: format!("{root}.{name}"),
             plan: "plan".to_owned(),
@@ -20,6 +24,7 @@ fn reusable(name: &str, root: &str, build_only: bool) -> RenderedStep {
 fn user(name: &str) -> RenderedStep {
     RenderedStep {
         name: name.to_owned(),
+        run: Some("true".to_owned()),
         ..RenderedStep::default()
     }
 }
@@ -55,10 +60,25 @@ fn qualify_shared_roots_the_names_two_reusable_steps_share_and_their_twins() {
 }
 
 #[test]
-fn qualify_shared_leaves_one_reusable_step_beside_a_user_step_of_its_name() {
+fn a_reusable_step_beside_a_user_step_of_its_name_is_refused() {
     let mut steps = vec![reusable("Format", ".", false), user("Format")];
     qualify_shared(&mut steps);
-    assert_eq!(names(&steps), ["Format", "Format"]);
+    assert_eq!(
+        violations(steps),
+        [Rule::ReusableStepNameShared("Format".to_owned())]
+    );
+}
+
+#[test]
+fn a_build_only_twin_named_like_a_user_step_is_refused() {
+    let steps = vec![
+        reusable("Test (build only)", ".", true),
+        user("Test (build only)"),
+    ];
+    assert_eq!(
+        violations(steps),
+        [Rule::ReusableStepNameShared("Test (build only)".to_owned())]
+    );
 }
 
 fn violations(steps: Vec<RenderedStep>) -> Vec<Rule> {
@@ -72,7 +92,6 @@ fn violations(steps: Vec<RenderedStep>) -> Vec<Rule> {
         .into_iter()
         .flatten()
         .map(|violation| violation.rule)
-        .filter(|rule| !matches!(rule, Rule::NotExactlyOneOfRunAndUses))
         .collect()
 }
 
@@ -102,24 +121,16 @@ fn qualified_names_that_no_user_step_holds_pass() {
 }
 
 #[test]
-fn a_filter_the_word_splitter_cannot_parse_leaves_no_twin_and_is_refused() {
+fn a_filter_the_word_splitter_cannot_parse_leaves_no_twin() {
     for run in [
         "cargo nextest run -E \"test(/a/) & $(echo 'x')\"",
         "cargo nextest run -E $'test(/a/)'",
         "cargo nextest run -E 'unbalanced",
         "cargo nextest run -E `echo a`",
         "cargo nextest run -E \"test($(date +\\\"%s\\\"))\"",
+        "cargo nextest run -E a\\",
     ] {
         assert_eq!(build_only(run), None, "{run}");
-        let mut twin = reusable("Test (build only)", ".", true);
-        twin.run = build_only(run);
-        assert_eq!(
-            violations(vec![twin]),
-            [Rule::BuildOnlyTwinUnparsable(
-                "Test (build only)".to_owned()
-            )],
-            "{run}"
-        );
     }
 }
 
@@ -130,4 +141,47 @@ fn a_quoted_filter_with_a_flag_inside_stays_whole_in_the_twin() {
         build_only(run).as_deref(),
         Some("cargo nextest run -E 'test(/ --no-tests=x/)' '$(literal)' --no-run")
     );
+}
+
+fn test_step() -> Result<Step, Box<dyn std::error::Error>> {
+    Ok(Step {
+        kind: StepKind::Cargo(CargoCommand::NextestRun {
+            filter: FilterRef::All,
+            ci_profile: false,
+        }),
+        directory: None,
+        manifest: None,
+        features: LaneFeatures::default(),
+        target_dir: None,
+        when: When::Success,
+        pr: PrRun::Always,
+        gate: None,
+        reads: None,
+        setup_order: SetupOrder::Unordered,
+        skip_after_merge_group: None,
+        reuse: Some(Reuse {
+            id: "root.test-1".to_owned(),
+            plan: JobId::new("rust-plan")?,
+        }),
+        skip_when_cold: false,
+        private_repo: false,
+        hosted_only: false,
+        any_gate: Vec::new(),
+    })
+}
+
+#[test]
+fn with_twin_leaves_the_twin_without_a_command_when_the_run_cannot_be_split()
+-> Result<(), Box<dyn std::error::Error>> {
+    let body = |run: &str| RenderedStep {
+        name: "Test".to_owned(),
+        run: Some(run.to_owned()),
+        ..RenderedStep::default()
+    };
+    let steps = with_twin(&test_step()?, body("cargo nextest run -E 'unbalanced"));
+    assert_eq!(names(&steps), ["Test (build only)", "Test"]);
+    assert_eq!(steps[0].run, None);
+    let steps = with_twin(&test_step()?, body("cargo nextest run"));
+    assert_eq!(steps[0].run.as_deref(), Some("cargo nextest run --no-run"));
+    Ok(())
 }

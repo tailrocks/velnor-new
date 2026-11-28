@@ -77,7 +77,7 @@ fn shared_names(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
         .iter()
         .enumerate()
         .filter_map(move |(index, step)| {
-            let reusable = step.reuse.as_ref().is_some_and(|reuse| !reuse.build_only);
+            let reusable = step.reuse.is_some();
             let shared = job
                 .steps
                 .iter()
