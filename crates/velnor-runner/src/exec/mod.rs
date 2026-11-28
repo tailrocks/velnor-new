@@ -34,7 +34,8 @@ use std::path::PathBuf;
 
 pub(crate) use adapter::ProcessOutcome;
 pub use adapter::{
-    AdapterRegistry, DeclaredInputs, InputValue, ResultsScope, StepAdapter, StepContext, StepFuture,
+    AdapterRegistry, CANCEL_GRACE, DeclaredInputs, InputValue, ResultsScope, StepAdapter,
+    StepContext, StepFuture,
 };
 pub use cancel::JobCancel;
 pub use facts::JobFacts;

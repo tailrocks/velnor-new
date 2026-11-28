@@ -42,6 +42,7 @@ mod tests_swap;
 #[cfg(test)]
 mod tests_upload;
 mod transfer;
+mod trusted;
 mod upload;
 mod walk;
 
@@ -183,6 +184,21 @@ impl Broker {
                     mirror::fetch(&self.layout.root, &self.facts, token, self.fetch_cap)
                         .await
                         .map(|notices| Response::Done { notices }),
+                )
+            }
+            Request::VerifyPin { token, pin, path } => {
+                let token = token.as_ref().map(Token::expose);
+                mirrored(
+                    mirror::verify_pin(
+                        &self.layout.root,
+                        &self.facts,
+                        token,
+                        &pin,
+                        &path,
+                        self.fetch_cap,
+                    )
+                    .await
+                    .map(|notices| Response::Done { notices }),
                 )
             }
             Request::RepairMirror {

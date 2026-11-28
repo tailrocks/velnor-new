@@ -4,23 +4,24 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 
 use crate::broker::{
-    FailedStep, Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, git_args,
-    mirror_path,
+    FailedStep, Request, StoreWriter, TREE_PROBE, TrustedFacts, git_args, mirror_path,
 };
 use crate::exec::{
-    DeclaredInputs, ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext,
-    StepFuture, StepResult,
+    DeclaredInputs, ExecError, InputValue, Inputs, JobCancel, ProcessOutcome, StepAdapter,
+    StepContext, StepFuture, StepResult,
 };
 use crate::store::store_root;
 
 use super::depth::{Depth, js_trim};
+use super::git::ask;
 
 pub(super) struct Checkout {
-    pub(super) store: std::sync::Arc<StoreWriter>,
+    pub(super) store: Arc<StoreWriter>,
 }
 
 impl StepAdapter for Checkout {
@@ -69,11 +70,14 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
     }
 }
 
-async fn empty_directory(path: &Path) -> Result<()> {
+async fn empty_directory(path: &Path, cancel: Option<&JobCancel>) -> Result<Option<StepResult>> {
     let mut entries = tokio::fs::read_dir(path)
         .await
         .with_context(|| format!("read {}", path.display()))?;
     while let Some(entry) = entries.next_entry().await? {
+        if cancel.is_some_and(JobCancel::is_cancelled) {
+            return Ok(Some(StepResult::Cancelled));
+        }
         let target = entry.path();
         if entry.file_type().await?.is_dir() {
             tokio::fs::remove_dir_all(&target).await
@@ -82,7 +86,7 @@ async fn empty_directory(path: &Path) -> Result<()> {
         }
         .with_context(|| format!("remove {}", target.display()))?;
     }
-    Ok(())
+    Ok(None)
 }
 
 fn ensure_disjoint(workspace: &Path, guarded: &Path) -> Result<()> {
@@ -236,31 +240,6 @@ async fn materialize(
     Ok(Materialized::Done)
 }
 
-async fn ask(
-    store: &StoreWriter,
-    ctx: &mut StepContext<'_>,
-    request: impl FnOnce(Option<Token>) -> Request,
-) -> Result<(), ExecError> {
-    let token = ctx.github_token.clone().map(Token::new);
-    match store.request(request(token)).await {
-        Response::Done { notices } => {
-            for notice in notices {
-                ctx.log(&notice);
-            }
-            Ok(())
-        }
-        Response::Sound => Ok(()),
-        Response::Failed { message } => Err(ExecError::Invalid(message)),
-        Response::Hello(_)
-        | Response::Ready
-        | Response::Published { .. }
-        | Response::AlreadyExists
-        | Response::Denied(_) => Err(ExecError::Invalid(
-            "store broker protocol error: unexpected answer to a mirror request".to_owned(),
-        )),
-    }
-}
-
 async fn populate(
     store: &StoreWriter,
     facts: &TrustedFacts,
@@ -285,7 +264,12 @@ async fn populate(
     for guarded in [&store_root().join("git"), ctx.temp] {
         ensure_disjoint(ctx.workspace, guarded).map_err(invalid)?;
     }
-    empty_directory(ctx.workspace).await.map_err(invalid)?;
+    if let Some(ended) = empty_directory(ctx.workspace, ctx.cancel.as_ref())
+        .await
+        .map_err(invalid)?
+    {
+        return Ok(ended);
+    }
     let mut state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     if let Materialized::CheckoutFailed(failed) = state {
         ask(store, ctx, |token| Request::RepairMirror {
@@ -294,7 +278,12 @@ async fn populate(
             failed,
         })
         .await?;
-        empty_directory(ctx.workspace).await.map_err(invalid)?;
+        if let Some(ended) = empty_directory(ctx.workspace, ctx.cancel.as_ref())
+            .await
+            .map_err(invalid)?
+        {
+            return Ok(ended);
+        }
         state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     }
     match state {
@@ -315,15 +304,7 @@ async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<Step
     validate_inputs(&evaluated).map_err(ExecError::Unsupported)?;
     let depth = fetch_depth(&ctx.inputs)?;
     let facts = store.facts().map_err(ExecError::Invalid)?;
-    let cancel = ctx.cancel.clone();
-    let work = populate(store, facts, depth, ctx);
-    let result = match cancel {
-        Some(cancel) => tokio::select! {
-            result = work => result,
-            () = cancel.cancelled() => Ok(StepResult::Cancelled),
-        },
-        None => work.await,
-    };
+    let result = populate(store, facts, depth, ctx).await;
     if matches!(result, Ok(StepResult::Succeeded)) {
         ctx.set_output("commit", facts.sha.as_str());
         ctx.set_output("ref", facts.git_ref());

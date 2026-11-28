@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+use velnor_runner::exec::CANCEL_GRACE;
+
 use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, commit, finish, git};
 
@@ -256,10 +258,7 @@ fn checkout_fetch_uses_trusted_facts() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_exits_cancelled()
--> Result<()> {
-    let rig = Rig::new()?;
+pub(crate) fn exits_cancelled_while_the_mirror_lock_is_held(rig: &Rig, job: &Path) -> Result<()> {
     let mut lock_path = rig.mirror().into_os_string();
     lock_path.push(".lock");
     let lock_path = std::path::PathBuf::from(lock_path);
@@ -272,10 +271,7 @@ fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_e
     holder.lock()?;
     for signal in ["-TERM", "-INT", "-HUP"] {
         let scratch = Scratch::new()?;
-        let mut runner = rig.start(
-            &rig.job("checkout_depth1", &rig.head, &rig.server_url())?,
-            &scratch,
-        )?;
+        let mut runner = rig.start(job, &scratch)?;
         std::thread::sleep(Duration::from_secs(1));
         assert!(runner.try_wait()?.is_none(), "the runner did not wait");
         let signalled = Command::new("kill")
@@ -283,7 +279,7 @@ fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_e
             .status()
             .context("run kill")?;
         assert!(signalled.success());
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + CANCEL_GRACE.saturating_sub(Duration::from_secs(1));
         while runner.try_wait()?.is_none() {
             if Instant::now() > deadline {
                 let _ = runner.kill();
@@ -300,10 +296,19 @@ fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_e
             ran.stdout,
             ran.stderr
         );
-        assert!(ran.stdout.contains("cancelled"), "{signal}: {}", ran.stdout);
+        assert!(ran.has_line("step 1 cancelled"), "{signal}: {}", ran.stdout);
+        assert!(!ran.has_line("step 1 failed"), "{signal}: {}", ran.stdout);
     }
     drop(holder);
     Ok(())
+}
+
+#[test]
+fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_exits_cancelled()
+-> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job("checkout_depth1", &rig.head, &rig.server_url())?;
+    exits_cancelled_while_the_mirror_lock_is_held(&rig, &job)
 }
 
 fn alive(pid: &str) -> bool {
@@ -372,7 +377,7 @@ fn a_cancelled_fetch_leaves_no_git_helper_behind() -> Result<()> {
         .status()?;
     assert!(signalled.success());
     let ran = finish(runner)?;
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + CANCEL_GRACE.saturating_sub(Duration::from_secs(1));
     while alive(&pid) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }

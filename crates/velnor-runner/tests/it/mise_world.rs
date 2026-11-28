@@ -1,18 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::exec_support::{Ran, Scratch};
 use crate::mise_store::StoreMode;
 
+pub(crate) use crate::mise_helpers::{
+    git, job_fixture, manifest, pinned_mise_action, real_action, sha256_hex,
+};
+
+const DEFAULT_SERVER: &str = "file:///velnor-test";
 pub(crate) const VERSION: &str = "2026.11.10";
 pub(crate) const SHA_PLACEHOLDER: &str = "__SETUP_VELNOR_SHA__";
 pub(crate) const CONFIG: &str = "[settings]\nlockfile = true\n\n[tools]\nnode = \"26.13.1\"\n";
@@ -25,66 +28,6 @@ pub(crate) struct World {
     pub(crate) root: PathBuf,
     temp: PathBuf,
     pub(crate) store_mode: StoreMode,
-}
-
-pub(crate) fn pinned_mise_action() -> Result<String> {
-    let policy: toml::Table = include_str!("../../../../.velnor/version-policy.toml")
-        .parse()
-        .context("parse the version policy")?;
-    policy["actions"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|action| action["name"].as_str() == Some("jdx/mise-action"))
-        .and_then(|action| action["sha"].as_str())
-        .map(str::to_owned)
-        .context("jdx/mise-action is not pinned in the version policy")
-}
-
-pub(crate) fn real_action() -> Result<String> {
-    let path = manifest("../../actions/setup-velnor/action.yml");
-    std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))
-}
-
-pub(crate) fn manifest(relative: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
-}
-
-pub(crate) fn job_fixture(name: &str) -> PathBuf {
-    manifest(&format!("tests/fixtures/jobs/{name}.json"))
-}
-
-pub(crate) fn git(directory: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(directory)
-        .args([
-            "-c",
-            "user.name=test",
-            "-c",
-            "user.email=test@example.com",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .with_context(|| format!("run git {args:?}"))?;
-    ensure!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-pub(crate) fn sha256_hex(path: &Path) -> Result<String> {
-    let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
-    Ok(Sha256::digest(bytes)
-        .iter()
-        .fold(String::new(), |mut text, byte| {
-            let _ = write!(text, "{byte:02x}");
-            text
-        }))
 }
 
 impl World {
@@ -131,8 +74,29 @@ impl World {
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
-        self.store
-            .join("git/file%3A%2F%2F%2Fvelnor-test/tailrocks/velnor-new/1.git")
+        crate::native_checkout_layout::mirror_in(&self.store, &self.server_url(), 1)
+    }
+
+    pub(crate) fn server_url(&self) -> String {
+        if self.upstream().exists() {
+            format!("file://{}", self.root.join("up").display())
+        } else {
+            DEFAULT_SERVER.to_owned()
+        }
+    }
+
+    pub(crate) fn upstream(&self) -> PathBuf {
+        self.root.join("up/tailrocks/velnor-new.git")
+    }
+
+    pub(crate) fn upstream_as(&self, repository: &str) -> Result<()> {
+        let link = self.root.join("up").join(format!("{repository}.git"));
+        if link.exists() {
+            return Ok(());
+        }
+        let parent = link.parent().context("the upstream link has a parent")?;
+        std::fs::create_dir_all(parent).context("create the upstream link directory")?;
+        std::os::unix::fs::symlink(self.upstream(), &link).context("link the upstream")
     }
 
     pub(crate) fn binary_dir(&self) -> PathBuf {
@@ -193,9 +157,16 @@ impl World {
         let directory = source.join("actions/setup-velnor");
         std::fs::create_dir_all(&directory).context("create the action source")?;
         std::fs::write(directory.join("action.yml"), action).context("write action.yml")?;
-        git(&source, &["init", "--quiet"])?;
+        git(&source, &["init", "--quiet", "-b", "main"])?;
         git(&source, &["add", "."])?;
         git(&source, &["commit", "--quiet", "--message", "action"])?;
+        let upstream = self.upstream();
+        std::fs::create_dir_all(&upstream).context("create the upstream")?;
+        git(&upstream, &["init", "--quiet", "--bare"])?;
+        git(
+            &source,
+            &["push", "--quiet", &upstream.to_string_lossy(), "main"],
+        )?;
         let mirror = self.mirror();
         std::fs::create_dir_all(mirror.with_file_name("")).context("create the mirror parent")?;
         git(
@@ -206,7 +177,9 @@ impl World {
     }
 
     pub(crate) fn with_text(&self, job: &Path, replace: &[(&str, &str)]) -> Result<PathBuf> {
-        let mut text = std::fs::read_to_string(job).context("read the job fixture")?;
+        let mut text = std::fs::read_to_string(job)
+            .context("read the job fixture")?
+            .replace(DEFAULT_SERVER, &self.server_url());
         for (from, to) in replace {
             ensure!(text.contains(from), "{from} is not in {}", job.display());
             text = text.replace(from, to);

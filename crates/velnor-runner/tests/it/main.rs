@@ -110,6 +110,7 @@ mod lifecycle_token;
 mod lifecycle_token_retry;
 mod mise_attack_state;
 mod mise_double;
+mod mise_helpers;
 mod mise_real;
 mod mise_repo;
 mod mise_store;
@@ -197,6 +198,10 @@ mod native_mise_values;
 mod native_setup_velnor;
 mod native_setup_velnor_admission;
 mod native_setup_velnor_contexts;
+mod native_setup_velnor_fetch;
+mod native_setup_velnor_race;
+mod native_setup_velnor_ref;
+mod native_setup_velnor_repair;
 #[path = "exec_offload.rs"]
 mod offload;
 #[path = "exec_parity.rs"]

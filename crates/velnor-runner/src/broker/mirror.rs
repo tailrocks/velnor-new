@@ -22,13 +22,15 @@ use super::within;
 mod dirty;
 mod held;
 mod owned;
+mod pin;
 mod refetch;
 mod refs;
 mod sound;
 
 use held::Held;
 use owned::Sweep;
-use refetch::refetch;
+pub(crate) use pin::verify_pin;
+use refetch::{Refetch, refetch};
 
 const MIRROR_CONFIG: &str = "[core]\n\trepositoryformatversion = 0\n\tbare = true\n";
 const MIRROR_HEAD: &str = "ref: refs/heads/main\n";
@@ -188,7 +190,7 @@ async fn fetch_locked(
                 .as_ref()
                 .is_err_and(|error| !refused_by_the_server(error))
         {
-            fetched = refetch(mirror, &clone_url, facts, &env).await;
+            fetched = refetch(mirror, &clone_url, Refetch::Job(facts), &env).await;
         }
     }
     if has_tree(mirror, sha).await {
@@ -232,7 +234,7 @@ async fn repair_locked(
     refs::tidy(mirror, held).await?;
     let notices = drop_broken_refs(mirror).await?;
     let env = fetch_env(facts.server_url.url(), token);
-    refetch(mirror, &facts.clone_url(), facts, &env).await?;
+    refetch(mirror, &facts.clone_url(), Refetch::Job(facts), &env).await?;
     Ok(Repair::Repaired(notices))
 }
 

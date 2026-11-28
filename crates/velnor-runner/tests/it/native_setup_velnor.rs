@@ -84,25 +84,6 @@ fn setup_velnor_ignores_git_from_the_step_path() -> Result<()> {
 }
 
 #[test]
-fn setup_velnor_rejects_a_reference_that_is_not_a_commit_sha() -> Result<()> {
-    let world = World::new()?;
-    world.publish_action(&real_action()?)?;
-    for reference in ["main", "abc123", &"g".repeat(40), &"a".repeat(41)] {
-        let ran = world.run(
-            &real_job(&world, "setup_velnor_real_action", reference)?,
-            &[],
-        )?;
-        assert_refused(
-            &ran,
-            &format!(
-                "unsupported: setup-velnor reference '{reference}' is not a 40 digit commit sha"
-            ),
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn setup_velnor_rejects_a_nested_uses() -> Result<()> {
     let world = World::new()?;
     let action = format!("{}    - uses: actions/checkout@v4\n", real_action()?);
@@ -117,18 +98,24 @@ fn setup_velnor_rejects_a_nested_uses() -> Result<()> {
 fn setup_velnor_fails_when_the_action_is_not_in_the_mirror() -> Result<()> {
     let world = World::new()?;
     let absent = "1".repeat(40);
-    let git_dir = format!("--git-dir={}", world.mirror().display());
-    let show = format!("show {absent}:{ACTION} failed: ");
+    let unreachable =
+        format!("setup-velnor: the pin {absent} is not reachable from refs/heads/main");
+    let broker_message = "does not appear to be a git repository";
     for published in [false, true] {
         if published {
             world.publish_action(&real_action()?)?;
+            std::fs::remove_dir_all(world.upstream()).context("remove the upstream")?;
         }
         let ran = world.run(&real_job(&world, "setup_velnor_real_action", &absent)?, &[])?;
+        let lines = ran.lines();
         assert!(
-            ran.lines()
-                .iter()
-                .any(|line| line.contains(&git_dir) && line.contains(&show)),
-            "{git_dir} {show}\n{}",
+            lines.iter().any(|line| line.contains(broker_message)),
+            "{broker_message}\n{}",
+            ran.stdout
+        );
+        assert!(
+            !lines.iter().any(|line| line.contains(&unreachable)),
+            "{}",
             ran.stdout
         );
         assert!(ran.has_line("step 1 failed"), "{}", ran.stdout);
@@ -294,6 +281,7 @@ fn setup_velnor_matches_input_names_case_insensitively() -> Result<()> {
 fn setup_velnor_accepts_the_repository_in_any_case() -> Result<()> {
     let world = World::new()?;
     let sha = world.publish_action(&real_action()?)?;
+    world.upstream_as("Tailrocks/Velnor-New")?;
     let job = world.with_text(
         &job_fixture("setup_velnor_real_action"),
         &[
