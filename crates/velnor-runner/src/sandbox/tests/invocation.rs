@@ -7,7 +7,7 @@ use clap::Parser;
 
 use super::super::cgroup::{limit_hit, memory_limit};
 use super::super::disk::Usage;
-use super::super::frames::{Delivery, FRAME_LIMIT};
+use super::super::frames::Delivery;
 use super::super::jit::Jit;
 use super::super::run_dir::write_at;
 use super::super::watch::Breach;
@@ -47,9 +47,9 @@ fn the_stdin_frames_come_jit_first_then_trusted_facts_each_within_64_kib() {
     let delivered = Delivery::read(&two(b"jit-secret", b"{}")[..]).expect("two small frames");
     assert_eq!(&delivered.jit[..], b"jit-secret");
     assert_eq!(&delivered.trusted[..], b"{}");
-    let largest = vec![b'x'; FRAME_LIMIT];
+    let largest = vec![b'x'; 64 * 1024];
     assert!(Delivery::read(&two(&largest, &largest)[..]).is_ok());
-    let over = vec![b'x'; FRAME_LIMIT + 1];
+    let over = vec![b'x'; 64 * 1024 + 1];
     assert!(
         Delivery::read(&two(&over, b"{}")[..]).is_err(),
         "a JIT over 64 KiB"
