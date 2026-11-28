@@ -127,7 +127,7 @@ fn lane_packages_must_be_given_with_a_filter_and_be_packages_of_the_root() -> Te
     Ok(())
 }
 
-const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\n";
+const LINT_DOC_LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\n";
 const STEPS: [&str; 2] = [
     "Lint (features: local-mode)",
     "Documentation (features: local-mode)",
@@ -152,7 +152,7 @@ fn plan(mode: &'static str, packages: &'static str) -> impl Fn(&str) -> Result<V
 }
 
 fn opens(mode: &'static str, packages: &'static str) -> Result<Vec<bool>, String> {
-    let repo = lane_view("0.1.108", LANE).map_err(|error| error.to_string())?;
+    let repo = lane_view("0.1.108", LINT_DOC_LANE).map_err(|error| error.to_string())?;
     let document = workflow(&repo).map_err(|error| error.to_string())?;
     let jobs =
         crate::yaml_tree::document(&document).map_err(|error| error.to_string())?["jobs"].clone();
