@@ -10,6 +10,8 @@ use crate::error::DetectError;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
+mod shadow;
+
 enum Argument<'a> {
     Relative(&'a str),
     ManifestDir(&'a str),
@@ -18,7 +20,7 @@ enum Argument<'a> {
 }
 
 impl<'a> Argument<'a> {
-    fn parse(first: &Token<'a>, rest: &[Token<'a>]) -> Self {
+    fn parse(first: &Token<'a>, rest: &[Token<'a>], shadowed: bool) -> Self {
         match (first, rest) {
             (Token::Str(literal), _) => Self::Relative(literal),
             (
@@ -35,12 +37,13 @@ impl<'a> Argument<'a> {
                     Token::Str(tail),
                     ending @ ..,
                 ],
-            ) if tail.starts_with('/') && !tail.contains('\\') && closes(ending) => match *variable
-            {
-                "CARGO_MANIFEST_DIR" => Self::ManifestDir(tail),
-                "OUT_DIR" if !tail.split('/').any(|part| part == "..") => Self::BuildOutput,
-                _ => Self::Unknown,
-            },
+            ) if !shadowed && tail.starts_with('/') && !tail.contains('\\') && closes(ending) => {
+                match *variable {
+                    "CARGO_MANIFEST_DIR" => Self::ManifestDir(tail),
+                    "OUT_DIR" if !tail.split('/').any(|part| part == "..") => Self::BuildOutput,
+                    _ => Self::Unknown,
+                }
+            }
             _ => Self::Unknown,
         }
     }
@@ -54,27 +57,6 @@ fn closes(ending: &[Token<'_>]) -> bool {
 }
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
-const SHADOWABLE: &[&str] = &["concat", "env"];
-
-fn shadows_a_macro(tokens: &[Token<'_>]) -> bool {
-    let mut importing = false;
-    for (at, token) in tokens.iter().enumerate() {
-        match token {
-            Token::Ident("macro_rules") => {
-                if let [Token::Punct('!'), Token::Ident(name), ..] = &tokens[at + 1..]
-                    && SHADOWABLE.contains(name)
-                {
-                    return true;
-                }
-            }
-            Token::Ident("use") => importing = true,
-            Token::Punct(';') => importing = false,
-            Token::Ident(name) if importing && SHADOWABLE.contains(name) => return true,
-            _ => {}
-        }
-    }
-    false
-}
 
 #[must_use]
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
@@ -97,6 +79,7 @@ struct Scan<'a> {
     reads: BTreeSet<Option<RepoPath>>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
+    shadowed: bool,
 }
 
 impl<'a> Scan<'a> {
@@ -136,10 +119,17 @@ impl<'a> Scan<'a> {
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
+            shadowed: false,
         }
     }
 
     fn run(mut self) -> BTreeSet<Option<RepoPath>> {
+        self.shadowed = self.pending.iter().any(|file| {
+            self.view
+                .files
+                .get(*file)
+                .is_some_and(|bytes| shadow::shadows(&tokens(&String::from_utf8_lossy(bytes))))
+        });
         while let Some(file) = self.pending.pop() {
             if !self.seen.insert(file) {
                 continue;
@@ -157,7 +147,10 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
-        let shadowed = shadows_a_macro(&tokens);
+        if !self.shadowed && shadow::shadows(&tokens) {
+            self.shadowed = true;
+            self.reads.insert(None);
+        }
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -172,11 +165,7 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
-            let parsed = if shadowed {
-                Argument::Unknown
-            } else {
-                Argument::parse(argument, &tokens[at + 4..])
-            };
+            let parsed = Argument::parse(argument, &tokens[at + 4..], self.shadowed);
             let resolved = match parsed {
                 Argument::Relative(literal) => {
                     literal_path(literal).and_then(|path| resolve(&self.view.symlinks, file, path))

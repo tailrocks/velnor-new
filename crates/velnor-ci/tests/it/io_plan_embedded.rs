@@ -6,9 +6,9 @@ use std::os::unix::fs::symlink;
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo, selected};
 
-const NOTHING: &str = "Cargo.toml: none\ntools/Cargo.toml: none\n";
+pub(crate) const NOTHING: &str = "Cargo.toml: none\ntools/Cargo.toml: none\n";
 
-fn embedded_repo(name: &str, include: &str) -> Repo {
+pub(crate) fn embedded_repo(name: &str, include: &str) -> Repo {
     let repo = plan_repo(name);
     repo.write_all(&[
         (".velnor/rust-ci.toml", "non_inputs = [\"notes/**\"]\n"),
@@ -24,7 +24,7 @@ fn explained(include: &str, changed: &str) -> String {
     explain(&repo, changed)
 }
 
-fn explain(repo: &Repo, changed: &str) -> String {
+pub(crate) fn explain(repo: &Repo, changed: &str) -> String {
     let output = plan_command(repo)
         .args(["plan", "--explain", "--changed", changed])
         .output()
@@ -143,21 +143,4 @@ fn a_relative_include_that_climbs_out_of_a_tracked_symlink_can_read_anything() {
         "../../notes",
     );
     assert!(planned.contains("b input:notes/x.md"), "{planned}");
-}
-
-#[test]
-fn a_crate_that_defines_its_own_concat_or_env_reads_any_file_for_a_build_output_include() {
-    for shadow in [
-        "macro_rules! concat { ($($t:tt)*) => { \"../notes/x.md\" }; }\n",
-        "macro_rules! env { ($($t:tt)*) => { \"../notes\" }; }\n",
-        "use helpers::concat;\n",
-        "use helpers::env as env;\n",
-    ] {
-        let include = format!("{shadow}include!(concat!(env!(\"OUT_DIR\"), \"/gen.rs\"));\n");
-        let planned = explained(&include, "notes/x.md");
-        assert!(
-            planned.contains("b input:notes/x.md"),
-            "{shadow}: {planned}"
-        );
-    }
 }

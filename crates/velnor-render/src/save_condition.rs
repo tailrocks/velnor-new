@@ -64,7 +64,6 @@ fn mode_read(gate: &Gate) -> Option<String> {
     })
 }
 
-/// The plan modes a job reads into its env, named by position over its roots in sorted order.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Modes(BTreeMap<RootSlug, String>);
 
