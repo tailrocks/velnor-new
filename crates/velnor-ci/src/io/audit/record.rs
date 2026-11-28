@@ -134,11 +134,9 @@ impl Audit<'_> {
                 file.display()
             )));
         };
-        let restored = hash.is_some_and(|hash| {
-            indices
-                .iter()
-                .any(|index| self.restored[*index].contains(hash))
-        });
+        let restored = indices
+            .iter()
+            .any(|index| self.restored[*index].contains(hash));
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
         let Some((source, _)) = self.dep_info(
