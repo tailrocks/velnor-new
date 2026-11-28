@@ -107,7 +107,6 @@ pub struct ApiCompare {
 #[derive(Debug, Deserialize)]
 pub struct ApiCompareFiles {
     pub status: String,
-    #[serde(default)]
     pub files: Vec<ApiCompareFile>,
 }
 

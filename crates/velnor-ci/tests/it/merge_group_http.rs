@@ -204,3 +204,9 @@ fn a_path_in_the_note_cannot_inject_a_workflow_command() {
     );
     assert!(outcome.stdout.contains("%0A"), "{}", outcome.stdout);
 }
+
+#[test]
+fn an_ahead_compare_without_a_file_list_runs_everything() {
+    let bare = (200, json!({"status": "ahead"}).to_string());
+    assert_everything(&push(vec![page(BEFORE, bare)]));
+}
