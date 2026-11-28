@@ -100,12 +100,13 @@ enum Event {
     Acquired {
         connection: usize,
         reservation: ReservationId,
+        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     },
     Acked {
         connection: usize,
         message_id: i64,
-        result: Result<(), ListenFault>,
+        result: Result<github::Acked, ListenFault>,
     },
     Ended {
         reservation: ReservationId,
@@ -141,6 +142,7 @@ struct Run<'a> {
     connections: Vec<Live>,
     slots: Slots,
     taken: BTreeSet<(usize, i64)>,
+    refreshed_for: BTreeSet<(usize, i64)>,
     next_reservation: u64,
     tasks: JoinSet<Event>,
     machine_ok: bool,
@@ -208,6 +210,7 @@ async fn run_with_health(
         connections,
         slots: Slots::new(capacity),
         taken: BTreeSet::new(),
+        refreshed_for: BTreeSet::new(),
         next_reservation: 1,
         tasks: JoinSet::new(),
         machine_ok: true,
@@ -272,8 +275,9 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
+                request_id,
                 result,
-            } => self.on_acquired(connection, reservation, result),
+            } => self.on_acquired(connection, reservation, request_id, result),
             Event::Acked {
                 connection,
                 message_id,

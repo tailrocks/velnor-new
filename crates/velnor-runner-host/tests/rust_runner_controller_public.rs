@@ -35,6 +35,8 @@ mod organization;
 mod runners;
 #[path = "rust_runner_controller_public/scope.rs"]
 mod scope;
+#[path = "rust_runner_controller_public/session_401.rs"]
+mod session_401;
 #[path = "rust_runner_controller_public/shutdown.rs"]
 mod shutdown;
 #[path = "rust_runner_controller_public/signals.rs"]

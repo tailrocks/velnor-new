@@ -35,8 +35,10 @@ export async function queue(path: string): Promise<never> {
   }
   const message = /^\/messages\/(\d+)$/.exec(path);
   if (method === "DELETE" && message?.[1]) {
+    const refused = refusal("message.expired");
+    record("message.delete", { id: message[1], status: refused?.status ?? 204 });
+    if (refused) reply(refused.status, { message: "expired" });
     mutate((state) => state.deleted.push(Number(message[1])));
-    record("message.delete", { id: message[1] });
     reply(204, undefined);
   }
   return unexpected();

@@ -82,9 +82,11 @@ function sessions(path: string): void {
 function jobs(path: string): void {
   if (method === "POST" && /\/acquirejobs$/.test(path)) {
     const requested = JSON.parse(body) as number[];
-    snapshot(record("acquire", { ids: requested.join(",") }));
+    const expired = refusal("acquire.expired");
+    snapshot(record("acquire", { ids: requested.join(","), status: expired?.status ?? 200 }));
     mutate((state) => (state.pending_jit = requested));
     held("acquire");
+    if (expired) reply(expired.status, { message: "expired" });
     const returned = (id: number): number[] => {
       const shape = offers().find((offer) => offer.request_id === id)?.acquire_returns;
       if (shape === "none") return [];

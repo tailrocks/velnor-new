@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::{
     AckScope, AcquireOutcome, EncodedJit, JitResult, ParsedBatch, QueueSession, RefreshGate,
-    RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, WireError, ack,
-    acquire, create_runner_scale_set, create_session, delete_session, get_runner_scale_set,
-    get_runner_scale_set_by_id, jit, jit_request, list_runner_groups, list_scale_set_runners,
-    refresh_session, remove_runner, sole_grant,
+    RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError,
+    WireError, ack, acquire, create_runner_scale_set, create_session, delete_session,
+    get_runner_scale_set, get_runner_scale_set_by_id, jit, jit_request, list_runner_groups,
+    list_scale_set_runners, refresh_session, remove_runner, sole_grant,
 };
 
 use zeroize::Zeroizing;
@@ -43,7 +44,13 @@ pub(super) struct QueueAccess {
 
 pub(super) enum Acquisition {
     NotAcquired,
+    RefreshRequired,
     Acquired { jit: EncodedJit },
+}
+
+pub(super) enum Acked {
+    Done,
+    RefreshRequired,
 }
 
 impl QueueAccess {
@@ -285,6 +292,7 @@ pub(super) fn acquire_and_jit(
     let mut transport =
         HttpsTransport::with_deadline(&admin.base, Instant::now() + ACQUIRE_BUDGET)?;
     let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
     let outcome = acquire(
         &mut transport,
         scale_set_id,
@@ -292,9 +300,14 @@ pub(super) fn acquire_and_jit(
         &[],
         &queue.token,
         &gate,
-        || Err(WireError::RefreshExhausted),
-    )
-    .map_err(map_listen)?;
+        || {
+            refresh_requested.set(true);
+            Err(WireError::RefreshExhausted)
+        },
+    );
+    let Some(outcome) = refresh_or_fail(outcome, &refresh_requested)? else {
+        return Ok(Acquisition::RefreshRequired);
+    };
     match outcome {
         AcquireOutcome::Acquired(ids) if ids.is_empty() => return Ok(Acquisition::NotAcquired),
         AcquireOutcome::Acquired(ids) if sole_grant(&ids, request_id) => {}
@@ -331,10 +344,11 @@ fn generate_jit(
     }
 }
 
-pub(super) fn acknowledge(queue: &QueueAccess, batch: &ParsedBatch) -> Result<(), ListenFault> {
+pub(super) fn acknowledge(queue: &QueueAccess, batch: &ParsedBatch) -> Result<Acked, ListenFault> {
     let mut transport = HttpsTransport::new(&queue.origin)?;
     let gate = RefreshGate::new();
-    ack(
+    let refresh_requested = Cell::new(false);
+    let acked = ack(
         &mut transport,
         &queue.path,
         batch,
@@ -344,8 +358,24 @@ pub(super) fn acknowledge(queue: &QueueAccess, batch: &ParsedBatch) -> Result<()
             queue_token: &queue.token,
         },
         &gate,
-        || Err(WireError::RefreshExhausted),
-    )
-    .map(drop)
-    .map_err(|error| map_listen(error).into())
+        || {
+            refresh_requested.set(true);
+            Err(WireError::RefreshExhausted)
+        },
+    );
+    Ok(match refresh_or_fail(acked, &refresh_requested)? {
+        Some(_) => Acked::Done,
+        None => Acked::RefreshRequired,
+    })
+}
+
+fn refresh_or_fail<T>(
+    result: Result<T, SessionError>,
+    refresh_requested: &Cell<bool>,
+) -> Result<Option<T>, ListenFault> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(SessionError::Wire(WireError::RefreshExhausted)) if refresh_requested.get() => Ok(None),
+        Err(error) => Err(map_listen(error).into()),
+    }
 }
