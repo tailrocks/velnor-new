@@ -90,7 +90,6 @@ mod external_workflows;
 mod facts;
 mod feature_lane_dedup;
 mod feature_lane_scope;
-mod feature_lane_scope_lint_doc;
 mod feature_lanes;
 mod fixed_uses;
 mod fixed_uses_comment;

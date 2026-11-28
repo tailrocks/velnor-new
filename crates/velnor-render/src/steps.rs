@@ -55,7 +55,6 @@ use steps_helpers::{
     after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps, variable,
 };
 use steps_outputs::{merge_group_output, test_outputs};
-
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub(crate) const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
