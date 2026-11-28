@@ -346,7 +346,11 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 GateNeed::Doctests | GateNeed::Docs => {
                     parts.push(runs(gate.need));
                     parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
-                    parts.extend(package_selection(gate, &read(GateNeed::PackageArgs)));
+                    parts.extend(package_selection(
+                        gate,
+                        &read(GateNeed::PackageArgs),
+                        replanned,
+                    ));
                 }
                 _ => {}
             }
@@ -371,7 +375,11 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
             if gate.unselected {
                 parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             }
-            parts.extend(package_selection(gate, &read(GateNeed::PackageArgs)));
+            parts.extend(package_selection(
+                gate,
+                &read(GateNeed::PackageArgs),
+                replanned,
+            ));
         }
         GateNeed::TestFilter
         | GateNeed::PackageArgs

@@ -17,12 +17,12 @@ const WITHOUT_PACKAGES: &str =
     "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
 const LINT: &str = "Lint (features: local-mode)";
 const DOC: &str = "Documentation (features: local-mode)";
-const ARGS: &str = "(steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)";
+const ARGS: &str = "env.VELNOR_PACKAGE_ARGS_ROOT";
 
 fn selected(package: &str) -> String {
-    let contains = |flag: &str| format!("contains(format(' {{0}} ', {ARGS}), ' {flag} ')");
+    let contains = |flag: &str| format!("contains({ARGS}, ' {flag} ')");
     format!(
-        "({} || {})",
+        "(steps.replan.outcome == 'success' || {} || {})",
         contains(&format!("-p {package}")),
         contains("--workspace")
     )
@@ -183,6 +183,28 @@ fn lanes_sharing_features_with_different_packages_gate_on_the_union() -> TestRes
         assert!(gated_on(&condition, "package-0"), "{condition}");
         assert!(gated_on(&condition, "package-1"), "{condition}");
         assert!(run.contains("--workspace"), "{run}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_lane_whose_feature_is_defined_by_140_members_keeps_its_gate_under_the_limit() -> TestResult {
+    let mut repo = lane_view(HELPER, NAMED)?;
+    for index in 0..140 {
+        with_member(
+            &mut repo,
+            &format!("definer-{index}"),
+            "[features]\nlocal-mode = []\n",
+        )?;
+    }
+    for name in [LINT, DOC] {
+        let (condition, _) = step_in(&repo, name)?;
+        assert!(gated_on(&condition, "definer-139"), "{name}");
+        assert!(
+            condition.chars().count() <= 21_000,
+            "{name}: {}",
+            condition.len()
+        );
     }
     Ok(())
 }

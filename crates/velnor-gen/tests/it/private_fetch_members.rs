@@ -116,20 +116,12 @@ fn many_long_members() -> Layout {
 }
 
 #[test]
-fn a_member_list_too_long_for_a_github_expression_fetches_every_member() -> TestResult {
-    let layout = many_long_members();
-    let every: BTreeSet<String> = layout.roots.iter().cloned().collect();
-    for steps in lanes(&layout)? {
-        for step in &steps {
-            let listed = step["env"]["VELNOR_FETCH_MANIFESTS"]
-                .as_str()
-                .unwrap_or_default();
-            assert!(listed.len() <= 21_000, "{} characters", listed.len());
-        }
-        assert_eq!(
-            fetched(&steps, selecting(PULL_REQUEST, "no_member_at_all"))?,
-            vec![every.clone()]
-        );
-    }
-    Ok(())
+fn a_member_list_too_long_for_a_github_expression_is_refused_for_its_step_condition() {
+    let refused = lanes(&many_long_members())
+        .err()
+        .map(|error| format!("{error:?}"));
+    assert!(
+        refused.is_some_and(|error| error.contains("ConditionTooLong")),
+        "generation must refuse a step condition over the limit"
+    );
 }

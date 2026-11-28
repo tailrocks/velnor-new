@@ -152,7 +152,7 @@ impl<'a> Scan<'a> {
             };
             let resolved = match Argument::parse(argument, &tokens[at + 4..]) {
                 Argument::Relative(literal) => {
-                    literal_path(literal).and_then(|path| resolve(file, path))
+                    literal_path(literal).and_then(|path| resolve(&self.view.symlinks, file, path))
                 }
                 Argument::ManifestDir(rest) => self.under_manifest_dir(rest),
                 Argument::BuildOutput => continue,
@@ -162,10 +162,6 @@ impl<'a> Scan<'a> {
                 self.reads.insert(None);
                 continue;
             };
-            if self.through_symlink(&resolved) {
-                self.reads.insert(None);
-                continue;
-            }
             if *name == "include" {
                 self.follow(&resolved);
             }
@@ -173,22 +169,11 @@ impl<'a> Scan<'a> {
         }
     }
 
-    fn through_symlink(&self, path: &RepoPath) -> bool {
-        let mut at = Some(path.clone());
-        while let Some(current) = at {
-            if self.view.symlinks.contains(&current) {
-                return true;
-            }
-            at = current.parent();
-        }
-        false
-    }
-
     fn under_manifest_dir(&self, rest: &str) -> Option<RepoPath> {
         let parts = self.directory.as_ref().map_or_else(Vec::new, |directory| {
             directory.as_str().split('/').collect()
         });
-        join(parts, rest.trim_start_matches('/'))
+        join(&self.view.symlinks, parts, rest.trim_start_matches('/'))
     }
 
     fn follow(&mut self, included: &RepoPath) {
@@ -211,23 +196,32 @@ impl<'a> Scan<'a> {
     }
 }
 
-fn resolve(file: &RepoPath, literal: &str) -> Option<RepoPath> {
+fn resolve(symlinks: &BTreeSet<RepoPath>, file: &RepoPath, literal: &str) -> Option<RepoPath> {
     if literal.starts_with('/') || literal.contains('\\') {
         return None;
     }
     let mut parts: Vec<&str> = file.as_str().split('/').collect();
     parts.pop();
-    join(parts, literal)
+    join(symlinks, parts, literal)
 }
 
-fn join<'a>(mut parts: Vec<&'a str>, literal: &'a str) -> Option<RepoPath> {
+fn join<'a>(
+    symlinks: &BTreeSet<RepoPath>,
+    mut parts: Vec<&'a str>,
+    literal: &'a str,
+) -> Option<RepoPath> {
     for part in literal.split('/') {
         match part {
             "" | "." => {}
             ".." => {
                 parts.pop()?;
             }
-            other => parts.push(other),
+            other => {
+                parts.push(other);
+                if symlinks.contains(&RepoPath::new(parts.join("/")).ok()?) {
+                    return None;
+                }
+            }
         }
     }
     RepoPath::new(parts.join("/")).ok()

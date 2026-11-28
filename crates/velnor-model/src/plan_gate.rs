@@ -111,6 +111,11 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
     format!("rust_{slug}_group_{group}")
 }
 
+#[must_use]
+pub fn package_args_env(slug: &RootSlug) -> String {
+    format!("VELNOR_PACKAGE_ARGS_{}", slug.as_str().to_ascii_uppercase())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanFrom {
     ThisJob,

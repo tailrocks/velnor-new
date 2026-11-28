@@ -313,6 +313,17 @@ fn an_env_value_whose_joined_expression_is_over_github_s_limit_is_refused() {
 }
 
 #[test]
+fn a_step_condition_over_github_s_limit_is_refused() {
+    let conditioned = |length: usize| {
+        let mut step = run("echo");
+        step.condition = Some(format!("${{{{ {} }}}}", "a".repeat(length)));
+        violations(step)
+    };
+    assert_eq!(conditioned(21_000), Vec::new());
+    assert_eq!(conditioned(21_001), [Rule::ConditionTooLong(21_001)]);
+}
+
+#[test]
 fn a_compliant_workflow_is_accepted() {
     let mut accepted = workflow(uses(PINNED));
     accepted.jobs[0].steps.extend([

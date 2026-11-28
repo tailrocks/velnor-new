@@ -115,7 +115,21 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     {
         rules.push(Rule::ExpressionTooLong(length));
     }
+    if let Some(length) = step.condition.as_deref().map(condition_length)
+        && length > MAX_EXPRESSION_CHARACTERS
+    {
+        rules.push(Rule::ConditionTooLong(length));
+    }
     rules
+}
+
+fn condition_length(condition: &str) -> usize {
+    let text = condition.trim();
+    text.strip_prefix("${{")
+        .and_then(|inner| inner.strip_suffix("}}"))
+        .map_or(text, str::trim)
+        .chars()
+        .count()
 }
 
 fn longest_expression(step: &RenderedStep) -> Option<usize> {

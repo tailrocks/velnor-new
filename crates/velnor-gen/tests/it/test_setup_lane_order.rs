@@ -31,7 +31,7 @@ fn a_helper_before_0_1_112_renders_a_lane_guard_as_it_did_before() -> TestResult
         assert_eq!(
             guard["if"].as_str(),
             Some(
-                "${{ !cancelled() && steps.restored.outcome == 'success' && (contains(format(' {0} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' -p package-0 ') || contains(format(' {0} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' --workspace ')) }}"
+                "${{ !cancelled() && steps.restored.outcome == 'success' && (steps.replan.outcome == 'success' || contains(env.VELNOR_PACKAGE_ARGS_ROOT, ' -p package-0 ') || contains(env.VELNOR_PACKAGE_ARGS_ROOT, ' --workspace ')) }}"
             ),
             "a 0.1.111 pin renders the lane guard as it did before 0.1.112: {guard}"
         );

@@ -126,3 +126,21 @@ fn a_relative_include_below_a_tracked_symlinked_folder_can_read_anything() {
     );
     assert!(planned.contains("b input:notes/x.md"), "{planned}");
 }
+
+#[test]
+fn a_manifest_dir_include_that_climbs_out_of_a_tracked_symlink_can_read_anything() {
+    let include = "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/link/../x.md\"));\n";
+    let planned = linked("embedded-climb-manifest", include, "b/link", "../notes");
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
+
+#[test]
+fn a_relative_include_that_climbs_out_of_a_tracked_symlink_can_read_anything() {
+    let planned = linked(
+        "embedded-climb-relative",
+        "include_str!(\"inc/../x.md\");\n",
+        "b/src/inc",
+        "../../notes",
+    );
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
