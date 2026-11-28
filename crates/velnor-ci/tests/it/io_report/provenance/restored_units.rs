@@ -232,8 +232,8 @@ fn a_record_written_at_another_commit_or_at_none_reads_as_absent()
 -> Result<(), Box<dyn std::error::Error>> {
     let other = "0123456789abcdef0123456789abcdef01234567";
     for (name, header) in [
-        ("other", Some(format!("velnor-restored-units 4 {other}"))),
-        ("none", Some("velnor-restored-units 4".to_owned())),
+        ("other", Some(format!("velnor-restored-units 5 {other}"))),
+        ("none", Some("velnor-restored-units 5".to_owned())),
         ("kept", None),
     ] {
         let repo = base(&format!("report-restored-units-bound-{name}"), "old")?;
@@ -266,7 +266,7 @@ fn a_record_written_before_the_first_commit_reads_as_absent()
     );
     restore_unborn(&repo);
     let record = fs::read_to_string(repo.root().join("target").join(restored_units_file("")))?;
-    assert_eq!(record.lines().next(), Some("velnor-restored-units 4"));
+    assert_eq!(record.lines().next(), Some("velnor-restored-units 5"));
     let gap = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[gap])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);

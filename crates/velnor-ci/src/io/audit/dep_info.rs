@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::OnceCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -50,7 +50,7 @@ impl Audit<'_> {
         index: usize,
         file: &Path,
         package: &str,
-        restored: bool,
+        restored: &BTreeSet<String>,
         unit: UnitIdentity<'_>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
         let text = read(
@@ -68,7 +68,9 @@ impl Audit<'_> {
             .changed_inputs(workspace, &paths, built, file, false, 1)?
             .is_empty()
         {
-            if !restored && !self.owners.of(Some(package), &source).is_empty() {
+            if !restored.contains(&crate::restored_units::digest(&text))
+                && !self.owners.of(Some(package), &source).is_empty()
+            {
                 self.stale.push(file.display().to_string());
             }
             return Ok(None);

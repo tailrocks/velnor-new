@@ -58,7 +58,7 @@ impl Audit<'_> {
             indices[0],
             file,
             package,
-            self.restored_unit(indices, hash),
+            &self.restored_digests(indices, hash),
             UnitIdentity::BuildScript,
         )?
         else {

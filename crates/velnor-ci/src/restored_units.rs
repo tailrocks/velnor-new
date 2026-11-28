@@ -9,7 +9,7 @@ use crate::cargo_package::PackageIdentity;
 use crate::report::LaneMetrics;
 use crate::telemetry::{Compilation, Invocation};
 
-const HEADER: &str = "velnor-restored-units 4";
+const HEADER: &str = "velnor-restored-units 5";
 const MISSING_INPUT: &str = "missing-input ";
 const RESTORED: &str = "restored ";
 
@@ -17,7 +17,7 @@ const RESTORED: &str = "restored ";
 pub struct RestoredUnits {
     pub present: BTreeSet<String>,
     pub missing_input: BTreeSet<String>,
-    pub restored: BTreeSet<String>,
+    pub restored: BTreeMap<String, BTreeSet<String>>,
     pub head: Option<String>,
 }
 
@@ -44,10 +44,12 @@ pub fn encode(units: &RestoredUnits) -> String {
         text.push_str(hash);
         text.push('\n');
     }
-    for hash in &units.restored {
-        text.push_str(RESTORED);
-        text.push_str(hash);
-        text.push('\n');
+    for (hash, digests) in &units.restored {
+        for digest in digests {
+            for part in [RESTORED, hash, " ", digest, "\n"] {
+                text.push_str(part);
+            }
+        }
     }
     text
 }
@@ -70,15 +72,29 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     for line in lines {
         match (
             line.strip_prefix(MISSING_INPUT),
-            line.strip_prefix(RESTORED),
+            line.strip_prefix(RESTORED)
+                .and_then(|rest| rest.split_once(' ')),
         ) {
             (Some(hash), _) if is_hash(hash) => units.missing_input.insert(hash.to_owned()),
-            (_, Some(hash)) if is_hash(hash) => units.restored.insert(hash.to_owned()),
+            (_, Some((hash, digest))) if is_hash(hash) && is_digest(digest) => units
+                .restored
+                .entry(hash.to_owned())
+                .or_default()
+                .insert(digest.to_owned()),
             (None, None) if is_hash(line) => units.present.insert(line.to_owned()),
             _ => return None,
         };
     }
     Some(units)
+}
+
+#[must_use]
+pub fn digest(dep_info: &str) -> String {
+    crate::image_candidate::hashing::sha256_hex(dep_info.as_bytes())
+}
+
+fn is_digest(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn is_commit(text: &str) -> bool {

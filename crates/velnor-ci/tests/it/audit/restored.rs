@@ -64,10 +64,25 @@ fn stale_units() -> Repo {
     repo
 }
 
+fn dep_info_of(hash: &str) -> String {
+    if hash == SCRIPT_STALE {
+        format!("{TARGET}/build/app-{SCRIPT_STALE}/build_script_build-{SCRIPT_STALE}.d")
+    } else {
+        format!("{TARGET}/deps/app-{hash}.d")
+    }
+}
+
 fn manifest_of(repo: &Repo, header: &str, restored: &[&str]) {
     let lines: Vec<String> = restored
         .iter()
-        .map(|hash| format!("restored {hash}"))
+        .map(|hash| {
+            let text = std::fs::read_to_string(repo.root().join(dep_info_of(hash)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            format!(
+                "restored {hash} {}",
+                velnor_ci::restored_units::digest(&text)
+            )
+        })
         .collect();
     unit(
         repo,
@@ -77,7 +92,7 @@ fn manifest_of(repo: &Repo, header: &str, restored: &[&str]) {
 }
 
 fn manifest(repo: &Repo, restored: &[&str]) {
-    let header = format!("velnor-restored-units 4 {}", head(repo));
+    let header = format!("velnor-restored-units 5 {}", head(repo));
     manifest_of(repo, &header, restored);
 }
 
@@ -101,10 +116,34 @@ fn a_stale_dep_info_of_a_restored_unit_does_not_refuse_the_audit() {
     assert!(repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
+fn rewrite(repo: &Repo, hash: &str) {
+    let path = dep_info_of(hash);
+    let text =
+        std::fs::read_to_string(repo.root().join(&path)).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(repo, &path, &format!("{text}\n"));
+    repo.set_mtime(&path, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+}
+
+#[test]
+fn a_stale_dep_info_rewritten_after_the_restore_refuses_the_audit() {
+    let repo = with_stale_unit();
+    manifest(&repo, &[STALE, SCRIPT_STALE]);
+    rewrite(&repo, STALE);
+    refused(&repo);
+}
+
+#[test]
+fn a_stale_build_script_dep_info_rewritten_after_the_restore_refuses_the_audit() {
+    let repo = with_stale_unit();
+    manifest(&repo, &[STALE, SCRIPT_STALE]);
+    rewrite(&repo, SCRIPT_STALE);
+    refused(&repo);
+}
+
 #[test]
 fn a_stale_dep_info_the_manifest_does_not_list_refuses_the_audit() {
     let repo = with_stale_unit();
-    manifest(&repo, &["f00000000000000d", SCRIPT_STALE]);
+    manifest(&repo, &[SCRIPT_STALE]);
     refused(&repo);
 }
 
@@ -118,7 +157,7 @@ fn a_stale_build_script_dep_info_the_manifest_does_not_list_refuses_the_audit() 
 #[test]
 fn a_manifest_of_an_older_format_does_not_excuse_a_stale_dep_info() {
     let repo = with_stale_unit();
-    let header = format!("velnor-restored-units 3 {}", head(&repo));
+    let header = format!("velnor-restored-units 4 {}", head(&repo));
     manifest_of(&repo, &header, &[STALE, SCRIPT_STALE]);
     refused(&repo);
 }
@@ -126,7 +165,7 @@ fn a_manifest_of_an_older_format_does_not_excuse_a_stale_dep_info() {
 #[test]
 fn a_manifest_written_at_another_commit_does_not_excuse_a_stale_dep_info() {
     let repo = with_stale_unit();
-    let header = format!("velnor-restored-units 4 {OTHER_COMMIT}");
+    let header = format!("velnor-restored-units 5 {OTHER_COMMIT}");
     manifest_of(&repo, &header, &[STALE, SCRIPT_STALE]);
     refused(&repo);
 }
@@ -134,14 +173,14 @@ fn a_manifest_written_at_another_commit_does_not_excuse_a_stale_dep_info() {
 #[test]
 fn a_manifest_bound_to_no_commit_does_not_excuse_a_stale_dep_info() {
     let repo = with_stale_unit();
-    manifest_of(&repo, "velnor-restored-units 4", &[STALE, SCRIPT_STALE]);
+    manifest_of(&repo, "velnor-restored-units 5", &[STALE, SCRIPT_STALE]);
     refused(&repo);
 }
 
 #[test]
 fn an_audit_before_the_first_commit_does_not_trust_a_manifest_bound_to_no_commit() {
     let repo = stale_units();
-    manifest_of(&repo, "velnor-restored-units 4", &[STALE, SCRIPT_STALE]);
+    manifest_of(&repo, "velnor-restored-units 5", &[STALE, SCRIPT_STALE]);
     refused(&repo);
 }
 

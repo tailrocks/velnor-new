@@ -66,7 +66,7 @@ pub(super) struct Audit<'a> {
     found: CompileInputs,
     /// Bytes read from each Cargo root's target directory, bounded per root.
     target_bytes: Vec<u64>,
-    restored: Vec<BTreeSet<String>>,
+    restored: Vec<BTreeMap<String, BTreeSet<String>>>,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,

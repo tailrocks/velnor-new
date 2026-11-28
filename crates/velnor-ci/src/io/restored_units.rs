@@ -32,20 +32,17 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
                     unit: name,
                     dependencies: dependency_crates(&path),
                 });
-                found.restored.insert(hash.clone());
                 found.present.insert(hash);
             }
             UnitFile::DepInfo {
                 hash: Some(hash), ..
             } => {
-                found.restored.insert(hash.clone());
+                restore_dep_info(&mut found, &hash, &path);
                 if names_missing_file(&path, &inside) {
                     found.missing_input.insert(hash);
                 }
             }
-            UnitFile::Script { hash, .. } | UnitFile::BuildOutput { hash, .. } => {
-                found.restored.insert(hash);
-            }
+            UnitFile::Script { hash, .. } => restore_dep_info(&mut found, &hash, &path),
             _ => {}
         }
     }
@@ -53,6 +50,16 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     found.present.retain(|hash| !missing.contains(hash));
     crate::restored_units::cascade(&mut found, &fingerprints);
     Some(found)
+}
+
+fn restore_dep_info(found: &mut RestoredUnits, hash: &str, path: &Path) {
+    if let Some(text) = read_small(path) {
+        found
+            .restored
+            .entry(hash.to_owned())
+            .or_default()
+            .insert(crate::restored_units::digest(&text));
+    }
 }
 
 fn dependency_crates(fingerprint: &Path) -> BTreeSet<String> {

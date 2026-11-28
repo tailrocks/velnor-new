@@ -308,7 +308,9 @@ fn a_unit_with_a_missing_input_is_recorded_as_restored_but_not_as_present()
     let lines: Vec<&str> = record.lines().collect();
     for hash in [MISSING_INPUT, KEPT_INPUT] {
         assert!(
-            lines.contains(&format!("restored {hash}").as_str()),
+            lines
+                .iter()
+                .any(|line| line.starts_with(&format!("restored {hash} "))),
             "{hash}: {record}"
         );
     }
@@ -321,7 +323,7 @@ const SCRIPT: &str = "00000000bad00005";
 const OUTPUT: &str = "00000000bad00006";
 
 #[test]
-fn a_dep_info_script_and_build_output_with_no_fingerprint_are_recorded_as_restored()
+fn a_dep_info_and_script_with_no_fingerprint_are_recorded_with_their_content_digest()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = fixture("report-restored-units-bare")?;
     repo.write(
@@ -338,15 +340,27 @@ fn a_dep_info_script_and_build_output_with_no_fingerprint_are_recorded_as_restor
     );
     restore(&repo);
     let record = restored_record(&repo)?;
-    for hash in [BARE_DEP_INFO, SCRIPT, OUTPUT] {
+    for (hash, text) in [
+        (
+            BARE_DEP_INFO,
+            format!("target/debug/deps/libserde-{BARE_DEP_INFO}.rmeta: src/lib.rs\n"),
+        ),
+        (SCRIPT, "out.d: build.rs\n".to_owned()),
+    ] {
+        let line = format!(
+            "restored {hash} {}",
+            velnor_ci::restored_units::digest(&text)
+        );
         assert!(
-            record
-                .lines()
-                .any(|line| line == format!("restored {hash}")),
+            record.lines().any(|found| found == line),
             "{hash}: {record}"
         );
-        assert!(!record.lines().any(|line| line == hash), "{hash}: {record}");
+        assert!(
+            !record.lines().any(|found| found == hash),
+            "{hash}: {record}"
+        );
     }
+    assert!(!record.contains(OUTPUT), "{record}");
     Ok(())
 }
 
@@ -368,7 +382,7 @@ fn the_record_names_the_commit_the_restore_ran_at() -> Result<(), Box<dyn std::e
     let record = restored_record(&repo)?;
     assert_eq!(
         record.lines().next(),
-        Some(format!("velnor-restored-units 4 {}", head.trim()).as_str()),
+        Some(format!("velnor-restored-units 5 {}", head.trim()).as_str()),
         "{record}"
     );
     Ok(())

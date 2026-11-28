@@ -134,7 +134,7 @@ impl Audit<'_> {
                 file.display()
             )));
         };
-        let restored = self.restored_unit(indices, hash);
+        let restored = self.restored_digests(indices, hash);
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
         let Some((source, _)) = self.dep_info(
@@ -142,7 +142,7 @@ impl Audit<'_> {
             budget,
             file,
             &package,
-            restored,
+            &restored,
             UnitIdentity::Fingerprint {
                 target: indices[0],
                 configuration,
@@ -164,10 +164,17 @@ impl Audit<'_> {
         Ok(())
     }
 
-    pub(in crate::io) fn restored_unit(&self, indices: &[usize], hash: &str) -> bool {
+    pub(in crate::io) fn restored_digests(
+        &self,
+        indices: &[usize],
+        hash: &str,
+    ) -> BTreeSet<String> {
         indices
             .iter()
-            .any(|index| self.restored[*index].contains(hash))
+            .filter_map(|index| self.restored[*index].get(hash))
+            .flatten()
+            .cloned()
+            .collect()
     }
 
     pub(super) fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
@@ -211,7 +218,7 @@ impl Audit<'_> {
             if known.is_empty()
                 && script
                     .as_deref()
-                    .is_some_and(|script| self.restored_unit(&[index], script))
+                    .is_some_and(|script| !self.restored_digests(&[index], script).is_empty())
             {
                 self.present
                     .insert((index, configuration.to_owned(), hash.to_owned()));

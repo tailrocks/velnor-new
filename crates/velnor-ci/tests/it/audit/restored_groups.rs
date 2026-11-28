@@ -55,15 +55,24 @@ fn each_root_of_a_shared_group_trusts_its_own_manifest_in_the_group_directory() 
         "{refused:?}"
     );
 
-    let header = format!("velnor-restored-units 4 {}", head(&repo));
+    let header = format!("velnor-restored-units 5 {}", head(&repo));
     for (prefix, hash) in [
         ("tools/a/", "f000000000000011"),
         ("tools/b/", "f000000000000013"),
     ] {
+        let package = prefix.trim_start_matches("tools/").trim_end_matches('/');
+        let text = std::fs::read_to_string(
+            repo.root()
+                .join(format!("{TARGET}/deps/{package}-{hash}.d")),
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
         unit(
             &repo,
             &format!("target-velnor/tools/{}", restored_units_file(prefix)),
-            &format!("{header}\nrestored {hash}\n"),
+            &format!(
+                "{header}\nrestored {hash} {}\n",
+                velnor_ci::restored_units::digest(&text)
+            ),
         );
     }
     let trusted = audit(&repo, &["--write"]);

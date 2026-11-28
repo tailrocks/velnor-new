@@ -72,7 +72,7 @@ pub(super) fn begin<'a>(
         outputs: BuildOutputs::default(),
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
-        restored: vec![BTreeSet::new(); workspaces.len()],
+        restored: vec![BTreeMap::new(); workspaces.len()],
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
@@ -84,17 +84,17 @@ pub(super) fn restored_hashes(
     shared: &[Vec<usize>],
     groups: &[PathBuf],
     head: Option<&str>,
-) -> Result<Vec<BTreeSet<String>>, CiError> {
+) -> Result<Vec<BTreeMap<String, BTreeSet<String>>>, CiError> {
     let hashes = |target: &Path, prefix: &str| {
         crate::io::restored_units::read(target, prefix, head)
             .1
-            .map_or_else(BTreeSet::new, |units| units.restored)
+            .map_or_else(BTreeMap::new, |units| units.restored)
     };
     let prefixes = workspaces
         .iter()
         .map(|workspace| crate::io::input_scopes::git_prefix(&workspace.root))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut restored: Vec<BTreeSet<String>> = workspaces
+    let mut restored: Vec<BTreeMap<String, BTreeSet<String>>> = workspaces
         .iter()
         .zip(&prefixes)
         .map(|(workspace, prefix)| hashes(&workspace.target_directory, prefix))
@@ -104,7 +104,9 @@ pub(super) fn restored_hashes(
             continue;
         }
         for index in indices {
-            restored[*index].extend(hashes(directory, &prefixes[*index]));
+            for (hash, digests) in hashes(directory, &prefixes[*index]) {
+                restored[*index].entry(hash).or_default().extend(digests);
+            }
         }
     }
     Ok(restored)
