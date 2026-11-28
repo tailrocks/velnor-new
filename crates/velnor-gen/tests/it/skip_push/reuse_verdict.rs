@@ -32,7 +32,7 @@ fn locked(roots: &[&str], helper: &str) -> Result<RepoView, Box<dyn std::error::
 }
 
 pub(super) fn jobs(roots: &[&str]) -> Result<Value, Box<dyn std::error::Error>> {
-    let text = workflow(&repo(roots, true, "0.1.117")?)?;
+    let text = workflow(&repo(roots, true, "0.1.118")?)?;
     Ok(crate::yaml_tree::document(&text)?["jobs"].clone())
 }
 
@@ -55,10 +55,10 @@ pub(super) fn condition(job: &Value, name: &str) -> Result<String, String> {
 #[test]
 fn the_knob_off_leaves_the_workflow_byte_identical_and_the_gate_without_reuse() -> TestResult {
     let roots = ["Cargo.toml", "lab/Cargo.toml"];
-    let plain = workflow(&repo(&roots, false, "0.1.117")?)?;
+    let plain = workflow(&repo(&roots, false, "0.1.118")?)?;
     assert!(!plain.contains("verdict"), "{plain}");
     assert!(!plain.contains("--reuse"), "{plain}");
-    let on = workflow(&repo(&roots, true, "0.1.117")?)?;
+    let on = workflow(&repo(&roots, true, "0.1.118")?)?;
     assert_ne!(plain, on);
     Ok(())
 }
@@ -69,13 +69,13 @@ fn the_knob_needs_a_helper_that_knows_the_verdict_commands() -> TestResult {
         .err()
         .ok_or("0.1.116 accepted")?
         .to_string();
-    assert!(error.contains("pin-helper 0.1.117"), "{error}");
+    assert!(error.contains("pin-helper 0.1.118"), "{error}");
     Ok(())
 }
 
 #[test]
 fn a_workflow_without_a_plan_job_refuses_the_knob() -> TestResult {
-    let error = expected_with_notes(&locked(&["Cargo.toml"], "0.1.117")?)
+    let error = expected_with_notes(&locked(&["Cargo.toml"], "0.1.118")?)
         .err()
         .ok_or("a single job accepted the knob")?
         .to_string();
@@ -252,7 +252,7 @@ fn the_reusable_list_names_each_job_and_step_by_the_name_github_reports() -> Tes
 
 #[test]
 fn the_gate_spec_names_what_a_verdict_may_stand_in_for() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], true, "0.1.117")?)?;
+    let text = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], true, "0.1.118")?)?;
     let spec = text
         .lines()
         .find_map(|line| line.trim().strip_prefix("GATE_SPEC: '"))
@@ -278,7 +278,7 @@ fn with_setup(name: &str, knob: bool) -> Result<RepoView, Box<dyn std::error::Er
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    pin_helper(&mut repo, "0.1.117")?;
+    pin_helper(&mut repo, "0.1.118")?;
     Ok(repo)
 }
 

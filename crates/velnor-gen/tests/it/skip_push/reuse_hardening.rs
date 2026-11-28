@@ -16,7 +16,7 @@ fn renamed(kind: &str, name: &str, knob: bool) -> Result<RepoView, Box<dyn std::
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    pin_helper(&mut repo, "0.1.117")?;
+    pin_helper(&mut repo, "0.1.118")?;
     Ok(repo)
 }
 
@@ -77,7 +77,7 @@ fn audit_condition(on_main: &str) -> Result<(String, String), Box<dyn std::error
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    pin_helper(&mut repo, "0.1.117")?;
+    pin_helper(&mut repo, "0.1.118")?;
     let document = crate::yaml_tree::document(&workflow(&repo)?)?;
     let all = &document["jobs"];
     let list = step(&all["rust-plan"], "velnor-ci verdict reuse")?["env"]["VELNOR_REUSABLE"]

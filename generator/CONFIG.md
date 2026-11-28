@@ -113,7 +113,7 @@ In the one-job shape the `rust` job itself is granted `actions: read` at job lev
 
 ## Reuse a pull request verdict in the merge queue
 
-`[ci] reuse_pr_verdict = true` in `.velnor/rust-ci.toml` lets a `merge_group` run skip the checks that a green `pull_request` run of the same pull request already passed on exactly the same tree. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.117 or later and a workflow with a plan job (more than one job); a single-job workflow is refused at generation, and so is an older helper.
+`[ci] reuse_pr_verdict = true` in `.velnor/rust-ci.toml` lets a `merge_group` run skip the checks that a green `pull_request` run of the same pull request already passed on exactly the same tree. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.118 or later and a workflow with a plan job (more than one job); a single-job workflow is refused at generation, and so is an older helper.
 
 ```toml
 [ci]

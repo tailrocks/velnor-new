@@ -16,7 +16,7 @@ fn outputs(knob: bool) -> Result<Value, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(config.as_bytes()))?;
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    pin_helper(&mut repo, "0.1.117")?;
+    pin_helper(&mut repo, "0.1.118")?;
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"]["rust-lane-local-mode-root"]["outputs"].clone())
 }
 
