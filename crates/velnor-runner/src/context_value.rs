@@ -261,26 +261,52 @@ pub const fn non_finite_text(value: NonFinite) -> &'static str {
     }
 }
 
-fn write_json_string(value: &str, output: &mut String) {
+enum JsonEscape {
+    Literal,
+    Short(&'static str),
+    Unicode,
+}
+
+fn json_escape(character: char) -> JsonEscape {
+    match character {
+        '"' => JsonEscape::Short("\\\""),
+        '\\' => JsonEscape::Short("\\\\"),
+        '\u{08}' => JsonEscape::Short("\\b"),
+        '\u{0c}' => JsonEscape::Short("\\f"),
+        '\n' => JsonEscape::Short("\\n"),
+        '\r' => JsonEscape::Short("\\r"),
+        '\t' => JsonEscape::Short("\\t"),
+        '\u{0085}' | '\u{2028}' | '\u{2029}' => JsonEscape::Unicode,
+        character if character <= '\u{1f}' => JsonEscape::Unicode,
+        _ => JsonEscape::Literal,
+    }
+}
+
+const UNICODE_ESCAPE_UNITS: usize = 6;
+
+pub(crate) fn json_string_utf16_units(value: &str) -> usize {
+    let body: usize = value
+        .chars()
+        .map(|character| match json_escape(character) {
+            JsonEscape::Literal => character.len_utf16(),
+            JsonEscape::Short(escaped) => escaped.len(),
+            JsonEscape::Unicode => UNICODE_ESCAPE_UNITS,
+        })
+        .sum();
+    body.saturating_add(2)
+}
+
+pub(crate) fn write_json_string(value: &str, output: &mut String) {
     use std::fmt::Write as _;
 
     output.push('"');
     for character in value.chars() {
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\u{08}' => output.push_str("\\b"),
-            '\u{0c}' => output.push_str("\\f"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            '\u{0085}' | '\u{2028}' | '\u{2029}' => {
+        match json_escape(character) {
+            JsonEscape::Literal => output.push(character),
+            JsonEscape::Short(escaped) => output.push_str(escaped),
+            JsonEscape::Unicode => {
                 let _ = write!(output, "\\u{:04x}", u32::from(character));
             }
-            character if character <= '\u{1f}' => {
-                let _ = write!(output, "\\u{:04x}", u32::from(character));
-            }
-            character => output.push(character),
         }
     }
     output.push('"');
@@ -334,13 +360,28 @@ pub fn ordinal_ignore_case_cmp(left: &str, right: &str) -> Ordering {
         .cmp(right.chars().map(simple_ordinal_uppercase))
 }
 
+pub(crate) fn ordinal_ignore_case_fold(value: &str) -> impl Iterator<Item = char> + '_ {
+    value.chars().map(simple_ordinal_uppercase)
+}
+
+const YPOGEGRAMMENI_TO_PROSGEGRAMMENI: u32 = 8;
+
 fn simple_ordinal_uppercase(character: char) -> char {
-    if matches!(character, '\u{0131}' | '\u{017f}') {
-        return character;
-    }
-    let mut upper = character.to_uppercase();
-    match (upper.next(), upper.next()) {
-        (Some(single), None) => single,
-        _ => character,
+    match character {
+        '\u{0131}' | '\u{017f}' => character,
+        '\u{1f80}'..='\u{1f87}' | '\u{1f90}'..='\u{1f97}' | '\u{1fa0}'..='\u{1fa7}' => {
+            char::from_u32(u32::from(character) + YPOGEGRAMMENI_TO_PROSGEGRAMMENI)
+                .unwrap_or(character)
+        }
+        '\u{1fb3}' => '\u{1fbc}',
+        '\u{1fc3}' => '\u{1fcc}',
+        '\u{1ff3}' => '\u{1ffc}',
+        _ => {
+            let mut upper = character.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(single), None) => single,
+                _ => character,
+            }
+        }
     }
 }

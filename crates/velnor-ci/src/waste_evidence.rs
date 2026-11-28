@@ -4,11 +4,8 @@
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::Path;
 
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
-
-pub const SEED_TRUNCATED: &str = "velnor-mbx-seed-truncated";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MbxCompilerWork {
@@ -44,8 +41,6 @@ pub struct MbxEvidence {
     #[serde(default)]
     pub declared: bool,
     pub store_primed: bool,
-    #[serde(default)]
-    pub seed_truncated: bool,
     pub sessions: Vec<MbxSession>,
     #[serde(default)]
     pub unparsed: u64,
@@ -54,17 +49,8 @@ pub struct MbxEvidence {
 impl MbxEvidence {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        !self.declared
-            && !self.store_primed
-            && !self.seed_truncated
-            && self.sessions.is_empty()
-            && self.unparsed == 0
+        !self.declared && !self.store_primed && self.sessions.is_empty() && self.unparsed == 0
     }
-}
-
-#[must_use]
-pub fn seed_truncated(runner_temp: &Path) -> bool {
-    runner_temp.join(SEED_TRUNCATED).is_file()
 }
 
 const OBJECT_CACHE_LABEL: &str = "object cache:";
@@ -204,7 +190,6 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .iter()
         .fold(0_u64, |total, session| total.saturating_add(session.misses));
     if metrics.mbx.store_primed
-        && !metrics.mbx.seed_truncated
         && metrics.mbx.unparsed == 0
         && sessions.iter().all(|session| session.hits == 0)
         && misses > 0

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, GroupFilter, HelperCommand, InputsCli, MBX_ACTION_RELEASE, MERGE_GROUP_STEP,
-    PrepareLocks, RepoPath,
+    CratesMirror, GroupFilter, HelperCommand, InputsCli, LaneFeatures, MBX_ACTION_RELEASE,
+    MERGE_GROUP_STEP, PrepareLocks, RepoPath,
 };
 
 use crate::base_steps::base_age;
@@ -217,8 +217,11 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     }
 }
 
-pub(crate) fn test_groups_step(groups: &[GroupFilter]) -> RenderedStep {
-    let mut run = "velnor-ci test-groups check".to_owned();
+pub(crate) fn test_groups_step(groups: &[GroupFilter], features: &LaneFeatures) -> RenderedStep {
+    let mut run = format!(
+        "velnor-ci test-groups check{}",
+        crate::cargo::feature_flag(&features.names)
+    );
     for group in groups {
         run.push_str(" --group ");
         run.push_str(&shell_word(&format!("{}={}", group.name, group.filter)));
@@ -244,26 +247,6 @@ pub(crate) fn mbx_store_step() -> RenderedStep {
         name: "velnor-ci mbx-store".to_owned(),
         run: Some("velnor-ci mbx-store".to_owned()),
         ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn mbx_seed_step() -> RenderedStep {
-    RenderedStep {
-        name: "velnor-ci mbx-seed".to_owned(),
-        condition: Some(
-            "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}"
-                .to_owned(),
-        ),
-        run: Some("velnor-ci mbx-seed".to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
-    use velnor_model::StepKind::ToolsLocal;
-    match kind {
-        ToolsLocal(verb, anchor) => crate::tools_steps::tools_local_step(*verb, anchor),
-        _ => mbx_seed_step(),
     }
 }
 
@@ -365,6 +348,14 @@ pub(crate) fn merge_queue_step() -> RenderedStep {
             crate::rules::Value::Expr("${{ github.token }}".to_owned()),
         )],
         run: Some("velnor-ci merge-queue-check".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn components_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci prepare components".to_owned(),
+        run: Some("velnor-ci prepare --no-locks".to_owned()),
         ..RenderedStep::default()
     }
 }

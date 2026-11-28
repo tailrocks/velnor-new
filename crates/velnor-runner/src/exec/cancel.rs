@@ -94,10 +94,11 @@ impl Groups {
 
     pub(super) async fn finish(&self) {
         let (groups, tracking) = self.take();
+        let Some(tracking) = tracking else {
+            return;
+        };
         kill_groups(&groups);
-        if let Some(tracking) = tracking {
-            let _ = tokio::task::spawn_blocking(move || tracking.reap()).await;
-        }
+        let _ = tokio::task::spawn_blocking(move || tracking.reap()).await;
     }
 }
 
@@ -113,6 +114,26 @@ impl Drop for Groups {
         kill_groups(&groups);
         if let Some(tracking) = tracking {
             tracking.reap();
+        }
+    }
+}
+
+pub(super) struct GroupGuard(Option<Pid>);
+
+impl GroupGuard {
+    pub(super) fn arm(group: Option<Pid>) -> Self {
+        Self(group)
+    }
+
+    pub(super) fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        if let Some(group) = self.0 {
+            let _ = kill_process_group(group, Signal::KILL);
         }
     }
 }

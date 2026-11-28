@@ -118,7 +118,7 @@ pub(super) fn admission_spec(step: &ActionStep, context: &JobContext) -> Option<
     let own = step
         .inputs
         .as_ref()
-        .and_then(|inputs| token::find(inputs, "shell"));
+        .and_then(|inputs| token::find(inputs, "shell").ok().flatten());
     if let Some(token) = own {
         match token_literal(token) {
             Some(text) if text.trim().is_empty() => {}

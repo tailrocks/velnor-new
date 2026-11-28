@@ -5,15 +5,15 @@
 use std::time::Duration;
 
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
-use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
+use super::BackgroundTask;
 use crate::exec::StepResult;
 use crate::protocol::{StepConclusion, TwirpResultsClient, TwirpStep};
 
 pub(super) struct StatusQueue {
     updates: UnboundedSender<Vec<TwirpStep>>,
-    task: JoinHandle<()>,
+    task: BackgroundTask,
     budget: Duration,
 }
 
@@ -25,7 +25,7 @@ impl StatusQueue {
         budget: Duration,
     ) -> Self {
         let (updates, mut queue) = unbounded_channel::<Vec<TwirpStep>>();
-        let task = tokio::spawn(async move {
+        let task = BackgroundTask::spawn(async move {
             let mut order = 0_i64;
             while let Some(steps) = queue.recv().await {
                 order += 1;
@@ -55,8 +55,7 @@ impl StatusQueue {
     pub(super) async fn finish(self) {
         drop(self.updates);
         let mut task = self.task;
-        if timeout(self.budget, &mut task).await.is_err() {
-            task.abort();
+        if timeout(self.budget, task.finished()).await.is_err() {
             eprintln!("warning: step status updates were not delivered in time and are dropped");
         }
     }

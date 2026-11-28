@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -10,6 +11,14 @@ use uuid::Uuid;
 use velnor_runner::exec::{RunOptions, TOOL_CACHE_VARIABLES};
 use velnor_runner::job_message::AgentJobRequestMessage;
 use velnor_runner::protocol::RunnerOs;
+
+pub(crate) fn host_os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        "Linux"
+    }
+}
 
 pub(crate) struct Scratch {
     root: PathBuf,
@@ -36,10 +45,14 @@ impl Scratch {
         self.root.join("workspace")
     }
 
+    pub(crate) fn temp(&self) -> PathBuf {
+        self.root.join("temp")
+    }
+
     pub(crate) fn options(&self) -> RunOptions {
         RunOptions {
             workspace: self.workspace(),
-            temp: self.root.join("temp"),
+            temp: self.temp(),
             tool_cache: self.root.join("_tool"),
             runner_name: "exec-test".to_owned(),
             os: RunnerOs::Linux,
@@ -47,8 +60,19 @@ impl Scratch {
     }
 }
 
+pub(crate) fn unlock_tree(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) {
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
+        for item in std::fs::read_dir(path).into_iter().flatten().flatten() {
+            unlock_tree(&item.path());
+        }
+    }
+}
+
 impl Drop for Scratch {
     fn drop(&mut self) {
+        unlock_tree(&self.root);
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }
@@ -92,9 +116,22 @@ pub(crate) fn run_fixture(name: &str, scratch: &Scratch) -> Result<Ran> {
 }
 
 pub(crate) fn run_path(job: &Path, scratch: &Scratch) -> Result<Ran> {
+    run_path_env(job, scratch, &[], None)
+}
+
+pub(crate) fn run_path_env(
+    job: &Path,
+    scratch: &Scratch,
+    env: &[(&str, &str)],
+    tz: Option<&OsStr>,
+) -> Result<Ran> {
     let started = Instant::now();
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
     scrub_tool_cache(&mut command);
+    command.env_remove("TZ").envs(env.iter().copied());
+    if let Some(tz) = tz {
+        command.env("TZ", tz);
+    }
     let output = command
         .arg("exec")
         .arg("--job")
@@ -102,7 +139,7 @@ pub(crate) fn run_path(job: &Path, scratch: &Scratch) -> Result<Ran> {
         .arg("--workspace")
         .arg(scratch.workspace())
         .arg("--temp")
-        .arg(scratch.root.join("temp"))
+        .arg(scratch.temp())
         .output()
         .context("run velnor-runner exec")?;
     Ok(Ran {

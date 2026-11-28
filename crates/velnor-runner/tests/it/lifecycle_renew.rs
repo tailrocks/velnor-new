@@ -69,6 +69,18 @@ async fn lifecycle_fails_the_job_when_the_first_renew_finds_it_gone() -> Result<
 }
 
 #[tokio::test]
+async fn lifecycle_retries_a_first_renew_that_a_404_without_a_run_service_body_refused()
+-> Result<()> {
+    let mock = first_renew_ends_with(Renew::NotFoundWithoutBody, "status=404").await?;
+
+    assert!(
+        mock.requests_to("POST", "/run/renewjob")?.len() > 1,
+        "a plain 404 is retried until the lock grace has passed"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_never_succeeds() -> Result<()> {
     let mock = first_renew_ends_with(Renew::ServerError, "status=500").await?;
 
@@ -96,11 +108,14 @@ async fn lifecycle_keeps_renewing_the_job_lock_until_the_completion_is_sent() ->
     .await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
-    let completing = mock.server.only_request("POST", "/run/completejob")?.at;
+    let completing = mock
+        .server
+        .only_request("POST", "/run/completejob")?
+        .arrived();
     let renewed_meanwhile = mock
         .requests_to("POST", "/run/renewjob")?
         .iter()
-        .filter(|renew| renew.at > completing)
+        .filter(|renew| renew.arrived() > completing)
         .count();
     assert!(
         renewed_meanwhile >= 2,
@@ -110,7 +125,7 @@ async fn lifecycle_keeps_renewing_the_job_lock_until_the_completion_is_sent() ->
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_when_a_later_renew_finds_it_gone() -> Result<()> {
+async fn lifecycle_renew_404_cancels_job() -> Result<()> {
     let behavior = Behavior {
         renew: Renew::RenewedThenJobGone,
         ..Behavior::default()

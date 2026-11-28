@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
-use crate::expr_support::{TempDir, error_text, expected_digest, text};
+use crate::expr_support::{TempDir, empty_env, error_text, expected_digest, text};
 use anyhow::Result;
+use std::time::Duration;
 
 #[test]
 fn expr_hash_files_matches_github_digest() -> Result<()> {
@@ -71,5 +72,29 @@ fn expr_hash_files_rejects_unknown_option() -> Result<()> {
             .contains("Invalid glob option --follow-symbolic-links")
     );
     assert!(error_text("hashFiles()", &env)?.contains("Too few parameters"));
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_times_out_after_two_minutes_by_default() {
+    assert_eq!(empty_env().hash_files_timeout, Duration::from_secs(120));
+}
+
+#[test]
+fn expr_hash_files_fails_when_it_runs_past_its_deadline() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a\n")?;
+    let mut env = dir.env();
+    env.hash_files_timeout = Duration::ZERO;
+
+    assert_eq!(
+        error_text("hashFiles('*.txt', 'it''s')", &env)?,
+        "hashFiles('*.txt, it''s') couldn't finish within 0 seconds."
+    );
+    env.hash_files_timeout = Duration::from_secs(120);
+    assert_eq!(
+        text("hashFiles('*.txt')", &env)?,
+        expected_digest(&[b"a\n"])
+    );
     Ok(())
 }

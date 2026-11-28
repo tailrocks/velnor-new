@@ -65,7 +65,7 @@ async fn token_request_gaps(
     Ok(requests
         .windows(2)
         .take(failures)
-        .map(|pair| pair[1].at.duration_since(pair[0].at))
+        .map(|pair| pair[1].arrived().duration_since(pair[0].arrived()))
         .collect())
 }
 

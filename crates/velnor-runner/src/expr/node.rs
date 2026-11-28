@@ -9,7 +9,7 @@ use super::value::Value;
 pub(crate) enum Node {
     Literal(Value),
     Wildcard,
-    NamedValue(RootContext),
+    NamedValue(RootContext, String),
     Index(Box<Node>, Box<Node>),
     Not(Box<Node>),
     And(Vec<Node>),
@@ -34,7 +34,7 @@ impl Node {
 
     pub(crate) fn children(&self) -> Vec<&Node> {
         match self {
-            Node::Literal(_) | Node::Wildcard | Node::NamedValue(_) => Vec::new(),
+            Node::Literal(_) | Node::Wildcard | Node::NamedValue(..) => Vec::new(),
             Node::Not(inner) => vec![inner.as_ref()],
             Node::Index(left, right) | Node::Binary(_, left, right) => {
                 vec![left.as_ref(), right.as_ref()]
@@ -42,6 +42,33 @@ impl Node {
             Node::And(nodes) | Node::Or(nodes) => nodes.iter().collect(),
             Node::Function { args, .. } => args.iter().collect(),
         }
+    }
+
+    pub(crate) fn reads_step_state(&self) -> bool {
+        let own = match self {
+            Node::NamedValue(root, _) => matches!(root, RootContext::Steps | RootContext::Env),
+            Node::Function { function, .. } => match function {
+                Function::HashFiles
+                | Function::Success
+                | Function::Cancelled
+                | Function::Failure => true,
+                Function::Format
+                | Function::Contains
+                | Function::StartsWith
+                | Function::EndsWith
+                | Function::ToJson
+                | Function::FromJson
+                | Function::Always => false,
+            },
+            Node::Literal(_)
+            | Node::Wildcard
+            | Node::Not(_)
+            | Node::Index(..)
+            | Node::Binary(..)
+            | Node::And(_)
+            | Node::Or(_) => false,
+        };
+        own || self.children().into_iter().any(Node::reads_step_state)
     }
 }
 

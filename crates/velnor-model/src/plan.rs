@@ -131,6 +131,7 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub manifest: Option<RepoPath>,
+    pub features: LaneFeatures,
     pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,

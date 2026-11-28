@@ -1,0 +1,140 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-0000000000aa",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000009",
+      "Name": "cache",
+      "ContextName": "cache",
+      "Reference": {
+        "Type": "repository",
+        "Name": "actions/cache",
+        "Path": "restore",
+        "Ref": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "RepositoryType": "GitHub"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "cache restore"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "path"
+            },
+            "value": {
+              "type": 0,
+              "lit": "data"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "key"
+            },
+            "value": {
+              "type": 0,
+              "lit": "k-1"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "fail-on-cache-miss"
+            },
+            "value": {
+              "type": 0,
+              "lit": "true"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "ContextData": {
+    "github": {
+      "t": 2,
+      "d": [
+        {
+          "k": "repository",
+          "v": {
+            "t": 0,
+            "s": "tailrocks/velnor-new"
+          }
+        },
+        {
+          "k": "event_name",
+          "v": {
+            "t": 0,
+            "s": "push"
+          }
+        },
+        {
+          "k": "ref",
+          "v": {
+            "t": 0,
+            "s": "refs/heads/main"
+          }
+        },
+        {
+          "k": "sha",
+          "v": {
+            "t": 0,
+            "s": "0123456789abcdef0123456789abcdef01234567"
+          }
+        },
+        {
+          "k": "run_id",
+          "v": {
+            "t": 0,
+            "s": "1"
+          }
+        },
+        {
+          "k": "event",
+          "v": {
+            "t": 2,
+            "d": [
+              {
+                "k": "repository",
+                "v": {
+                  "t": 2,
+                  "d": [
+                    {
+                      "k": "default_branch",
+                      "v": {
+                        "t": 0,
+                        "s": "main"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "k": "server_url",
+          "v": {
+            "t": 0,
+            "s": "https://github.com"
+          }
+        },
+        {
+          "k": "repository_id",
+          "v": {
+            "t": 0,
+            "s": "4242"
+          }
+        }
+      ]
+    }
+  }
+}

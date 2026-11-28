@@ -4,6 +4,7 @@
 use crate::expr_support::{TempDir, error_text, expected_digest, text};
 use anyhow::Result;
 use std::fs;
+use velnor_runner::expr::ExprEnv;
 
 #[test]
 fn expr_hash_files_accepts_dot_slash_prefix() -> Result<()> {
@@ -304,5 +305,81 @@ fn expr_hash_files_tilde_needs_a_rooted_home() -> Result<()> {
             .contains("Expected HOME directory to be a rooted path. Actual 'relative/home'")
     );
     assert_eq!(text("hashFiles('~x')", &env)?, expected_digest(&[b"tilde"]));
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_does_not_canonicalize_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    std::os::unix::fs::symlink(dir.path(), dir.path().join("link"))?;
+    let mut env = dir.env();
+    env.home = Some(dir.path().join("link"));
+    assert_eq!(text("hashFiles('~/ws/a.txt')", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_rejects_relative_home_whatever_the_cwd() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+    env.home = Some("src".into());
+    assert!(
+        error_text("hashFiles('~')", &env)?
+            .contains("Expected HOME directory to be a rooted path. Actual 'src'")
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_rejects_empty_home_var() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let env = ExprEnv::with_home_var(dir.env().workspace, Some(String::new().into()));
+    assert!(error_text("hashFiles('~')", &env)?.contains("Unable to determine HOME directory"));
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_rejects_dotted_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/sub/b.txt", "b")?;
+    let root = fs::canonicalize(dir.path())?;
+    let mut env = dir.env();
+
+    for home in [
+        root.join("ws/sub/.."),
+        root.join(".").join("ws"),
+        root.join("missing/../ws"),
+    ] {
+        env.home = Some(home);
+        for pattern in ["~/a.txt", "~/**"] {
+            let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+            assert!(
+                message.contains("Relative pathing '.' and '..' is not allowed."),
+                "{pattern}: {message}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_trims_only_javascript_whitespace() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/lock", "plain")?;
+    dir.write("ws/\u{85}lock", "next-line")?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('\u{85}lock')", &env)?,
+        expected_digest(&[b"next-line"])
+    );
+    assert_eq!(
+        text("hashFiles('\u{a0}lock\u{feff}')", &env)?,
+        expected_digest(&[b"plain"])
+    );
     Ok(())
 }

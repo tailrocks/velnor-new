@@ -1,0 +1,145 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::expr_support::{TempDir, error_text, expected_digest, text};
+use anyhow::Result;
+use std::ffi::OsStr;
+use std::fs;
+use std::io;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
+
+const MACOS_EILSEQ: i32 = 92;
+
+fn write_named(directory: &Path, name: &[u8], contents: &str) -> bool {
+    let created = fs::create_dir_all(directory)
+        .and_then(|()| fs::write(directory.join(OsStr::from_bytes(name)), contents));
+    match created {
+        Ok(()) => true,
+        Err(error) => {
+            assert!(
+                refused_by_the_filesystem(&error),
+                "creating {name:?} failed for a reason other than the filesystem refusing the name: {error}"
+            );
+            false
+        }
+    }
+}
+
+fn refused_by_the_filesystem(error: &io::Error) -> bool {
+    cfg!(target_os = "macos") && error.raw_os_error() == Some(MACOS_EILSEQ)
+}
+
+#[test]
+fn expr_hash_files_fails_when_the_walk_reaches_a_name_that_is_not_valid_utf8() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/dir2/ok.txt", "ok")?;
+    let workspace = dir.workspace()?;
+    if !write_named(&workspace.join("dir"), b"bad\xff.txt", "bad") {
+        return Ok(());
+    }
+    let env = dir.env();
+
+    for expression in [
+        "hashFiles('**')",
+        "hashFiles('dir/*.txt')",
+        "hashFiles('dir/**')",
+        "hashFiles('dir/bad?.txt')",
+        "hashFiles('dir/*/x.txt')",
+    ] {
+        let message = error_text(expression, &env)?;
+        assert!(
+            message.contains("failed. Fail to hash files under directory '"),
+            "{message}"
+        );
+        assert!(message.contains("bad\u{FFFD}.txt"), "{message}");
+        assert!(message.contains("No such file or directory"), "{message}");
+    }
+    assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
+    for expression in [
+        "hashFiles('dir2/*.txt')",
+        "hashFiles('d*/ok.txt')",
+        "hashFiles('*/ok.txt')",
+    ] {
+        assert_eq!(text(expression, &env)?, expected_digest(&[b"ok"]));
+    }
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reads_a_name_that_is_not_valid_utf8_as_its_replacement_character_twin()
+-> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let both = dir.workspace()?.join("both");
+    if !write_named(&both, b"a\xff.txt", "X") {
+        return Ok(());
+    }
+    write_named(&both, "a\u{FFFD}.txt".as_bytes(), "Y");
+    let env = dir.env();
+
+    let twice = expected_digest(&[b"Y", b"Y"]);
+    assert_eq!(text("hashFiles('both/**')", &env)?, twice);
+    assert_eq!(text("hashFiles('both/*.txt')", &env)?, twice);
+    assert_eq!(text("hashFiles('both/a?.txt')", &env)?, twice);
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_drops_a_replacement_character_twin_that_links_outside_the_workspace()
+-> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("outside.txt", "O")?;
+    dir.write("ws/out/z.txt", "Z")?;
+    let out = dir.workspace()?.join("out");
+    if !write_named(&out, b"x\xff.txt", "X") {
+        return Ok(());
+    }
+    dir.symlink("ws/out/x\u{FFFD}.txt", &dir.path().join("outside.txt"))?;
+    let env = dir.env();
+
+    let only_z = expected_digest(&[b"Z"]);
+    assert_eq!(text("hashFiles('out/**')", &env)?, only_z);
+    assert_eq!(text("hashFiles('out/*.txt')", &env)?, only_z);
+    assert_eq!(text("hashFiles('out/x?.txt')", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_names_the_first_non_utf8_entry_in_walk_order() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/e/z/ok.txt", "ok")?;
+    let tree = dir.workspace()?.join("e");
+    if !write_named(&tree.join("c"), b"q\xff.txt", "q") {
+        return Ok(());
+    }
+    write_named(&tree, b"m\xff.txt", "m");
+    write_named(&tree.join("z"), b"r\xff.txt", "r");
+    let env = dir.env();
+
+    let message = error_text("hashFiles('e/**')", &env)?;
+    assert!(message.contains("e/c/q\u{FFFD}.txt"), "{message}");
+    assert!(!message.contains("m\u{FFFD}.txt"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_fails_when_a_pattern_descends_into_a_directory_that_is_not_valid_utf8()
+-> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    if !write_named(
+        &dir.workspace()?.join("e").join(OsStr::from_bytes(b"c\xff")),
+        b"inner.txt",
+        "i",
+    ) {
+        return Ok(());
+    }
+    let env = dir.env();
+
+    let message = error_text("hashFiles('e/c*/inner.txt')", &env)?;
+    assert!(message.contains("e/c\u{FFFD}"), "{message}");
+    assert!(message.contains("No such file or directory"), "{message}");
+    Ok(())
+}

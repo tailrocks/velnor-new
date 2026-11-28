@@ -10,16 +10,12 @@ fn expr_unsupported_function_is_error() -> Result<()> {
     let env = empty_env();
 
     assert_eq!(
-        error_text("fromJSON(env.PAYLOAD)", &env)?,
-        "unsupported expression function fromJSON"
+        error_text("toYAML(env.PAYLOAD)", &env)?,
+        "unsupported expression function toYAML"
     );
     assert_eq!(
         error_text("join('a', ',')", &env)?,
         "unsupported expression function join"
-    );
-    assert_eq!(
-        error_text("EndsWith('a', 'b')", &env)?,
-        "unsupported expression function EndsWith"
     );
     assert_eq!(
         error_text("case(true, 'a', 'b')", &env)?,
@@ -36,10 +32,6 @@ fn expr_unsupported_function_is_error() -> Result<()> {
 fn expr_unsupported_context_is_error() -> Result<()> {
     let env = empty_env();
 
-    assert_eq!(
-        error_text("vars.FOO", &env)?,
-        "unsupported expression context vars"
-    );
     for context in ["job", "jobs", "matrix", "strategy"] {
         assert_eq!(
             error_text(&format!("{context}.x"), &env)?,
@@ -47,11 +39,11 @@ fn expr_unsupported_context_is_error() -> Result<()> {
         );
     }
     assert_eq!(
-        error_text("format('{0}', Vars.x)", &env)?,
-        "unsupported expression context Vars"
+        error_text("format('{0}', Matrix.x)", &env)?,
+        "unsupported expression context Matrix"
     );
     for context in [
-        "github", "runner", "needs", "steps", "inputs", "secrets", "env", "GITHUB",
+        "github", "runner", "needs", "steps", "inputs", "secrets", "env", "vars", "GITHUB",
     ] {
         evaluate_expression(&format!("{context}.x"), &env)?;
     }

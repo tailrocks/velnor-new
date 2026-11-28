@@ -26,7 +26,6 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "app-token",
     "revoke-token",
     "mbx-store",
-    "mbx-seed",
     "tools-local",
     "tools-verify",
     "check-metadata",
@@ -44,6 +43,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "mise-pin",
     "validate-artifact-id",
     "qualification",
+    "runner-drift",
 ];
 
 pub(crate) fn subcommand(run: &str) -> Option<String> {

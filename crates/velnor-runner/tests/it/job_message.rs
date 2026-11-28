@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::context_value::ContextValue;
-use velnor_runner::job_message::{AgentJobRequestMessage, MaskType, template_token_context_value};
+use velnor_runner::job_message::{AgentJobRequestMessage, MaskKind, template_token_context_value};
 
 const FIXTURE: &str = include_str!("../../fixtures/job-message-wire.json");
 
@@ -112,37 +112,108 @@ fn context_data_rejects_unknown_integer_type() {
     assert!(materialize_one(&json!({"t": 9})).is_err());
 }
 
+fn unsupported(spelling: &str) -> MaskKind {
+    MaskKind::Unsupported(spelling.to_owned())
+}
+
 #[test]
-fn mask_hints_accept_numeric_and_named_types() -> Result<()> {
+fn mask_hints_accept_integers_numeric_strings_and_names() -> Result<()> {
     let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
     wire["Mask"] = json!([
         {"Type": 1, "Value": "first"},
         {"type": 2, "value": "second"},
         {"Type": "Variable", "Value": "third"},
         {"Type": "regex", "Value": "fourth"},
+        {"Type": "1", "Value": "fifth"},
+        {"Type": " 2 ", "Value": "sixth"},
     ]);
 
     let message = AgentJobRequestMessage::from_value(wire)?;
 
-    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind).collect();
+    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind.clone()).collect();
     assert_eq!(
         kinds,
         [
-            Some(MaskType::Variable),
-            Some(MaskType::Regex),
-            Some(MaskType::Variable),
-            Some(MaskType::Regex),
+            MaskKind::Variable,
+            MaskKind::Regex,
+            MaskKind::Variable,
+            MaskKind::Regex,
+            MaskKind::Variable,
+            MaskKind::Regex,
         ]
     );
     Ok(())
 }
 
 #[test]
-fn mask_hint_with_unknown_type_is_rejected() -> Result<()> {
+fn mask_hints_with_unknown_integer_or_missing_types_are_kept_for_the_worker_to_skip() -> Result<()>
+{
     let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
-    wire["Mask"] = json!([{"Type": 3, "Value": "secret"}]);
+    wire["Mask"] = json!([
+        {"Type": 3, "Value": "integer"},
+        {"Type": 0, "Value": "zero"},
+        {"Type": "7", "Value": "numeric string"},
+        {"Type": "Variable, Regex", "Value": "joined"},
+        {"Type": " Regex ,Regex", "Value": "repeated"},
+        {"Type": "-1", "Value": "negative"},
+        {"Value": "absent"},
+        {"Type": 1, "Value": "kept"},
+    ]);
 
-    assert!(AgentJobRequestMessage::from_value(wire).is_err());
+    let message = AgentJobRequestMessage::from_value(wire)?;
+
+    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind.clone()).collect();
+    assert_eq!(
+        kinds,
+        [
+            unsupported("3"),
+            unsupported("0"),
+            unsupported("7"),
+            unsupported("3"),
+            MaskKind::Regex,
+            unsupported("-1"),
+            unsupported("0"),
+            MaskKind::Variable,
+        ]
+    );
+    assert_eq!(
+        message.mask[7]
+            .value
+            .as_ref()
+            .map(|value| value.expose().as_str()),
+        Some("kept")
+    );
+    assert_eq!(message.steps.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn mask_hints_with_a_malformed_type_fail_the_job_message() -> Result<()> {
+    for bad in [
+        json!("Bogus"),
+        json!(null),
+        json!(1.5),
+        json!(true),
+        json!({"a": 1}),
+        json!([1]),
+        json!(2_147_483_648_i64),
+        json!("2147483648"),
+        json!("Variable,2147483648"),
+        json!("Variable,Bogus"),
+        json!("Variable,1"),
+        json!("1,2"),
+        json!("2, Regex"),
+        json!("Regex, 7"),
+        json!(""),
+        json!("Variable,"),
+    ] {
+        let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
+        wire["Mask"] = json!([{"Type": bad, "Value": "secret"}]);
+        assert!(
+            AgentJobRequestMessage::from_value(wire).is_err(),
+            "{bad} must fail closed"
+        );
+    }
     Ok(())
 }
 
@@ -165,4 +236,80 @@ fn insert_expression_reads_its_directive() -> Result<()> {
     .context("expected mapping")?;
     assert_eq!(template_token_context_value(&mapping)?, expected);
     Ok(())
+}
+
+#[test]
+fn job_message_keeps_file_table_snapshot_debugger_and_endpoint_ids() -> Result<()> {
+    for casing in [Casing::Camel, Casing::Pascal] {
+        let message =
+            AgentJobRequestMessage::from_value(casing.message()).context("parse job message")?;
+
+        assert_eq!(
+            message.file_table,
+            vec![Some("ci.yml".to_owned()), Some("action.yml".to_owned())]
+        );
+        assert_eq!(message.snapshot, Some(json!({"type": 0, "lit": "image"})));
+        assert!(message.enable_debugger);
+        assert_eq!(
+            message.debugger_welcome_message.as_deref(),
+            Some("connect now")
+        );
+        let tunnel = message.debugger_tunnel.context("debugger tunnel")?;
+        assert_eq!(tunnel.tunnel_id.as_deref(), Some("t1"));
+        assert_eq!(tunnel.cluster_id.as_deref(), Some("c1"));
+        assert_eq!(
+            tunnel
+                .host_token
+                .as_ref()
+                .map(|token| token.expose().as_str()),
+            Some("host-token")
+        );
+        assert_eq!(tunnel.port, Some(8080));
+        assert_eq!(
+            message.resources.endpoints[0].id.as_deref(),
+            Some("00000000-0000-0000-0000-0000000000aa")
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn job_message_defaults_the_new_fields_when_absent_or_null() -> Result<()> {
+    let message = AgentJobRequestMessage::from_value(
+        json!({"FileTable": null, "EnableDebugger": null, "Snapshot": null}),
+    )?;
+
+    assert_eq!(message.file_table, Vec::<Option<String>>::new());
+    assert!(message.snapshot.is_none());
+    assert!(!message.enable_debugger);
+    assert!(message.debugger_tunnel.is_none());
+    Ok(())
+}
+
+enum Casing {
+    Camel,
+    Pascal,
+}
+
+impl Casing {
+    fn message(&self) -> serde_json::Value {
+        match self {
+            Self::Camel => json!({
+                "fileTable": ["ci.yml", "action.yml"],
+                "snapshot": {"type": 0, "lit": "image"},
+                "enableDebugger": true,
+                "debuggerTunnel": {"tunnelId": "t1", "clusterId": "c1", "hostToken": "host-token", "port": 8080},
+                "debuggerWelcomeMessage": "connect now",
+                "resources": {"endpoints": [{"id": "00000000-0000-0000-0000-0000000000aa", "name": "SystemVssConnection"}]},
+            }),
+            Self::Pascal => json!({
+                "FileTable": ["ci.yml", "action.yml"],
+                "Snapshot": {"type": 0, "lit": "image"},
+                "EnableDebugger": true,
+                "DebuggerTunnel": {"TunnelId": "t1", "ClusterId": "c1", "HostToken": "host-token", "Port": 8080},
+                "DebuggerWelcomeMessage": "connect now",
+                "Resources": {"Endpoints": [{"Id": "00000000-0000-0000-0000-0000000000aa", "Name": "SystemVssConnection"}]},
+            }),
+        }
+    }
 }

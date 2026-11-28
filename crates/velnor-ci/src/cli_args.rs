@@ -342,3 +342,38 @@ pub struct PrepareArgs {
     )]
     pub no_locks: bool,
 }
+
+#[derive(Debug, Args)]
+pub struct RunnerDriftArgs {
+    #[arg(
+        long,
+        help = "The latest release tag, for example v2.338.2; skips the lookup"
+    )]
+    pub latest: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct LaneGuardArgs {
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the lane step passes to cargo"
+    )]
+    pub features: Option<String>,
+    #[arg(long, help = "The lane step passes --all-features to cargo")]
+    pub all_features: bool,
+    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
+    pub no_default_features: bool,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "The lane's own nextest filter expression"
+    )]
+    pub filter: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Nextest binary id the lane never lists; repeatable"
+    )]
+    pub except_binary: Vec<String>,
+}

@@ -5,6 +5,7 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_node;
+use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
 use super::value::{ArrayValue, ObjectValue, Value};
 
@@ -14,6 +15,7 @@ enum Collection {
 }
 
 pub(crate) fn evaluate_index(
+    node: &Node,
     target: &Node,
     index: &Node,
     env: &ExprEnv,
@@ -39,59 +41,103 @@ pub(crate) fn evaluate_index(
         Some(evaluate_node(index, env)?)
     };
 
-    Ok(match collection {
-        Collection::Array(array) if array.is_filtered() => filtered_index(&array, key.as_ref()),
-        Collection::Object(object) => object_index(&object, key.as_ref()),
-        Collection::Array(array) => array_index(&array, key.as_ref()),
-    })
+    match collection {
+        Collection::Array(array) if array.is_filtered() => {
+            filtered_index(node, &array, key.as_ref())
+        }
+        Collection::Object(object) => object_index(node, &object, key.as_ref()),
+        Collection::Array(array) => array_index(node, &array, key.as_ref()),
+    }
 }
 
-fn filtered_index(array: &ArrayValue, key: Option<&Value>) -> Value {
+const POINTER_BYTES: usize = 8;
+const MIN_OBJECT_BYTES: usize = 24;
+
+fn projection(node: &Node) -> Result<MemoryCounter<'_>, ExprError> {
+    let mut memory = MemoryCounter::new(Subject::Node(node));
+    memory.add_bytes(MIN_OBJECT_BYTES)?;
+    Ok(memory)
+}
+
+fn project<'a>(
+    values: impl IntoIterator<Item = &'a Value>,
+    memory: &mut MemoryCounter<'_>,
+    result: &mut Vec<Value>,
+) -> Result<(), ExprError> {
+    for value in values {
+        memory.add_bytes(POINTER_BYTES)?;
+        if let Value::String(text) = value {
+            memory.add(text)?;
+        }
+        result.push(value.clone());
+    }
+    Ok(())
+}
+
+fn filtered_index(
+    node: &Node,
+    array: &ArrayValue,
+    key: Option<&Value>,
+) -> Result<Value, ExprError> {
+    let mut memory = MemoryCounter::new(Subject::Node(node));
     let mut result = Vec::new();
     for item in array.items() {
         match (item, key) {
-            (Value::Object(nested), None) => {
-                result.extend(nested.entries().iter().map(|(_, value)| value.clone()));
-            }
+            (Value::Object(nested), None) => project(
+                nested.entries().iter().map(|(_, value)| value),
+                &mut memory,
+                &mut result,
+            )?,
             (Value::Object(nested), Some(key)) => {
                 if let Some(value) = string_index(key).and_then(|key| nested.get(&key)) {
-                    result.push(value.clone());
+                    project([value], &mut memory, &mut result)?;
                 }
             }
-            (Value::Array(nested), None) => result.extend(nested.items().iter().cloned()),
+            (Value::Array(nested), None) => {
+                project(nested.items(), &mut memory, &mut result)?;
+            }
             (Value::Array(nested), Some(key)) => {
                 if let Some(value) = integer_index(key).and_then(|index| nested.items().get(index))
                 {
-                    result.push(value.clone());
+                    project([value], &mut memory, &mut result)?;
                 }
             }
             _ => {}
         }
     }
-    Value::Array(ArrayValue::filtered(result))
+    Ok(Value::Array(ArrayValue::filtered(result)))
 }
 
-fn object_index(object: &ObjectValue, key: Option<&Value>) -> Value {
+fn object_index(
+    node: &Node,
+    object: &ObjectValue,
+    key: Option<&Value>,
+) -> Result<Value, ExprError> {
     let Some(key) = key else {
-        let values = object
-            .entries()
-            .iter()
-            .map(|(_, value)| value.clone())
-            .collect();
-        return Value::Array(ArrayValue::filtered(values));
+        let mut memory = projection(node)?;
+        let mut values = Vec::new();
+        project(
+            object.entries().iter().map(|(_, value)| value),
+            &mut memory,
+            &mut values,
+        )?;
+        return Ok(Value::Array(ArrayValue::filtered(values)));
     };
-    string_index(key)
+    Ok(string_index(key)
         .and_then(|key| object.get(&key).cloned())
-        .unwrap_or(Value::Null)
+        .unwrap_or(Value::Null))
 }
 
-fn array_index(array: &ArrayValue, key: Option<&Value>) -> Value {
+fn array_index(node: &Node, array: &ArrayValue, key: Option<&Value>) -> Result<Value, ExprError> {
     let Some(key) = key else {
-        return Value::Array(ArrayValue::filtered(array.items().to_vec()));
+        let mut memory = projection(node)?;
+        let mut values = Vec::new();
+        project(array.items(), &mut memory, &mut values)?;
+        return Ok(Value::Array(ArrayValue::filtered(values)));
     };
-    integer_index(key)
+    Ok(integer_index(key)
         .and_then(|index| array.items().get(index).cloned())
-        .unwrap_or(Value::Null)
+        .unwrap_or(Value::Null))
 }
 
 fn string_index(value: &Value) -> Option<String> {

@@ -1,0 +1,60 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "mise",
+      "ContextName": "mise",
+      "Reference": {
+        "Type": "repository",
+        "RepositoryType": "GitHub",
+        "Name": "jdx/mise-action",
+        "Ref": "236a21c3b91f5db6d4e174b348674a0f0caac06d"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Install tools"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "version"
+            },
+            "value": {
+              "type": 0,
+              "lit": "2026.11.10"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "sha256"
+            },
+            "value": {
+              "type": 0,
+              "lit": ""
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "cache"
+            },
+            "value": {
+              "type": 0,
+              "lit": "true"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

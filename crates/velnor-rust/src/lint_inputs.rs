@@ -10,6 +10,8 @@ use velnor_model::{
 };
 
 use crate::config::CONFIG_PATH;
+use crate::embedded::is_rust_source;
+use crate::generator_inputs::Generator;
 use crate::lint_tasks::{TASK_FOLDERS, task_names};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
@@ -21,12 +23,9 @@ pub fn lint_runs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
+    unplain: &BTreeSet<RepoPath>,
 ) -> BTreeMap<RootSlug, bool> {
-    let tree = Tree {
-        tracked,
-        symlinks,
-        base,
-    };
+    let tree = Tree::new(facts, tracked, symlinks, base, unplain);
     facts
         .config
         .lint
@@ -40,9 +39,32 @@ struct Tree<'a> {
     tracked: &'a BTreeSet<RepoPath>,
     symlinks: &'a BTreeSet<RepoPath>,
     base: &'a BTreeMap<RepoPath, String>,
+    unplain: &'a BTreeSet<RepoPath>,
+    generator: Option<Generator>,
 }
 
-impl Tree<'_> {
+impl<'a> Tree<'a> {
+    fn new(
+        facts: &RepoFacts,
+        tracked: &'a BTreeSet<RepoPath>,
+        symlinks: &'a BTreeSet<RepoPath>,
+        base: &'a BTreeMap<RepoPath, String>,
+        unplain: &'a BTreeSet<RepoPath>,
+    ) -> Self {
+        let from_source = facts
+            .config
+            .lint
+            .iter()
+            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { from_source: true }));
+        Self {
+            tracked,
+            symlinks,
+            base,
+            unplain,
+            generator: from_source.then(|| Generator::of(facts)),
+        }
+    }
+
     fn edited(&self, path: &RepoPath) -> bool {
         self.tracked.contains(path) && self.base.contains_key(path) && !self.symlinks.contains(path)
     }
@@ -77,10 +99,20 @@ fn triggered(
     changed: &BTreeSet<RepoPath>,
     tree: &Tree<'_>,
 ) -> bool {
-    tree.symlinks
-        .iter()
-        .chain(changed)
-        .any(|path| reached(facts, lint, path, tree))
+    changed.iter().any(|path| reached(facts, lint, path, tree))
+        || tree
+            .symlinks
+            .iter()
+            .any(|symlink| linked(facts, lint, symlink, tree))
+}
+
+fn linked(facts: &RepoFacts, lint: &LintJob, symlink: &RepoPath, tree: &Tree<'_>) -> bool {
+    match (&lint.kind, tree.generator.as_ref()) {
+        (LintKind::GeneratedCheck { from_source: true }, Some(generator)) => {
+            generator.reads(symlink)
+        }
+        _ => reached(facts, lint, symlink, tree),
+    }
 }
 
 #[must_use]
@@ -91,13 +123,10 @@ pub fn unmatched_inputs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
+    unplain: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
     let changed = changed.filter(|_| event == EventKind::PullRequest);
-    let tree = Tree {
-        tracked,
-        symlinks,
-        base,
-    };
+    let tree = Tree::new(facts, tracked, symlinks, base, unplain);
     let entries = facts
         .config
         .lint
@@ -208,18 +237,40 @@ fn names_a_lint_task(facts: &RepoFacts, path: &RepoPath) -> bool {
     })
 }
 
-fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
+fn in_generator_folder(path: &RepoPath) -> bool {
     GENERATOR_FOLDERS
         .iter()
         .any(|folder| path.as_str().starts_with(folder))
-        || (names_a_lint_task(facts, path) && !tree.edited(path))
+}
+
+fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
+    in_generator_folder(path) || (names_a_lint_task(facts, path) && !tree.edited(path))
+}
+
+fn is_markdown(path: &RepoPath) -> bool {
+    Path::new(path.as_str())
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
 }
 
 fn inert(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
-    !read_by_the_generator(facts, path, tree)
-        && Path::new(path.as_str())
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+    !read_by_the_generator(facts, path, tree) && is_markdown(path)
+}
+
+fn generated_check_reached(
+    from_source: bool,
+    facts: &RepoFacts,
+    path: &RepoPath,
+    tree: &Tree<'_>,
+) -> bool {
+    let Some(generator) = tree.generator.as_ref().filter(|_| from_source) else {
+        return from_source || !inert(facts, path, tree);
+    };
+    tree.unplain.contains(path)
+        || in_generator_folder(path)
+        || names_a_lint_task(facts, path)
+        || generator.reads(path)
+        || !(is_rust_source(path) || is_markdown(path))
 }
 
 fn declared(lint: &LintJob, path: &RepoPath) -> bool {
@@ -228,7 +279,7 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
 
 fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath, tree: &Tree<'_>) -> bool {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
-        return from_source || !inert(facts, path, tree);
+        return generated_check_reached(from_source, facts, path, tree);
     }
     declared(lint, path)
         || implicit(lint, path)

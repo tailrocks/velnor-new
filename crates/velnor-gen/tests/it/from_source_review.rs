@@ -41,6 +41,7 @@ fn selected(config: &str, paths: &[&str]) -> Result<bool, Box<dyn std::error::Er
         &BTreeSet::new(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     )
     .into_iter()
     .find(|(slug, _)| slug.as_str() == "generated_check")
@@ -228,8 +229,8 @@ fn from_source_wires_the_shared_mbx_store_before_the_tools_install() -> TestResu
     let at = |name: &str| names.iter().position(|found| found == name);
     let store = at("velnor-ci mbx-store").ok_or("no shared store step")?;
     let tools = at("Install tools").ok_or("no tools step")?;
-    assert!(store < tools, "{names:?}");
-    assert!(at("Private mbx store").is_none(), "{names:?}");
+    let private = at("Private mbx store").ok_or("no private store step")?;
+    assert!(private < store && store < tools, "{names:?}");
     Ok(())
 }
 

@@ -19,9 +19,9 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, BuildArgs, CheckConfigurationsArgs, CollectArgs,
-    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, MisePinArgs, PlanArgs, PlanMode,
-    PrepareArgs, QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
-    VerifyCandidateArgs,
+    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, LaneGuardArgs, MisePinArgs,
+    PlanArgs, PlanMode, PrepareArgs, QualificationCommand, QualificationCompareArgs,
+    RunnerDriftArgs, ToolsLocalArgs, ToolsVerifyArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use crate::cli_image::{ImageStageArgs, ImageSysrootArgs, OpensslMode};
@@ -84,7 +84,7 @@ pub enum Command {
     )]
     Plan(PlanArgs),
     #[command(
-        about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already succeeded on GITHUB_SHA, and skip=false otherwise. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
+        about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already passed on GITHUB_SHA, and skip=false otherwise. A run has passed when the job named by VELNOR_REQUIRED_CHECK succeeded in the latest merge_group run of this workflow on GITHUB_SHA, completed or still in progress; when the variable is empty, a completed run with the conclusion success is required. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
     )]
     MergeGroupPassed,
     #[command(
@@ -128,13 +128,9 @@ pub enum Command {
     )]
     RevokeToken,
     #[command(
-        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps the per-job store that the generated `Private mbx store` step sets before this one. Whenever the variable is set, every event appends the same pod-private MBX_SHIMS_DIR under $RUNNER_TEMP, because mbx names its compiler shims in HOST_CC and a different path recompiles build scripts. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,
-    #[command(
-        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it appends no MBX_CACHE_DIR and MBX builds cold. It never writes MBX_SHARE_OUT_DIR; mbx-store does"
-    )]
-    MbxSeed,
     #[command(
         about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, and (helper 0.1.111 or later) a HOME that is a symlink, dangling or looping included, not absolute or the filesystem root"
     )]
@@ -159,6 +155,10 @@ pub enum Command {
         about = "Run in the directory of a Cargo root after the feature test lane: exit 1 unless the lane filter selects every test that exists only with the features, as cargo-nextest lists them. Lists the workspace three times (default features, the features, and the features under the filter) with cargo-nextest, so the build is the lane's own; ignored tests are exempt, and a listing error fails the guard"
     )]
     LaneGuard(LaneGuardArgs),
+    #[command(
+        about = "Compare RUNNER_PROTOCOL_VERSION, the actions/runner release that velnor-runner reports, with the newest release of actions/runner (GET /repos/actions/runner/releases/latest, or the tag --latest names, which makes no request) as three integers. Prints `runner protocol current: <v>` and exits 0, or `runner protocol behind: <reported> < <latest>` and exits 1, both versions without the leading v. A failed lookup or an unreadable version exits 2, never 1. Reads GITHUB_TOKEN, which needs only the default read access"
+    )]
+    RunnerDrift(RunnerDriftArgs),
     #[command(
         subcommand,
         about = "Check the [[test_groups]] of .velnor/rust-ci.toml against the tests cargo-nextest lists"
@@ -263,32 +263,6 @@ pub struct FetchAssetsArgs {
     pub asset: Vec<String>,
 }
 
-#[derive(Debug, Args)]
-pub struct LaneGuardArgs {
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "Comma-separated features the lane step passes to cargo"
-    )]
-    pub features: Option<String>,
-    #[arg(long, help = "The lane step passes --all-features to cargo")]
-    pub all_features: bool,
-    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
-    pub no_default_features: bool,
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "The lane's own nextest filter expression"
-    )]
-    pub filter: String,
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "Nextest binary id the lane never lists; repeatable"
-    )]
-    pub except_binary: Vec<String>,
-}
-
 #[derive(Debug, Subcommand)]
 pub enum ArtifactsCommand {
     #[command(
@@ -321,7 +295,7 @@ pub struct ArtifactsStageArgs {
 #[derive(Debug, Subcommand)]
 pub enum TestGroupsCommand {
     #[command(
-        about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged, so the filter means what the group job runs; ignored tests are exempt, and a listing error fails the check"
+        about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged and with the --features the build used, so the filter means what the group job runs and the listing reuses that build; ignored tests are exempt, and a listing error fails the check"
     )]
     Check(TestGroupsCheckArgs),
 }
@@ -336,6 +310,12 @@ pub struct TestGroupsCheckArgs {
         help = "A group's name, an equals sign and its nextest filter; repeat for each group"
     )]
     pub groups: Vec<GroupFilter>,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the build of the tests used; every listing passes them to cargo-nextest"
+    )]
+    pub features: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -104,7 +104,7 @@ async fn stop_commands_resume_with_unicode_case_folding() -> Result<()> {
 #[tokio::test]
 async fn a_job_output_that_does_not_evaluate_is_annotated() -> Result<()> {
     let mut message = job(vec![run("a", "echo hi")]);
-    message["JobOutputs"] = mapping(&[("x", expression("fromJSON(env.X)"))]);
+    message["JobOutputs"] = mapping(&[("x", expression("toYAML(env.X)"))]);
     let (finished, _) = execute(
         &message,
         &Scratch::new()?,
@@ -118,7 +118,7 @@ async fn a_job_output_that_does_not_evaluate_is_annotated() -> Result<()> {
             annotation.level == AnnotationLevel::Error
                 && annotation
                     .message
-                    .contains("unsupported expression function fromJSON")
+                    .contains("unsupported expression function toYAML")
         }),
         "{:?}",
         finished.annotations

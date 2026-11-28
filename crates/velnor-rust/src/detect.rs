@@ -36,6 +36,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         WORKFLOWS_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
+        crate::generator_lock::EXTERNALS,
         TIMINGS_PATH,
         RepoPath::from_static(".velnor/image-sysroot.lock"),
         MISE_LOCK,
@@ -166,6 +167,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         })
         .transpose()?;
     crate::config_test_lane::check(&config, &rust_roots)?;
+    crate::config_workspace_features::check(view, &config, &rust_roots)?;
     crate::config_root_timeouts::check(&config, &rust_roots)?;
     crate::config_check_configurations::check(view, &config, &rust_roots, helper.as_ref())?;
     let toolchain = toolchain(&view.files)?;
@@ -200,6 +202,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
     Ok(RepoFacts {
+        generator_unmodelled: crate::generator_sources::unmodelled(view, &rust_roots, &unowned),
         policy,
         deny_configs,
         repository,

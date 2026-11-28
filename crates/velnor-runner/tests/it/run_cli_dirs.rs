@@ -12,7 +12,7 @@ use super::exec_builder::BACKGROUND_SLEEP;
 use super::exec_support::Scratch;
 use super::lifecycle_support::{fixture_job, job_replacing};
 use super::run_cli::{signal_and_wait, start_runner_with, until};
-use super::support::mock_github::{Behavior, MockGithub};
+use super::support::mock_github::{Behavior, MockGithub, Renew};
 
 const EXIT_BUDGET: Duration = Duration::from_secs(20);
 
@@ -51,6 +51,32 @@ async fn run_cli_gives_the_work_directories_fixed_modes_whatever_the_umask() -> 
         "work, workspace, tool cache, temp and logs"
     );
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn run_cli_gives_the_job_directories_their_owner_bits_whatever_the_umask() -> Result<()> {
+    let behavior = Behavior {
+        renew: Renew::RenewedAfter(Duration::from_secs(30)),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let scratch = Scratch::new()?;
+    let started = start_runner_with(&mock, &scratch, Some("0100"), &[])?;
+    let work_dir = started.work_dir.clone();
+
+    let modes = until("the job directories had their modes", || {
+        let modes: Result<Vec<u32>> = ["", "workspace", "temp", "logs"]
+            .into_iter()
+            .map(|name| mode_of(&work_dir.join(name)))
+            .collect();
+        Ok(modes
+            .ok()
+            .filter(|modes| modes[..] == [0o755, 0o755, 0o700, 0o700]))
+    })
+    .await;
+    signal_and_wait(started, Signal::TERM).await?;
+
+    modes.map(|_| ())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

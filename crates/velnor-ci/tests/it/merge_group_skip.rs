@@ -185,3 +185,22 @@ fn only_the_latest_merge_group_run_on_this_commit_decides() {
     ]));
     assert!(skip_push(&older_failed_newer_passed, &context()).skip);
 }
+
+fn completed_failed_run(jobs_body: &str) -> FakeGitHub {
+    let mut fake = fake(&runs(&[("merge_group", SHA, "completed", "failure")]));
+    fake.respond(run_jobs_path(&repo(), 1, 1), jobs_body);
+    fake
+}
+
+#[test]
+fn a_completed_run_with_a_failed_advisory_job_and_a_succeeded_required_job_skips() {
+    let github = completed_failed_run(&jobs(&[("Required", "success"), ("Cache", "failure")]));
+    let result = skip_push(&github, &with_required());
+    assert!(result.skip, "{}", result.note);
+}
+
+#[test]
+fn a_completed_failed_run_whose_required_job_failed_does_not_skip() {
+    let github = completed_failed_run(&jobs(&[("Required", "failure"), ("Cache", "success")]));
+    assert!(!skip_push(&github, &with_required()).skip);
+}

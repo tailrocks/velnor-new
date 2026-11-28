@@ -275,6 +275,9 @@ fn a_deny_config_with_a_quote_is_passed_as_one_checkout_relative_argument() -> T
     assert!(
         steps
             .iter()
+            .filter(|step| !step["run"]
+                .as_str()
+                .is_some_and(|run| run.starts_with("rustup ")))
             .all(|step| step.get("working-directory").is_none())
     );
     assert!(steps.iter().any(|step| step["run"].as_str() == Some(r#". "$VELNOR_EXEC" run -- cargo-deny --manifest-path 'lab'\''s/Cargo.toml' --config 'lab'\''s/.config/deny.toml' --locked check"#)));

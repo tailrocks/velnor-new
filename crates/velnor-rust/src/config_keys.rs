@@ -39,6 +39,7 @@ pub const KEYS: &[&str] = &[
     "lint",
     "test_groups",
     "test_lane",
+    "workspace_features",
     "budget",
     "workspace_groups",
     "policy",

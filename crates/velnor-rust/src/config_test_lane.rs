@@ -68,14 +68,8 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
             }
         })?),
     };
-    let mut seen = BTreeSet::new();
     let no_features = raw.features.is_empty() && !all && !no_default;
-    let bad_feature = no_features
-        || raw
-            .features
-            .iter()
-            .any(|feature| !feature_name(feature) || !seen.insert(feature));
-    if bad_feature {
+    if no_features || !feature_names(&raw.features) {
         return Err(Reason::InvalidValue {
             key: "test_lane.features",
             value: raw.features.join(","),
@@ -138,6 +132,27 @@ fn lane_packages(raw: &RawTestLane) -> Result<Vec<PackageName>, Reason> {
         .iter()
         .map(|name| PackageName::new(name.clone()).map_err(|_| invalid()))
         .collect()
+}
+
+pub(crate) fn workspace_features(names: Vec<String>) -> Result<LaneFeatures, Reason> {
+    if feature_names(&names) && names.iter().all(|name| !name.contains('/')) {
+        Ok(LaneFeatures {
+            names,
+            ..LaneFeatures::default()
+        })
+    } else {
+        Err(Reason::InvalidValue {
+            key: "workspace_features",
+            value: names.join(","),
+        })
+    }
+}
+
+fn feature_names(names: &[String]) -> bool {
+    let mut seen = BTreeSet::new();
+    names
+        .iter()
+        .all(|name| feature_name(name) && seen.insert(name))
 }
 
 fn feature_name(name: &str) -> bool {

@@ -1,9 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::adapter::AdapterRegistry;
+use std::collections::BTreeMap;
+
+use super::adapter::{AdapterRegistry, DeclaredInputs};
 use super::context::JobContext;
 use super::shell;
+use super::token;
+use crate::job_message::template_token::token_literal;
 use crate::job_message::{ActionReferenceType, ActionStep, ActionStepKind, AgentJobRequestMessage};
 
 pub(super) fn reference(step: &ActionStep) -> Option<String> {
@@ -47,11 +51,35 @@ fn step_problem(
     if step.background || step.kind == ActionStepKind::BackgroundStepControl {
         return Some("background step".to_owned());
     }
+    if step.reference.is_none() {
+        return Some("step without a definition reference".to_owned());
+    }
     if let Some(reference) = reference(step) {
-        return adapters
-            .find(&reference)
-            .is_none()
-            .then(|| format!("uses {reference}"));
+        let Some(adapter) = adapters.find(&reference) else {
+            return Some(format!("uses {reference}"));
+        };
+        let inputs = match step.inputs.as_ref() {
+            Some(inputs) => match token::declared(inputs) {
+                Ok(declared) => declared,
+                Err(error) => return Some(format!("{reference} {error}")),
+            },
+            None => DeclaredInputs::Known(BTreeMap::new()),
+        };
+        if let Some(problem) = adapter.problem(&reference, &inputs) {
+            return Some(problem);
+        }
+        let env = context.admission_env(step).ok();
+        return step.inputs.as_ref().and_then(|inputs| {
+            token::pairs(inputs)
+                .ok()?
+                .into_iter()
+                .find_map(|(key, value)| {
+                    let value = env
+                        .as_ref()
+                        .and_then(|env| token::scalar_before_steps(value, env).ok().flatten());
+                    adapter.unsupported_input(&reference, token_literal(key)?, value.as_deref())
+                })
+        });
     }
     shell_problem(step, context)
 }

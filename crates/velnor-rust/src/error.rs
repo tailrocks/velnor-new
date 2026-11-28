@@ -88,6 +88,17 @@ pub enum Reason {
         first: &'static str,
         second: &'static str,
     },
+    UnknownWorkspaceFeature {
+        root: String,
+        feature: String,
+    },
+    TestLaneDuplicatesWorkspaceFeatures {
+        features: String,
+    },
+    GatedHarnessWithWorkspaceFeatures {
+        package: String,
+        target: String,
+    },
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {

@@ -147,6 +147,34 @@ fn expr_numbers_format_and_parse_like_github() -> Result<()> {
 }
 
 #[test]
+fn expr_strings_parse_infinity_the_way_dotnet_does() -> Result<()> {
+    let env = empty_env();
+
+    for expression in [
+        "'infinity' == Infinity",
+        "'INFINITY' == Infinity",
+        "'+Infinity' == Infinity",
+        "'+infinity' == Infinity",
+        "' +iNfInItY ' == Infinity",
+        "'-infinity' == -Infinity",
+        "'-INFINITY' == -Infinity",
+    ] {
+        assert!(truthy(expression, &env)?, "{expression}");
+    }
+    for expression in [
+        "'infinit' == Infinity",
+        "'++Infinity' == Infinity",
+        "'+-Infinity' == -Infinity",
+        "'--Infinity' == -Infinity",
+        "'+ Infinity' == Infinity",
+        "'ınfinity' == Infinity",
+    ] {
+        assert!(!truthy(expression, &env)?, "{expression}");
+    }
+    Ok(())
+}
+
+#[test]
 fn expr_malformed_expressions_are_parse_errors() -> Result<()> {
     let env = empty_env();
 
@@ -170,5 +198,23 @@ fn expr_malformed_expressions_are_parse_errors() -> Result<()> {
     assert!(error_text("toJSON('a', 'b')", &env)?.contains("Too many parameters"));
     assert!(matches!(eval("", &env)?, Value::Null));
     assert!(matches!(eval("   ", &env)?, Value::Null));
+    Ok(())
+}
+
+#[test]
+fn expr_hex_and_octal_literals_use_signed_32_bit_semantics() -> Result<()> {
+    let env = empty_env();
+
+    assert!(truthy("0xFFFFFFFF == -1", &env)?);
+    assert_eq!(text("0x80000000", &env)?, "-2147483648");
+    assert_eq!(text("0x7FFFFFFF", &env)?, "2147483647");
+    assert_eq!(text("0o37777777777", &env)?, "-1");
+    assert!(truthy("'0xFFFFFFFF' == -1", &env)?);
+    for expression in ["0x100000000", "0o40000000000"] {
+        assert!(
+            error_text(expression, &env)?.starts_with("Unexpected symbol"),
+            "{expression}"
+        );
+    }
     Ok(())
 }

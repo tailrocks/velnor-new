@@ -27,7 +27,7 @@
             },
             "value": {
               "type": 3,
-              "expr": "format('echo {0}', fromJSON(env.X))"
+              "expr": "format('echo {0}', toYAML(env.X))"
             }
           }
         ]

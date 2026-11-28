@@ -40,7 +40,10 @@ pub(super) fn mount_results(server: &TestServer, base: &str, behavior: &Behavior
     ] {
         let url = format!("{base}{blob}");
         server.respond("POST", &format!("{receiver}/{method}"), move |_| {
-            Reply::json(200, &json!({"logs_url": url}))
+            Reply::json(
+                200,
+                &json!({"logs_url": url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+            )
         })?;
         server.respond("PUT", blob, blob_reply)?;
     }
@@ -48,7 +51,7 @@ pub(super) fn mount_results(server: &TestServer, base: &str, behavior: &Behavior
     server.respond(
         "POST",
         &format!("{receiver}/GetStepSummarySignedBlobURL"),
-        move |_| Reply::json(200, &json!({"summary_url": summary_url})),
+        move |_| Reply::json(200, &json!({"summary_url": summary_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"})),
     )?;
     server.respond("PUT", SUMMARY_BLOB, blob_reply)?;
     for method in [

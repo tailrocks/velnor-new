@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_cache_rules::{
-    ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, Timestamp, access_for, evict,
+    DEFAULT_CACHE_BUDGET_BYTES, ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, Timestamp,
+    access_for, evict,
 };
 
 use crate::support::{entries, event, found, list, number, reserved, rows, short};
@@ -146,6 +147,11 @@ fn rule_5_least_recently_used_entries_go_first_until_the_total_fits() {
          main|b||0|1|30 main|a||0|1|20; 0; main|a main|b
          -; 100; -",
     );
+}
+
+#[test]
+fn the_default_cache_budget_is_the_8_gb_of_docs_goals_md_line_59() {
+    assert_eq!(DEFAULT_CACHE_BUDGET_BYTES, 8_000_000_000);
 }
 
 #[test]

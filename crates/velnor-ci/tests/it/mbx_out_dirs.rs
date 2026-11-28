@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use velnor_ci::mbx_seed_copy::SUBSETS;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -199,26 +198,9 @@ fn tar(args: &[&str]) -> TestResult {
     Ok(())
 }
 
-fn copy_seeded_subsets(from: &Path, to: &Path) -> TestResult {
-    fs::create_dir_all(to.join("actions"))?;
-    for subset in SUBSETS {
-        let source = from.join("actions").join(subset);
-        if source.exists() {
-            let status = Command::new("cp")
-                .arg("-R")
-                .arg(&source)
-                .arg(to.join("actions"))
-                .status()?;
-            assert!(status.success(), "cp {}", source.display());
-        }
-    }
-    Ok(())
-}
-
-fn rebuild_from_base(
+fn warm_build_in_an_empty_store(
     name: &str,
     setting: Option<(&str, &str)>,
-    seeded: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let scratch = Scratch::new(name)?;
     let store = scratch.0.join("runner-temp/mbx");
@@ -235,15 +217,8 @@ fn rebuild_from_base(
         &base,
         ".",
     ])?;
-    let seed = scratch.0.join("seed");
-    if seeded {
-        copy_seeded_subsets(&store, &seed)?;
-    }
     fs::remove_file(krate.join("target"))?;
     remove_tree(&scratch.0.join("runner-temp"))?;
-    if seeded {
-        copy_seeded_subsets(&seed, &store)?;
-    }
     fs::create_dir(krate.join("target"))?;
     tar(&[
         "-C",
@@ -252,13 +227,6 @@ fn rebuild_from_base(
         &base,
     ])?;
     build(&krate, &store, setting)
-}
-
-fn warm_build_in_an_empty_store(
-    name: &str,
-    setting: Option<(&str, &str)>,
-) -> Result<String, Box<dyn std::error::Error>> {
-    rebuild_from_base(name, setting, false)
 }
 
 #[test]
@@ -278,21 +246,5 @@ fn without_the_setting_mbx_points_dep_info_into_a_store_the_next_job_does_not_ha
         "mbx no longer keeps build-script outputs in the cache directory; drop {}=0 (#2373): {warm}",
         SETTING.0
     );
-    Ok(())
-}
-
-#[test]
-fn a_base_restored_into_a_seeded_store_compiles_nothing_when_outputs_stay_in_target() -> TestResult
-{
-    let warm = rebuild_from_base("seeded-kept", Some(SETTING), true)?;
-    assert!(!warm.contains("Compiling"), "{warm}");
-    assert!(warm.contains("Fresh probe"), "{warm}");
-    Ok(())
-}
-
-#[test]
-fn without_the_setting_a_seeded_store_still_recompiles_the_probe() -> TestResult {
-    let warm = rebuild_from_base("seeded-default", None, true)?;
-    assert!(warm.contains("Compiling probe"), "{warm}");
     Ok(())
 }

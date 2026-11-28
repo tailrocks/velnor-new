@@ -3,10 +3,42 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
 use super::pattern::{GlobError, Pattern, Seg, align, components_of};
+use super::seam::Seam;
+use super::walk::Walk;
 use std::collections::HashSet;
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
+
+const UNBOUNDED: Duration = Duration::from_hours(365 * 24);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DirLinks {
+    Ignore,
+    Follow,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Hidden {
+    Include,
+    Skip,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct WalkOptions<'a> {
+    pub(crate) links: DirLinks,
+    pub(crate) hidden: Hidden,
+    pub(crate) stop: Option<&'a AtomicBool>,
+}
+
+impl WalkOptions<'static> {
+    pub(crate) const HASH_FILES: Self = Self {
+        links: DirLinks::Ignore,
+        hidden: Hidden::Include,
+        stop: None,
+    };
+}
 
 struct Entry {
     negate: bool,
@@ -25,15 +57,17 @@ impl PatternSet {
         home: Option<&Path>,
         lines: impl Iterator<Item = &'a str>,
     ) -> Result<Self, GlobError> {
-        let workspace = components_of(workspace);
+        let workspace = components_of(workspace)?;
+        let patterns = lines
+            .map(|line| Pattern::parse(line, &workspace, home))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut entries = Vec::new();
-        for line in lines {
-            let pattern = Pattern::parse(line, &workspace, home)?;
+        for pattern in patterns {
             if pattern.trailing || !matches!(pattern.segs.last(), Some(Seg::GlobStar)) {
                 entries.push(Entry {
                     negate: pattern.negate,
                     files: true,
-                    segs: pattern.implicit_descendants(),
+                    segs: pattern.implicit_descendants()?,
                 });
             }
             entries.push(Entry {
@@ -45,24 +79,26 @@ impl PatternSet {
         Ok(Self { workspace, entries })
     }
 
-    fn matches_file(&self, path: &[String]) -> bool {
-        self.entries.iter().fold(false, |matched, entry| {
-            if entry.files && align(&entry.segs, path).last() == Some(&true) {
-                !entry.negate
-            } else {
-                matched
+    pub(super) fn matches_file(&self, path: &[String]) -> Result<bool, GlobError> {
+        let mut matched = false;
+        for entry in &self.entries {
+            if entry.files && align(&entry.segs, path)?.last() == Some(&true) {
+                matched = !entry.negate;
             }
-        })
+        }
+        Ok(matched)
     }
 
-    fn may_contain(&self, path: &[String]) -> bool {
-        self.entries
-            .iter()
-            .filter(|entry| !entry.negate)
-            .any(|entry| align(&entry.segs, path).iter().any(|alive| *alive))
+    pub(super) fn may_contain(&self, path: &[String]) -> Result<bool, GlobError> {
+        for entry in self.entries.iter().filter(|entry| !entry.negate) {
+            if align(&entry.segs, path)?.iter().any(|alive| *alive) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
-    fn roots(&self) -> Vec<Vec<String>> {
+    pub(crate) fn roots(&self) -> Vec<Vec<String>> {
         let candidates: Vec<Vec<String>> = self
             .entries
             .iter()
@@ -72,6 +108,7 @@ impl PatternSet {
                     .segs
                     .iter()
                     .map_while(|seg| seg.literal().map(str::to_owned))
+                    .filter(|literal| literal != ".")
                     .collect()
             })
             .collect();
@@ -99,150 +136,27 @@ impl PatternSet {
         roots
     }
 
-    pub(crate) fn walk<'a>(&'a self, workspace: &'a Path) -> Walk<'a> {
-        Walk {
-            patterns: self,
-            workspace,
-            roots: self.roots().into_iter(),
-            stack: Vec::new(),
-        }
-    }
-}
-
-struct Visit {
-    path: PathBuf,
-    comps: Vec<String>,
-    kind: fs::FileType,
-    matched: bool,
-    partial: bool,
-}
-
-pub(crate) struct Walk<'a> {
-    patterns: &'a PatternSet,
-    workspace: &'a Path,
-    roots: std::vec::IntoIter<Vec<String>>,
-    stack: Vec<Visit>,
-}
-
-fn skip_missing<T>(result: io::Result<T>, path: &Path) -> Result<Option<T>, GlobError> {
-    match result {
-        Ok(value) => Ok(Some(value)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(GlobError::io(path, error)),
-    }
-}
-
-impl Iterator for Walk<'_> {
-    type Item = Result<PathBuf, GlobError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let visit = match self.next_visit()? {
-                Ok(visit) => visit,
-                Err(error) => return Some(Err(error)),
-            };
-            match self.visit(visit) {
-                Ok(Some(path)) => return Some(Ok(path)),
-                Ok(None) => {}
-                Err(error) => return Some(Err(error)),
-            }
-        }
-    }
-}
-
-impl Walk<'_> {
-    fn next_visit(&mut self) -> Option<Result<Visit, GlobError>> {
-        while self.stack.is_empty() {
-            let root = self.roots.next()?;
-            match self.start(&root) {
-                Ok(Some(visit)) => return Some(Ok(visit)),
-                Ok(None) => {}
-                Err(error) => return Some(Err(error)),
-            }
-        }
-        self.stack.pop().map(Ok)
+    pub(super) fn workspace(&self) -> &[String] {
+        &self.workspace
     }
 
-    fn classify(&self, path: PathBuf, comps: Vec<String>, kind: fs::FileType) -> Option<Visit> {
-        let matched = self.patterns.matches_file(&comps);
-        let partial = self.patterns.may_contain(&comps);
-        (matched || partial).then_some(Visit {
-            path,
-            comps,
-            kind,
-            matched,
-            partial,
-        })
+    pub(crate) fn walk<'a>(
+        &'a self,
+        workspace: &'a Path,
+        deadline: Instant,
+        seam: &'a Seam,
+        options: WalkOptions<'a>,
+    ) -> Walk<'a> {
+        Walk::new(self, workspace, deadline, seam, options)
     }
 
-    fn start(&self, root: &[String]) -> Result<Option<Visit>, GlobError> {
-        let relative = &root[self.patterns.workspace.len()..];
-        let path = match relative.split_last() {
-            None => self.workspace.to_path_buf(),
-            Some((name, parents)) => {
-                let parent = parents
-                    .iter()
-                    .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
-                let Some(real) = skip_missing(fs::canonicalize(&parent), &parent)? else {
-                    return Ok(None);
-                };
-                if !real.starts_with(self.workspace) {
-                    return Ok(None);
-                }
-                real.join(name)
-            }
-        };
-        let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
-            return Ok(None);
-        };
-        Ok(self.classify(path, root.to_vec(), metadata.file_type()))
-    }
-
-    fn visit(&mut self, visit: Visit) -> Result<Option<PathBuf>, GlobError> {
-        if visit.kind.is_dir() {
-            if visit.partial {
-                self.push_children(&visit)?;
-            }
-            return Ok(None);
-        }
-        if !visit.matched {
-            return Ok(None);
-        }
-        if visit.kind.is_file() {
-            return Ok(Some(visit.path));
-        }
-        if !visit.kind.is_symlink() {
-            return Ok(None);
-        }
-        let real =
-            fs::canonicalize(&visit.path).map_err(|error| GlobError::io(&visit.path, error))?;
-        if !real.starts_with(self.workspace) {
-            return Ok(None);
-        }
-        let metadata = skip_missing(fs::metadata(&real), &real)?;
-        Ok(metadata.filter(fs::Metadata::is_file).map(|_| real))
-    }
-
-    fn push_children(&mut self, parent: &Visit) -> Result<(), GlobError> {
-        let Some(reader) = skip_missing(fs::read_dir(&parent.path), &parent.path)? else {
-            return Ok(());
-        };
-        let mut children = Vec::new();
-        for item in reader {
-            let item = item.map_err(|error| GlobError::io(&parent.path, error))?;
-            let path = item.path();
-            if let Some(kind) = skip_missing(item.file_type(), &path)? {
-                children.push((item.file_name(), kind));
-            }
-        }
-        children.sort_unstable_by(|left, right| right.0.cmp(&left.0));
-        for (name, kind) in children {
-            let mut comps = parent.comps.clone();
-            comps.push(name.to_string_lossy().into_owned());
-            if let Some(visit) = self.classify(parent.path.join(&name), comps, kind) {
-                self.stack.push(visit);
-            }
-        }
-        Ok(())
+    pub(crate) fn walk_following<'a>(
+        &'a self,
+        workspace: &'a Path,
+        options: WalkOptions<'a>,
+    ) -> Walk<'a> {
+        static FOLLOWING: LazyLock<Seam> = LazyLock::new(Seam::following);
+        let deadline = Instant::now() + UNBOUNDED;
+        Walk::new(self, workspace, deadline, &FOLLOWING, options)
     }
 }

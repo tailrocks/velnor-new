@@ -5,48 +5,90 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_node;
+use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
 use super::number::format_number;
-use super::value::Value;
+use super::value::{Value, ValueKind};
+use crate::context_value::{json_string_utf16_units, write_json_string};
+use std::ops::Range;
 
-pub(crate) fn evaluate_format(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
+pub(crate) fn evaluate_format(
+    node: &Node,
+    args: &[Node],
+    env: &ExprEnv,
+) -> Result<Value, ExprError> {
     let [format, rest @ ..] = args else {
         return Err(ExprError::evaluation(
             "Invalid number of function arguments",
         ));
     };
     let format = evaluate_node(format, env)?.convert_to_string();
-    format_template(&format, rest.len(), |index| match rest.get(index) {
-        Some(arg) => evaluate_node(arg, env),
-        None => Ok(Value::Null),
+    let mut memory = MemoryCounter::new(Subject::Node(node));
+    format_template(&format, rest.len(), &mut memory, |index| {
+        match rest.get(index) {
+            Some(arg) => evaluate_node(arg, env),
+            None => Ok(Value::Null),
+        }
     })
     .map(Value::String)
 }
 
 struct Placeholder {
     arg_index: usize,
-    specifiers: String,
+    specifiers: Range<usize>,
     rbrace: usize,
 }
 
-fn char_at(chars: &[char], position: usize) -> char {
-    chars.get(position).copied().unwrap_or('\0')
+fn byte_at(bytes: &[u8], position: usize) -> u8 {
+    bytes.get(position).copied().unwrap_or(0)
 }
 
-fn find_char(chars: &[char], from: usize, needle: char) -> Option<usize> {
-    chars
+fn find_byte(bytes: &[u8], from: usize, needle: u8) -> Option<usize> {
+    bytes
         .get(from..)?
         .iter()
-        .position(|&c| c == needle)
+        .position(|&byte| byte == needle)
         .map(|position| position + from)
 }
 
-fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Option<Placeholder> {
+#[derive(Clone, Copy)]
+enum Scan {
+    Unknown,
+    Absent,
+    At(usize),
+}
+
+struct NextByte {
+    needle: u8,
+    scan: Scan,
+}
+
+impl NextByte {
+    fn new(needle: u8) -> Self {
+        Self {
+            needle,
+            scan: Scan::Unknown,
+        }
+    }
+
+    fn from(&mut self, bytes: &[u8], index: usize) -> Option<usize> {
+        match self.scan {
+            Scan::Absent => return None,
+            Scan::At(position) if position >= index => return Some(position),
+            Scan::At(_) | Scan::Unknown => {}
+        }
+        let found = find_byte(bytes, index, self.needle);
+        self.scan = found.map_or(Scan::Absent, Scan::At);
+        found
+    }
+}
+
+fn read_placeholder(bytes: &[u8], lbrace: usize, rbrace: Option<usize>) -> Option<Placeholder> {
     if rbrace.is_none_or(|rbrace| rbrace <= lbrace + 1) {
         return None;
     }
-    let (arg_index, end_arg_index) = read_arg_index(chars, lbrace + 1)?;
-    let (specifiers, rbrace) = read_format_specifiers(chars, end_arg_index + 1)?;
+    let (arg_index, end_arg_index) = read_arg_index(bytes, lbrace + 1)?;
+    let (specifiers, rbrace) = read_format_specifiers(bytes, end_arg_index + 1)?;
     Some(Placeholder {
         arg_index,
         specifiers,
@@ -54,106 +96,180 @@ fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Opt
     })
 }
 
-pub(crate) fn format_template(
+enum Segment {
+    Text(Range<usize>),
+    Argument {
+        index: usize,
+        specifiers: Range<usize>,
+    },
+}
+
+fn visit_text(
+    visit: &mut impl FnMut(Segment) -> Result<(), ExprError>,
+    range: Range<usize>,
+) -> Result<(), ExprError> {
+    if range.is_empty() {
+        Ok(())
+    } else {
+        visit(Segment::Text(range))
+    }
+}
+
+fn scan_template(
     format: &str,
     argument_count: usize,
-    mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
-) -> Result<String, ExprError> {
-    let chars: Vec<char> = format.chars().collect();
-    let mut cache: Vec<Option<String>> = vec![None; argument_count];
-    let mut result = String::new();
+    mut visit: impl FnMut(Segment) -> Result<(), ExprError>,
+) -> Result<(), ExprError> {
+    let bytes = format.as_bytes();
     let mut index = 0usize;
     let invalid = || ExprError::evaluation(format!("Invalid format string: {format}"));
+    let mut opening = NextByte::new(b'{');
+    let mut closing = NextByte::new(b'}');
 
-    while index < chars.len() {
-        let lbrace = find_char(&chars, index, '{');
-        let rbrace = find_char(&chars, index, '}');
+    while index < bytes.len() {
+        let lbrace = opening.from(bytes, index);
+        let rbrace = closing.from(bytes, index);
 
         match (lbrace, rbrace) {
             (Some(lbrace), rbrace) if rbrace.is_none_or(|rbrace| rbrace > lbrace) => {
-                if char_at(&chars, lbrace + 1) == '{' {
-                    result.extend(&chars[index..=lbrace]);
+                if byte_at(bytes, lbrace + 1) == b'{' {
+                    visit_text(&mut visit, index..lbrace + 1)?;
                     index = lbrace + 2;
                     continue;
                 }
-                let placeholder = read_placeholder(&chars, lbrace, rbrace).ok_or_else(invalid)?;
+                let placeholder = read_placeholder(bytes, lbrace, rbrace).ok_or_else(invalid)?;
                 if placeholder.arg_index >= argument_count {
                     return Err(ExprError::evaluation(format!(
                         "The following format string references more arguments than were supplied: {format}"
                     )));
                 }
-                if !placeholder.specifiers.is_empty() {
-                    return Err(ExprError::evaluation(format!(
-                        "The format specifiers '{}' are not valid for objects of type '{}'",
-                        placeholder.specifiers,
-                        resolve(placeholder.arg_index)?.kind().as_str()
-                    )));
-                }
-                result.extend(&chars[index..lbrace]);
-                let slot = &mut cache[placeholder.arg_index];
-                if slot.is_none() {
-                    *slot = Some(resolve(placeholder.arg_index)?.convert_to_string());
-                }
-                result.push_str(slot.as_deref().unwrap_or_default());
+                visit_text(&mut visit, index..lbrace)?;
+                visit(Segment::Argument {
+                    index: placeholder.arg_index,
+                    specifiers: placeholder.specifiers,
+                })?;
                 index = placeholder.rbrace + 1;
             }
             (_, Some(rbrace)) => {
-                if char_at(&chars, rbrace + 1) != '}' {
+                if byte_at(bytes, rbrace + 1) != b'}' {
                     return Err(invalid());
                 }
-                result.extend(&chars[index..=rbrace]);
+                visit_text(&mut visit, index..rbrace + 1)?;
                 index = rbrace + 2;
             }
             _ => {
-                result.extend(&chars[index..]);
+                visit_text(&mut visit, index..bytes.len())?;
                 break;
             }
         }
     }
 
+    Ok(())
+}
+
+fn format_template(
+    format: &str,
+    argument_count: usize,
+    memory: &mut MemoryCounter<'_>,
+    mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
+) -> Result<String, ExprError> {
+    scan_template(format, argument_count, |segment| match segment {
+        Segment::Text(range) => memory.add(&format[range]),
+        Segment::Argument { .. } => Ok(()),
+    })?;
+    let mut cache: Vec<Option<(ValueKind, String)>> = vec![None; argument_count];
+    let mut result = String::new();
+
+    scan_template(format, argument_count, |segment| {
+        match segment {
+            Segment::Text(range) => result.push_str(&format[range]),
+            Segment::Argument { index, specifiers } => {
+                let slot = &mut cache[index];
+                if slot.is_none() {
+                    let value = resolve(index)?;
+                    *slot = Some((value.kind(), value.convert_to_string()));
+                }
+                let Some((kind, argument)) = slot.as_ref() else {
+                    return Ok(());
+                };
+                if !specifiers.is_empty() {
+                    return Err(ExprError::evaluation(format!(
+                        "The format specifiers '{}' are not valid for objects of type '{}'",
+                        format[specifiers].replace("}}", "}"),
+                        kind.as_str()
+                    )));
+                }
+                memory.add(argument)?;
+                result.push_str(argument);
+            }
+        }
+        Ok(())
+    })?;
+
     Ok(result)
 }
 
-fn read_arg_index(chars: &[char], start: usize) -> Option<(usize, usize)> {
-    let length = chars
+fn read_arg_index(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    let length = bytes
         .get(start..)?
         .iter()
-        .take_while(|c| c.is_ascii_digit())
+        .take_while(|byte| byte.is_ascii_digit())
         .count();
     if length == 0 {
         return None;
     }
-    let digits: String = chars[start..start + length].iter().collect();
+    let digits = std::str::from_utf8(&bytes[start..start + length]).ok()?;
     let parsed = digits.parse::<u8>().ok()?;
     Some((usize::from(parsed), start + length - 1))
 }
 
-fn read_format_specifiers(chars: &[char], start: usize) -> Option<(String, usize)> {
-    match char_at(chars, start) {
-        '}' => return Some((String::new(), start)),
-        ':' => {}
+fn read_format_specifiers(bytes: &[u8], start: usize) -> Option<(Range<usize>, usize)> {
+    match byte_at(bytes, start) {
+        b'}' => return Some((start..start, start)),
+        b':' => {}
         _ => return None,
     }
-    let mut specifiers = String::new();
     let mut index = start + 1;
     loop {
-        let c = *chars.get(index)?;
-        if c != '}' {
-            specifiers.push(c);
+        let byte = *bytes.get(index)?;
+        if byte != b'}' {
             index += 1;
-        } else if chars.get(index + 1).copied() == Some('}') {
-            specifiers.push('}');
+        } else if bytes.get(index + 1).copied() == Some(b'}') {
             index += 2;
         } else {
-            return Some((specifiers, index));
+            return Some((start + 1..index, index));
         }
     }
 }
 
-pub(crate) fn to_json(value: &Value) -> String {
-    let mut out = String::new();
-    write_json(value, &mut out, 0, JsonPrefix::Root);
-    out
+pub(crate) fn to_json(node: &Node, value: &Value) -> Result<String, ExprError> {
+    let mut writer = JsonWriter {
+        out: String::new(),
+        memory: MemoryCounter::new(Subject::Node(node)),
+    };
+    write_json(value, &mut writer, 0, JsonPrefix::Root)?;
+    Ok(writer.out)
+}
+
+struct JsonWriter<'a> {
+    out: String,
+    memory: MemoryCounter<'a>,
+}
+
+impl JsonWriter<'_> {
+    fn push(&mut self, piece: &str) -> Result<(), ExprError> {
+        self.memory.add(piece)?;
+        self.out.push_str(piece);
+        Ok(())
+    }
+
+    fn push_string(&mut self, prefix: &str, value: &str) -> Result<(), ExprError> {
+        let units = prefix.encode_utf16().count() + json_string_utf16_units(value);
+        self.memory.add_units(units)?;
+        self.out.push_str(prefix);
+        write_json_string(value, &mut self.out);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -163,49 +279,47 @@ enum JsonPrefix {
     Element(bool),
 }
 
-fn write_json(value: &Value, out: &mut String, level: usize, prefix: JsonPrefix) {
-    let indent = "  ".repeat(level);
-    let prefix = match prefix {
+fn prefix_text(prefix: JsonPrefix, level: usize) -> String {
+    match prefix {
         JsonPrefix::Root => String::new(),
         JsonPrefix::MappingValue => ": ".to_string(),
         JsonPrefix::Element(first) => {
-            format!("{}\n{indent}", if first { "" } else { "," })
+            format!("{}\n{}", if first { "" } else { "," }, "  ".repeat(level))
         }
-    };
+    }
+}
+
+fn write_json(
+    value: &Value,
+    writer: &mut JsonWriter<'_>,
+    level: usize,
+    prefix: JsonPrefix,
+) -> Result<(), ExprError> {
+    let indent = "  ".repeat(level);
+    let prefix = prefix_text(prefix, level);
 
     match value {
         Value::Object(object) if !object.entries().is_empty() => {
-            out.push_str(&prefix);
-            out.push('{');
+            writer.push(&format!("{prefix}{{"))?;
             for (position, (key, entry)) in object.entries().iter().enumerate() {
-                let key = Value::String(key.clone());
-                write_json(&key, out, level + 1, JsonPrefix::Element(position == 0));
-                write_json(entry, out, level + 1, JsonPrefix::MappingValue);
+                let key_prefix = prefix_text(JsonPrefix::Element(position == 0), level + 1);
+                writer.push_string(&key_prefix, key)?;
+                write_json(entry, writer, level + 1, JsonPrefix::MappingValue)?;
             }
-            out.push('\n');
-            out.push_str(&indent);
-            out.push('}');
+            writer.push(&format!("\n{indent}}}"))
         }
         Value::Array(array) if !array.items().is_empty() => {
-            out.push_str(&prefix);
-            out.push('[');
+            writer.push(&format!("{prefix}["))?;
             for (position, item) in array.items().iter().enumerate() {
-                write_json(item, out, level + 1, JsonPrefix::Element(position == 0));
+                write_json(item, writer, level + 1, JsonPrefix::Element(position == 0))?;
             }
-            out.push('\n');
-            out.push_str(&indent);
-            out.push(']');
+            writer.push(&format!("\n{indent}]"))
         }
-        other => {
-            out.push_str(&prefix);
-            out.push_str(&match other {
-                Value::Null => "null".to_string(),
-                Value::Boolean(value) => value.to_string(),
-                Value::Number(value) => format_number(*value),
-                Value::String(value) => serde_json::Value::String(value.clone()).to_string(),
-                Value::Array(_) => "[]".to_string(),
-                Value::Object(_) => "{}".to_string(),
-            });
-        }
+        Value::String(value) => writer.push_string(&prefix, value),
+        Value::Null => writer.push(&format!("{prefix}null")),
+        Value::Boolean(value) => writer.push(&format!("{prefix}{value}")),
+        Value::Number(value) => writer.push(&format!("{prefix}{}", format_number(*value))),
+        Value::Array(_) => writer.push(&format!("{prefix}[]")),
+        Value::Object(_) => writer.push(&format!("{prefix}{{}}")),
     }
 }

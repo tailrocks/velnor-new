@@ -6,7 +6,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
 use velnor_ci::mbx_store::{
-    Inputs, KEEP_OUT_DIR, Outcome, env_lines, message, select, trusted_event,
+    Inputs, KEEP_OUT_DIR, Outcome, env_lines, message, select, shims_line, trusted_event,
 };
 
 use crate::io::Repo;
@@ -24,17 +24,23 @@ fn host(name: &str) -> Host {
     Host { _repo: repo, root }
 }
 
-fn run(host: &Host, event: &str, git_ref: &str, shared: Option<&Path>) -> Outcome {
+fn run(event: &str, git_ref: &str, shared: Option<&Path>) -> Outcome {
     let shared = shared.map(|path| path.display().to_string());
-    let temp = host.root.join("temp");
     select(&Inputs {
         event_name: event,
         git_ref,
         ref_protected: true,
         default_branch: Some("main"),
         shared_dir: shared.as_deref(),
-        runner_temp: &temp,
     })
+}
+
+fn shims(host: &Host) -> PathBuf {
+    host.root.join("temp/velnor-mbx-shims")
+}
+
+fn lines(host: &Host, outcome: &Outcome) -> String {
+    env_lines(outcome, &host.root.join("temp")).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 #[test]
@@ -87,19 +93,18 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
     let host = host("mbx-store-trusted");
     let shared = host.root.join("shared");
     for (event, git_ref) in [("push", "refs/heads/main"), ("schedule", "refs/heads/main")] {
-        let outcome = run(&host, event, git_ref, Some(&shared));
+        let outcome = run(event, git_ref, Some(&shared));
         assert_eq!(
-            env_lines(&outcome).expect("env lines"),
+            lines(&host, &outcome),
             format!(
                 "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\nMBX_SHARE_OUT_DIR=0\n",
                 shared.display(),
-                host.root.join("temp/velnor-mbx-shims").display()
+                shims(&host).display()
             ),
             "{event}"
         );
     }
-    let mode = fs::metadata(host.root.join("temp/velnor-mbx-shims"))
-        .map_or_default(|m| m.permissions().mode() & 0o777);
+    let mode = fs::metadata(shims(&host)).map_or_default(|m| m.permissions().mode() & 0o777);
     assert_eq!(mode, 0o700);
     let leftovers: Vec<_> = fs::read_dir(&shared)
         .map(Iterator::count)
@@ -113,30 +118,33 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
 }
 
 #[test]
-fn a_pull_request_never_gets_the_shared_directory() {
+fn a_pull_request_never_gets_the_shared_directory_but_the_same_shims() {
     let host = host("mbx-store-pr");
     let outcome = run(
-        &host,
         "pull_request",
         "refs/pull/1/merge",
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
-    assert!(!host.root.join("temp/velnor-mbx-shims").exists());
+    assert_eq!(
+        lines(&host, &outcome),
+        format!("MBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}", shims(&host).display())
+    );
 }
 
 #[test]
-fn a_merge_group_never_gets_the_shared_directory() {
+fn a_merge_group_never_gets_the_shared_directory_but_the_same_shims() {
     let host = host("mbx-store-queue");
     let outcome = run(
-        &host,
         "merge_group",
         "refs/heads/gh-readonly-queue/main/pr-1-a",
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(
+        lines(&host, &outcome),
+        format!("MBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}", shims(&host).display())
+    );
 }
 
 #[test]
@@ -145,7 +153,7 @@ fn a_stale_probe_file_does_not_block_the_shared_directory() {
     let shared = host.root.join("shared");
     let stale = shared.join(format!(".velnor-probe-{}", std::process::id()));
     fs::write(&stale, "").unwrap_or_else(|e| unreachable!("{e}"));
-    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
+    let outcome = run("push", "refs/heads/main", Some(&shared));
     assert!(matches!(outcome, Outcome::Shared { .. }), "{outcome:?}");
     assert!(stale.exists());
 }
@@ -153,12 +161,10 @@ fn a_stale_probe_file_does_not_block_the_shared_directory() {
 #[test]
 fn no_offered_directory_appends_only_the_out_dir_setting() {
     let host = host("mbx-store-none");
-    let outcome = run(&host, "push", "refs/heads/main", None);
+    let outcome = run("push", "refs/heads/main", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(
-        env_lines(&outcome).expect("env lines"),
-        "MBX_SHARE_OUT_DIR=0\n"
-    );
+    assert_eq!(lines(&host, &outcome), KEEP_OUT_DIR);
+    assert!(!shims(&host).exists());
 }
 
 #[test]
@@ -188,7 +194,7 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
         cases.push((root.join("ro"), "not writable"));
     }
     for (dir, reason) in cases {
-        let outcome = run(&host, "push", "refs/heads/main", Some(&dir));
+        let outcome = run("push", "refs/heads/main", Some(&dir));
         assert_eq!(
             outcome,
             Outcome::Rejected(reason_static(reason)),
@@ -196,12 +202,13 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
             dir.display()
         );
         assert_eq!(
-            env_lines(&outcome).expect("env lines"),
-            "MBX_SHARE_OUT_DIR=0\n"
+            lines(&host, &outcome),
+            format!("MBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}", shims(&host).display()),
+            "{}",
+            dir.display()
         );
         assert!(message(&outcome).starts_with("::warning::VELNOR_MBX_SHARED_DIR ignored"));
     }
-    assert!(!root.join("temp/velnor-mbx-shims").exists());
 }
 
 fn reason_static(reason: &str) -> &'static str {
@@ -222,13 +229,15 @@ fn reason_static(reason: &str) -> &'static str {
 #[test]
 fn an_existing_shims_directory_is_secured_or_refused() {
     let host = host("mbx-store-shims");
-    let shared = host.root.join("shared");
-    let shims = host.root.join("temp/velnor-mbx-shims");
+    let temp = host.root.join("temp");
+    let shims = shims(&host);
     fs::create_dir(&shims).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&shims, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
-    assert!(matches!(outcome, Outcome::Shared { .. }), "{outcome:?}");
+    assert_eq!(
+        shims_line(&temp).as_deref().ok(),
+        Some(format!("MBX_SHIMS_DIR={}\n", shims.display()).as_str())
+    );
     let mode = fs::metadata(&shims)
         .unwrap_or_else(|e| unreachable!("{e}"))
         .permissions()
@@ -239,30 +248,34 @@ fn an_existing_shims_directory_is_secured_or_refused() {
     let target = host.root.join("elsewhere");
     fs::create_dir(&target).unwrap_or_else(|e| unreachable!("{e}"));
     symlink(&target, &shims).unwrap_or_else(|e| unreachable!("{e}"));
-    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
-    assert_eq!(outcome, Outcome::Rejected("shims path is not a directory"));
+    let error = shims_line(&temp).err().map_or_default(|e| e.to_string());
+    assert!(error.contains("shims path is not a directory"), "{error}");
 }
 
 #[test]
 fn a_store_or_shims_directory_with_a_line_break_cannot_add_an_environment_variable() {
+    let host = host("mbx-store-line-break");
+    let temp = host.root.join("temp");
     let clean = Outcome::Shared {
         dir: PathBuf::from("/runner/mbx"),
-        shims: PathBuf::from("/runner/shims"),
     };
     assert_eq!(
-        env_lines(&clean).as_deref().ok(),
-        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\nMBX_SHARE_OUT_DIR=0\n")
+        env_lines(&clean, &temp).as_deref().ok(),
+        Some(
+            format!(
+                "MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR={}\nMBX_SHARE_OUT_DIR=0\n",
+                shims(&host).display()
+            )
+            .as_str()
+        )
     );
-    for (dir, shims) in [
-        ("/runner/mbx\nGITHUB_PATH=/evil", "/runner/shims"),
-        ("/runner/mbx", "/runner/shims\nGITHUB_PATH=/evil"),
-    ] {
-        let outcome = Outcome::Shared {
-            dir: PathBuf::from(dir),
-            shims: PathBuf::from(shims),
-        };
-        assert!(env_lines(&outcome).is_err(), "{dir:?} {shims:?}");
-    }
+    let outcome = Outcome::Shared {
+        dir: PathBuf::from("/runner/mbx\nGITHUB_PATH=/evil"),
+    };
+    assert!(env_lines(&outcome, &temp).is_err());
+    let broken = host.root.join("te\nmp");
+    fs::create_dir(&broken).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(shims_line(&broken).is_err());
 }
 
 #[test]

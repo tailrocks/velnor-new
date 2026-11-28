@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/tests/broker_protocol.rs
 
-use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use reqwest::StatusCode;
-use serde_json::{Value, json};
+use serde_json::json;
+use velnor_model::RUNNER_PROTOCOL_VERSION;
 use velnor_runner::protocol::{
-    AcquireJobOutcome, AcquireJobSkipReason, BrokerClient, BrokerErrorCategory, BrokerPoll,
-    RUNNER_JOB_REQUEST, RUNNER_VERSION, RetryDelays, RunServiceClient, RunServiceCompleteJob,
-    RunnerOs, RunnerStatus, TaskAgentMessage, TaskAgentSession, TaskResult, acquire_job,
+    AcquireJobOutcome, BrokerClient, BrokerPoll, RUNNER_JOB_REQUEST, RetryDelays, RunServiceClient,
+    RunnerOs, RunnerStatus, TaskAgentMessage, TaskAgentSession, acquire_job,
 };
 
 use super::support::{
-    RecordedRequest, Reply, TOKEN, TestServer, assert_bearer, assert_github_status,
+    JOB_ID, PLAN_ID, RecordedRequest, Reply, TOKEN, TestServer, assert_bearer,
+    assert_github_status, complete_job,
 };
 
 const UPSTREAM_OS: &str = if cfg!(target_os = "linux") {
@@ -35,9 +34,6 @@ const UPSTREAM_ARCHITECTURE: &str = if cfg!(target_arch = "x86_64") {
     "ARM"
 };
 
-const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
-const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
-
 fn mount_broker_routes(server: &TestServer, run_service_url: &str) -> Result<()> {
     server.respond("POST", "/broker/session", |_| {
         Reply::json(
@@ -48,7 +44,7 @@ fn mount_broker_routes(server: &TestServer, run_service_url: &str) -> Result<()>
                 "agent": {
                     "id": 42,
                     "name": "velnor-test",
-                    "version": RUNNER_VERSION,
+                    "version": RUNNER_PROTOCOL_VERSION,
                     "osDescription": std::env::consts::OS
                 },
                 "useFipsEncryption": false
@@ -79,7 +75,10 @@ fn assert_poll_query(request: &RecordedRequest, status: &str, disable_update: &s
     assert_bearer(request);
     assert_eq!(request.query("sessionId"), Some("session-1"));
     assert_eq!(request.query("status"), Some(status));
-    assert_eq!(request.query("runnerVersion"), Some(RUNNER_VERSION));
+    assert_eq!(
+        request.query("runnerVersion"),
+        Some(RUNNER_PROTOCOL_VERSION)
+    );
     assert_eq!(request.query("os"), Some(UPSTREAM_OS));
     assert_eq!(request.query("architecture"), Some(UPSTREAM_ARCHITECTURE));
     assert_eq!(request.query("disableUpdate"), Some(disable_update));
@@ -234,12 +233,18 @@ async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
     )?;
     server.respond("POST", "/broker/acknowledge", |_| Reply::stall())?;
 
+    let started = Instant::now();
     let outcome = tokio::time::timeout(
         Duration::from_secs(10),
         broker.acknowledge_runner_request("session-1", "request-1", RunnerStatus::Online),
     )
     .await
     .context("acknowledgement must give up within ten seconds")?;
+    assert!(
+        started.elapsed() < Duration::from_millis(6500),
+        "acknowledgement took {:?}",
+        started.elapsed()
+    );
 
     let error = outcome.err().context("a stalled acknowledgement fails")?;
     assert!(format!("{error:#}").contains("timed out"), "{error:#}");
@@ -248,69 +253,8 @@ async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-
-    for (status, reason, expected_category) in [
-        (
-            StatusCode::NOT_FOUND,
-            AcquireJobSkipReason::NotFound,
-            BrokerErrorCategory::Terminal,
-        ),
-        (
-            StatusCode::CONFLICT,
-            AcquireJobSkipReason::AlreadyAcquired,
-            BrokerErrorCategory::Conflict,
-        ),
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            AcquireJobSkipReason::Unprocessable,
-            BrokerErrorCategory::Conflict,
-        ),
-    ] {
-        server.reset()?;
-        let refusal = json!({
-            "source": "actions-run-service",
-            "statusCode": status.as_u16(),
-            "errorMessage": "acquire refused"
-        });
-        let reply_body = refusal.clone();
-        server.respond("POST", "/run/jobs/123/acquirejob", move |_| {
-            Reply::json(status.as_u16(), &reply_body)
-        })?;
-
-        let outcome = acquire_job(
-            RetryDelays::IMMEDIATE,
-            &run_service_url,
-            "broker-message",
-            std::env::consts::OS,
-            None,
-            fresh_token,
-        )
-        .await?;
-        let AcquireJobOutcome::Skipped {
-            status: actual,
-            body,
-            reason: actual_reason,
-            category: actual_category,
-        } = outcome
-        else {
-            bail!("expected skipped acquire");
-        };
-        assert_eq!(actual, status);
-        assert_eq!(actual_reason, reason);
-        assert_eq!(serde_json::from_str::<Value>(&body)?, refusal);
-        assert_eq!(actual_category, expected_category);
-        assert_eq!(
-            server
-                .requests_to("POST", "/run/jobs/123/acquirejob")?
-                .len(),
-            1
-        );
-    }
-    Ok(())
+async fn fresh_token() -> Result<String> {
+    Ok(TOKEN.to_owned())
 }
 
 fn job_message(run_service_url: &str) -> TaskAgentMessage {
@@ -325,24 +269,5 @@ fn job_message(run_service_url: &str) -> TaskAgentMessage {
             "billing_owner_id": "42"
         })
         .to_string(),
-    }
-}
-
-async fn fresh_token() -> Result<String> {
-    Ok(TOKEN.to_owned())
-}
-
-pub(crate) fn complete_job() -> RunServiceCompleteJob {
-    RunServiceCompleteJob {
-        plan_id: PLAN_ID.to_owned(),
-        job_id: JOB_ID.to_owned(),
-        conclusion: TaskResult::Succeeded,
-        outputs: BTreeMap::new(),
-        step_results: Vec::new(),
-        annotations: Vec::new(),
-        telemetry: Vec::new(),
-        environment_url: None,
-        billing_owner_id: Some("42".to_owned()),
-        infrastructure_failure_category: None,
     }
 }

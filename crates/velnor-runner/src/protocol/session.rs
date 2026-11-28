@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use super::http::RUNNER_VERSION;
+use velnor_model::RUNNER_PROTOCOL_VERSION;
 
 pub const RUNNER_JOB_REQUEST: &str = "RunnerJobRequest";
 
@@ -44,7 +44,7 @@ impl TaskAgentSession {
             agent: TaskAgentReference {
                 id: agent_id,
                 name: agent_name.into(),
-                version: RUNNER_VERSION.to_owned(),
+                version: RUNNER_PROTOCOL_VERSION.to_owned(),
                 os_description: std::env::consts::OS.to_owned(),
             },
             broker_session: true,

@@ -75,9 +75,17 @@ pub(super) fn string(value: &str) -> ContextValue {
 }
 
 pub(super) fn object(pairs: &[(String, String)], case_sensitive: bool) -> ContextValue {
+    let mut unique = Vec::new();
+    for (name, value) in pairs {
+        if case_sensitive {
+            set_pair(&mut unique, name, value);
+        } else {
+            set_output(&mut unique, name, value);
+        }
+    }
     ContextValue::Object {
         case_sensitive,
-        entries: pairs
+        entries: unique
             .iter()
             .map(|(name, value)| (name.clone(), string(value)))
             .collect(),
@@ -90,6 +98,10 @@ pub(super) fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> O
         .iter()
         .find(|(known, _)| known.eq_ignore_ascii_case(name))
         .and_then(|(_, variable)| variable.value.as_ref().map(|value| value.expose().as_str()))
+}
+
+pub(super) fn github_token(message: &AgentJobRequestMessage) -> Option<String> {
+    variable(message, GITHUB_TOKEN_VARIABLE).map(str::to_owned)
 }
 
 pub(super) fn upsert(entries: &mut Vec<(String, ContextValue)>, name: &str, value: ContextValue) {
@@ -269,7 +281,7 @@ pub(super) async fn run_defaults(
 ) -> Result<Vec<(String, String)>, ExecError> {
     let mut run = Vec::new();
     for defaults in &message.defaults {
-        if let Some(entry) = token::find(defaults, "run") {
+        if let Some(entry) = token::find(defaults, "run")? {
             run.clear();
             for (name, value) in evaluate::mapping(entry, env).await? {
                 if !value.is_empty() {

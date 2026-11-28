@@ -279,6 +279,28 @@ fn a_build_dependency_feature_reaches_the_tests_only_when_the_resolver_unifies_i
 }
 
 #[test]
+fn an_edition_a_root_package_inherits_decides_whether_the_resolver_splits_the_build() -> TestResult
+{
+    let manifest = "[package]\nname = \"b\"\n[build-dependencies]\na = { path = \"../a\" }\n";
+    let root = |edition: &str| {
+        format!(
+            "[package]\nname = \"r\"\nedition.workspace = true\n[workspace]\nmembers = [\"a\", \"b\"]\n[workspace.package]\nedition = \"{edition}\"\n"
+        )
+    };
+    let harness = |edition: &str| -> Result<String, Box<dyn std::error::Error>> {
+        workflow(&forwarding_view(
+            manifest,
+            DependencyKind::Build,
+            &["x"],
+            &root(edition),
+        )?)
+    };
+    assert!(!harness("2021")?.contains("--test=gated"));
+    assert!(harness("2018")?.contains("--test=gated"));
+    Ok(())
+}
+
+#[test]
 fn a_package_scoped_harness_carries_the_features_it_requires() -> TestResult {
     let forwarding = forwarding_view(
         "[package]\nname = \"b\"\n",

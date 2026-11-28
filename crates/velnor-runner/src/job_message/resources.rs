@@ -24,6 +24,8 @@ pub struct JobResources {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceEndpoint {
+    #[serde(default, alias = "Id")]
+    pub id: Option<String>,
     #[serde(default, alias = "Name")]
     pub name: Option<String>,
     #[serde(default, alias = "Url")]

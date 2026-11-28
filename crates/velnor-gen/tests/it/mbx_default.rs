@@ -315,22 +315,23 @@ fn the_explicit_layout_with_the_shim_env_is_still_accepted() -> TestResult {
 }
 
 #[test]
-fn a_shared_store_or_a_remote_cache_keeps_its_own_wiring_and_gets_no_private_store() -> TestResult {
-    for (config, version, wired) in [
+fn a_shared_store_follows_the_private_store_and_a_remote_cache_keeps_its_own_wiring() -> TestResult
+{
+    for (config, wired, private) in [
         (
             &b"mbx_shared_store = true\n"[..],
-            "0.1.88",
             "velnor-ci mbx-store",
+            true,
         ),
         (
             &b"[cache]\nmbx_remote = \"github-actions\"\n"[..],
-            "0.1.88",
             "jdx/mr-boxington-action@",
+            false,
         ),
     ] {
-        let text = workflow(&pinned(Some(config), version)?)?;
+        let text = workflow(&pinned(Some(config), "0.1.88")?)?;
         assert!(text.contains(wired), "{wired}");
-        assert!(!text.contains(STORE), "{wired}");
+        assert_eq!(text.contains(STORE), private, "{wired}");
     }
     Ok(())
 }

@@ -45,6 +45,7 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
     assert_ne!(steps[0]["external_id"], JOB_ID);
     assert_eq!(steps[0]["conclusion"], "succeeded");
     assert_eq!(steps[0]["status"], "completed");
+    assert!(steps[0].get("completed_log_lines").is_none());
     let updates = mock.requests_to("POST", RESULTS_STEPS_UPDATE)?;
     let states: Vec<(i64, i64)> = updates
         .iter()

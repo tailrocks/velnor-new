@@ -1814,6 +1814,7 @@ checksum = "ed5d126d72eb017f10b302e73bdeca446bea405ee449af4d9e7866d6b082d83e"
 dependencies = [
  "jiff-core 1.0.1",
  "jiff-static 1.0.1",
+ "jiff-tzdb 1.0.0",
  "jiff-tzdb-platform 1.0.0",
  "log",
  "portable-atomic",
@@ -3026,6 +3027,17 @@ dependencies = [
  "ryu-js",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -4483,8 +4495,9 @@ dependencies = [
  "anyhow",
  "base64 0.23.1",
  "clap",
+ "flate2",
  "futures-util",
- "globset",
+ "jiff 1.0.1",
  "landlock",
  "libc",
  "regex-automata",
@@ -4494,15 +4507,22 @@ dependencies = [
  "rustix 1.1.6",
  "seccompiler",
  "serde",
+ "serde-saphyr",
  "serde_json",
+ "serde_path_to_error",
  "sha2",
+ "tar",
  "thiserror",
  "time",
  "tokio",
  "tokio-tungstenite",
+ "toml",
  "url",
  "uuid",
+ "velnor-cache-rules",
+ "velnor-model",
  "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -4636,6 +4656,7 @@ dependencies = [
  "tera",
  "toml",
  "url",
+ "velnor-cache-rules",
  "velnor-model",
 ]
 

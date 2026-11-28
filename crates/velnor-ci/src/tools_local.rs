@@ -7,8 +7,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
-use crate::mbx_seed::SEED_DIR_ENV;
-use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
+use crate::mbx_store::{SEED_DIR_ENV, SHARED_DIR_ENV, trusted_event};
 
 mod clear;
 mod lease;
