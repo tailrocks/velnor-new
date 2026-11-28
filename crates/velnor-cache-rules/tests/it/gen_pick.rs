@@ -3,7 +3,7 @@
 
 use velnor_cache_rules::{GenKey, Generation, Run, Want, pick};
 
-use crate::gen_support::{generation, key, main, mg, pr, pull, push, queue, rust, sha};
+use crate::gen_support::{fork, generation, key, main, mg, pr, pull, push, queue, rust, sha};
 
 fn picked(
     run: &Run,
@@ -213,7 +213,5 @@ fn fork_pull_request_reads_nothing() {
         generation(&k, main(1), "L1", 10),
         generation(&k, pr(7, 1, 1), "L1", 20),
     ];
-    let mut fork = pull(7, 9);
-    fork.same_repository = false;
-    assert_eq!(picked(&fork, &k, "L1", Some(1), &all), None);
+    assert_eq!(picked(&fork(7, 9), &k, "L1", Some(1), &all), None);
 }

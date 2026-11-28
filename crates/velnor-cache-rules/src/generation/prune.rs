@@ -10,7 +10,6 @@ use crate::generation::scope::{GenScope, Generation};
 
 const HOUR: u64 = 60 * 60;
 const DAY: u64 = 24 * HOUR;
-const GIB: u64 = 1024 * 1024 * 1024;
 
 pub const PRUNE_FLOOR_SECONDS: u64 = 6 * HOUR;
 pub const MAIN_KEEP: usize = 8;
@@ -18,19 +17,6 @@ pub const PR_KEEP: usize = 2;
 pub const MAIN_MAX_BORN_SECONDS: u64 = 7 * DAY;
 pub const PR_MAX_SECONDS: u64 = 7 * DAY;
 pub const MG_MAX_SECONDS: u64 = DAY;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Budget {
-    pub high_bytes: u64,
-    pub low_bytes: u64,
-}
-
-impl Budget {
-    pub const DEFAULT: Self = Self {
-        high_bytes: 250 * GIB,
-        low_bytes: 200 * GIB,
-    };
-}
 
 fn age(now: Timestamp, then: Timestamp) -> u64 {
     now.0.saturating_sub(then.0)
@@ -64,12 +50,38 @@ fn newest_main_per_key(generations: &[Generation]) -> BTreeSet<usize> {
     best.into_values().collect()
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrunePlan<'a> {
+    pub victims: Vec<&'a Generation>,
+    pub eviction_queue: Vec<&'a Generation>,
+}
+
+fn newest_per_key_without_main(
+    generations: &[Generation],
+    survivors: impl Fn(usize) -> bool,
+) -> BTreeSet<usize> {
+    let mut best: BTreeMap<&GenKey, usize> = BTreeMap::new();
+    let mut has_main: BTreeSet<&GenKey> = BTreeSet::new();
+    for (index, generation) in generations.iter().enumerate() {
+        if matches!(generation.scope, GenScope::Main { .. }) {
+            has_main.insert(&generation.key);
+        }
+        if survivors(index) {
+            let slot = best.entry(&generation.key).or_insert(index);
+            let rank = |g: &Generation| (g.published, g.scope.clone());
+            if rank(generation) > rank(&generations[*slot]) {
+                *slot = index;
+            }
+        }
+    }
+    best.into_iter()
+        .filter(|(key, _)| !has_main.contains(key))
+        .map(|(_, index)| index)
+        .collect()
+}
+
 #[must_use]
-pub fn prune_plan<'a>(
-    now: Timestamp,
-    generations: &'a [Generation],
-    budget: &Budget,
-) -> Vec<&'a Generation> {
+pub fn prune_plan(now: Timestamp, generations: &[Generation]) -> PrunePlan<'_> {
     let newest_main = newest_main_per_key(generations);
     let removable = |index: usize| {
         !newest_main.contains(&index)
@@ -102,24 +114,17 @@ pub fn prune_plan<'a>(
         doomed.extend(members.into_iter().skip(keep).filter(|&i| removable(i)));
     }
 
-    let mut total = (0..generations.len())
-        .filter(|i| !doomed.contains(i))
-        .fold(0_u64, |sum, i| sum.saturating_add(generations[i].bytes));
-    if total > budget.high_bytes {
-        let mut oldest_first: Vec<usize> = (0..generations.len())
-            .filter(|&i| !doomed.contains(&i) && removable(i))
-            .collect();
-        oldest_first.sort_by_key(|&i| (generations[i].published, generations[i].path()));
-        for index in oldest_first {
-            if total < budget.low_bytes {
-                break;
-            }
-            doomed.insert(index);
-            total = total.saturating_sub(generations[index].bytes);
-        }
-    }
+    let newest_without_main =
+        newest_per_key_without_main(generations, |index| !doomed.contains(&index));
+    let mut queue: Vec<usize> = (0..generations.len())
+        .filter(|i| !doomed.contains(i) && removable(*i) && !newest_without_main.contains(i))
+        .collect();
+    queue.sort_by_key(|&i| (generations[i].published, generations[i].path()));
 
     let mut victims: Vec<&Generation> = doomed.into_iter().map(|i| &generations[i]).collect();
     victims.sort_by_key(|g| g.path());
-    victims
+    PrunePlan {
+        victims,
+        eviction_queue: queue.into_iter().map(|i| &generations[i]).collect(),
+    }
 }

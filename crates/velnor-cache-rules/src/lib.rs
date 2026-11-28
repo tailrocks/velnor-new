@@ -14,8 +14,9 @@ pub use evict::{
     DEFAULT_CACHE_BUDGET_BYTES, ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, evict, is_expired,
 };
 pub use generation::{
-    Budget, GenKey, GenScope, Generation, GenerationError, MAIN_KEEP, MAIN_MAX_BORN_SECONDS,
-    MG_MAX_SECONDS, PR_KEEP, PR_MAX_SECONDS, PRUNE_FLOOR_SECONDS, Run, Sha, Want, pick, prune_plan,
+    GenKey, GenScope, Generation, GenerationError, Head, MAIN_KEEP, MAIN_MAX_BORN_SECONDS,
+    MG_MAX_SECONDS, PR_KEEP, PR_MAX_SECONDS, PRUNE_FLOOR_SECONDS, PrunePlan, Run, RunEvent, Sha,
+    Want, pick, prune_plan,
 };
 pub use lookup::lookup;
 pub use reserve::{AlreadyExists, reserve};

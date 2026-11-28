@@ -1,31 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_cache_rules::{Budget, GenKey, GenScope, Generation, Timestamp, prune_plan};
+use velnor_cache_rules::{GenKey, GenScope, Generation, Timestamp, prune_plan};
 
 use crate::gen_support::{DAY, NOW, generation, key, main, mg, pr, rust};
 
 const HOUR: u64 = 3600;
 
-fn doomed(all: &[Generation], budget: &Budget) -> Vec<String> {
-    prune_plan(Timestamp(NOW), all, budget)
+fn doomed(all: &[Generation]) -> Vec<String> {
+    prune_plan(Timestamp(NOW), all)
+        .victims
         .iter()
         .map(|g| g.scope.path())
         .collect()
 }
 
-fn unlimited() -> Budget {
-    Budget {
-        high_bytes: u64::MAX,
-        low_bytes: 0,
-    }
+fn queued(all: &[Generation]) -> Vec<String> {
+    prune_plan(Timestamp(NOW), all)
+        .eviction_queue
+        .iter()
+        .map(|g| g.path())
+        .collect()
 }
 
-fn sized(key: &GenKey, scope: GenScope, published: u64, bytes: u64) -> Generation {
-    Generation {
-        bytes,
-        ..generation(key, scope, "L", published)
-    }
+fn at(key: &GenKey, scope: GenScope, published: u64) -> Generation {
+    generation(key, scope, "L", published)
 }
 
 fn born(key: &GenKey, scope: GenScope, born: u64, published: u64) -> Generation {
@@ -42,7 +41,7 @@ fn main_keeps_the_newest_eight_per_key() {
         .map(|n| generation(&k, main(n), "L", NOW - DAY + u64::from(n) * 100))
         .collect();
     let paths: Vec<String> = [1, 2].map(|n| main(n).path()).to_vec();
-    assert_eq!(doomed(&all, &unlimited()), paths);
+    assert_eq!(doomed(&all), paths);
 }
 
 #[test]
@@ -57,7 +56,7 @@ fn main_count_is_per_key() {
             ]
         })
         .collect();
-    assert_eq!(doomed(&all, &unlimited()), Vec::<String>::new());
+    assert_eq!(doomed(&all), Vec::<String>::new());
 }
 
 #[test]
@@ -69,11 +68,8 @@ fn main_born_over_seven_days_ago_goes_except_the_newest_of_its_key() {
         born(&k, main(3), NOW - 7 * DAY, NOW - DAY),
         born(&k, main(4), NOW, NOW - 12 * HOUR),
     ];
-    assert_eq!(
-        doomed(&all, &unlimited()),
-        vec![main(1).path(), main(2).path()]
-    );
-    assert_eq!(doomed(&all[..2], &unlimited()), vec![main(1).path()]);
+    assert_eq!(doomed(&all), vec![main(1).path(), main(2).path()]);
+    assert_eq!(doomed(&all[..2]), vec![main(1).path()]);
 }
 
 #[test]
@@ -84,7 +80,7 @@ fn nothing_published_under_six_hours_ago_is_removed() {
         born(&k, main(2), NOW - 9 * DAY, NOW - 6 * HOUR + 1),
         born(&k, main(3), NOW - 9 * DAY, NOW - HOUR),
     ];
-    assert_eq!(doomed(&all, &unlimited()), vec![main(1).path()]);
+    assert_eq!(doomed(&all), vec![main(1).path()]);
 }
 
 #[test]
@@ -98,7 +94,7 @@ fn pull_request_keeps_the_two_highest_runs_whatever_the_publish_order() {
         generation(&k, pr(8, 1, 1), "L", NOW - DAY),
     ];
     assert_eq!(
-        doomed(&all, &unlimited()),
+        doomed(&all),
         vec!["pr7/3-1".to_owned(), "pr7/4-1".to_owned()]
     );
 }
@@ -112,10 +108,7 @@ fn pull_request_and_merge_group_generations_expire_by_publish_age() {
         born(&k, mg(1), NOW, NOW - DAY - 1),
         generation(&k, mg(2), "L", NOW - DAY),
     ];
-    assert_eq!(
-        doomed(&all, &unlimited()),
-        vec![mg(1).path(), "pr7/1-1".to_owned()]
-    );
+    assert_eq!(doomed(&all), vec![mg(1).path(), "pr7/1-1".to_owned()]);
 }
 
 #[test]
@@ -125,86 +118,144 @@ fn merge_group_generations_do_not_count_towards_the_newest_eight_main() {
         .map(|n| generation(&k, main(n), "L", NOW - DAY + u64::from(n) * 100))
         .collect();
     all.extend((20..25).map(|n| generation(&k, mg(n), "L", NOW - 12 * HOUR)));
-    assert_eq!(doomed(&all, &unlimited()), Vec::<String>::new());
+    assert_eq!(doomed(&all), Vec::<String>::new());
 }
 
 #[test]
-fn space_evicts_oldest_first_until_under_the_low_mark_and_never_the_newest_of_a_key() {
-    let (a, b) = (rust(), key("lint", "root", "0123456789abcdef"));
-    let t = |n: u64| NOW - DAY + n * 100;
+fn main_published_long_ago_but_born_recently_stays() {
+    let k = rust();
     let all = [
-        sized(&b, main(10), t(0), 30),
-        sized(&a, main(1), t(1), 40),
-        sized(&a, main(2), t(3), 40),
-        sized(&a, main(3), t(4), 40),
-        sized(&a, pr(7, 1, 1), t(5), 10),
-        sized(&a, main(4), t(6), 40),
+        born(&k, main(1), NOW - HOUR, NOW - 30 * DAY),
+        born(&k, main(2), NOW - HOUR, NOW - 20 * DAY),
     ];
-    let budget = Budget {
-        high_bytes: 150,
-        low_bytes: 90,
-    };
+    assert_eq!(doomed(&all), Vec::<String>::new());
+}
+
+#[test]
+fn an_age_doomed_main_among_the_newest_eight_does_not_use_up_a_count_slot() {
+    let k = rust();
+    let mut all: Vec<Generation> = (1..=9)
+        .map(|n| born(&k, main(n), NOW - DAY, NOW - DAY + u64::from(n) * 100))
+        .collect();
+    all[7].born = Timestamp(NOW - 8 * DAY);
+    assert_eq!(doomed(&all), vec![main(8).path()]);
+}
+
+#[test]
+fn an_age_doomed_pull_request_run_among_the_newest_two_does_not_use_up_a_count_slot() {
+    let k = rust();
+    let all = [
+        at(&k, pr(7, 1, 1), NOW - 2 * DAY),
+        at(&k, pr(7, 2, 1), NOW - 8 * DAY),
+        at(&k, pr(7, 3, 1), NOW - DAY),
+    ];
+    assert_eq!(doomed(&all), vec!["pr7/2-1".to_owned()]);
+}
+
+#[test]
+fn the_eviction_queue_is_oldest_published_first_whatever_the_birth() {
+    let k = rust();
+    let all = [
+        born(&k, main(1), NOW - HOUR, NOW - 3 * DAY),
+        born(&k, main(2), NOW - 6 * DAY, NOW - 2 * DAY),
+        born(&k, main(3), NOW - 5 * DAY, NOW - 4 * DAY),
+        born(&k, main(4), NOW - 4 * DAY, NOW - DAY),
+    ];
+    let order: Vec<String> = [3, 1, 2]
+        .map(|n| format!("{}/{}", k.dir_name(), main(n).path()))
+        .to_vec();
+    assert_eq!(queued(&all), order);
+}
+
+#[test]
+fn the_eviction_queue_never_lists_a_victim() {
+    let k = rust();
+    let all = [
+        born(&k, main(1), NOW - 9 * DAY, NOW - 4 * DAY),
+        at(&k, main(2), NOW - 3 * DAY),
+        at(&k, main(3), NOW - 2 * DAY),
+        at(&k, pr(7, 1, 1), NOW - 8 * DAY),
+        at(&k, mg(4), NOW - 2 * DAY),
+    ];
     assert_eq!(
-        doomed(&all, &budget),
-        vec![main(1).path(), main(2).path(), main(3).path()]
+        doomed(&all),
+        vec![main(1).path(), mg(4).path(), "pr7/1-1".to_owned()]
+    );
+    assert_eq!(
+        queued(&all),
+        vec![format!("{}/{}", k.dir_name(), main(2).path())]
     );
 }
 
 #[test]
-fn space_is_left_alone_while_the_total_does_not_exceed_the_high_mark() {
-    let k = rust();
+fn the_eviction_queue_protects_the_newest_main_of_each_key() {
+    let (a, b) = (rust(), key("lint", "root", "0123456789abcdef"));
     let all = [
-        sized(&k, main(1), NOW - DAY, 50),
-        sized(&k, main(2), NOW - DAY + 1, 50),
+        at(&a, main(1), NOW - 3 * DAY),
+        at(&a, main(2), NOW - DAY),
+        at(&b, main(3), NOW - 5 * DAY),
     ];
-    let budget = Budget {
-        high_bytes: 100,
-        low_bytes: 0,
-    };
-    assert_eq!(doomed(&all, &budget), Vec::<String>::new());
+    assert_eq!(
+        queued(&all),
+        vec![format!("{}/{}", a.dir_name(), main(1).path())]
+    );
 }
 
 #[test]
-fn space_never_evicts_anything_under_the_six_hour_floor() {
+fn a_key_without_main_protects_its_newest_generation_from_space_only() {
     let k = rust();
     let all = [
-        sized(&k, pr(7, 1, 1), NOW - 10 * HOUR, 50),
-        sized(&k, pr(8, 1, 1), NOW - HOUR, 50),
-        sized(&k, main(1), NOW - 20 * HOUR, 50),
+        at(&k, pr(7, 1, 1), NOW - 3 * DAY),
+        at(&k, pr(8, 1, 1), NOW - 2 * DAY),
+        at(&k, mg(1), NOW - 12 * HOUR),
     ];
-    let budget = Budget {
-        high_bytes: 10,
-        low_bytes: 0,
-    };
-    assert_eq!(doomed(&all, &budget), vec!["pr7/1-1".to_owned()]);
+    assert_eq!(doomed(&all), Vec::<String>::new());
+    assert_eq!(
+        queued(&all),
+        vec![
+            format!("{}/pr7/1-1", k.dir_name()),
+            format!("{}/pr8/1-1", k.dir_name()),
+        ]
+    );
 }
 
 #[test]
-fn default_budget_trims_from_above_250_gib_to_below_200_gib() {
+fn a_key_without_main_protects_the_newest_that_age_left_standing() {
     let k = rust();
-    let gib = 1024 * 1024 * 1024;
     let all = [
-        sized(&k, main(1), NOW - 3 * DAY, 90 * gib),
-        sized(&k, main(2), NOW - 2 * DAY, 90 * gib),
-        sized(&k, main(3), NOW - DAY, 90 * gib),
+        at(&k, pr(7, 1, 1), NOW - 3 * DAY),
+        at(&k, pr(8, 1, 1), NOW - 2 * DAY),
+        at(&k, pr(9, 1, 1), NOW - 8 * DAY),
     ];
-    assert_eq!(doomed(&all, &Budget::DEFAULT), vec![main(1).path()]);
-    assert_eq!(doomed(&all[1..], &Budget::DEFAULT), Vec::<String>::new());
+    assert_eq!(doomed(&all), vec!["pr9/1-1".to_owned()]);
+    assert_eq!(queued(&all), vec![format!("{}/pr7/1-1", k.dir_name())]);
 }
 
 #[test]
-fn space_keeps_evicting_until_strictly_below_the_low_mark() {
+fn the_eviction_queue_skips_everything_under_the_six_hour_floor() {
     let k = rust();
     let all = [
-        sized(&k, main(1), NOW - 3 * DAY, 40),
-        sized(&k, main(2), NOW - 2 * DAY, 40),
-        sized(&k, main(3), NOW - DAY, 40),
+        at(&k, pr(7, 1, 1), NOW - 10 * HOUR),
+        at(&k, pr(8, 1, 1), NOW - HOUR),
+        at(&k, main(1), NOW - 20 * HOUR),
+        at(&k, pr(9, 1, 1), NOW - 6 * HOUR + 1),
     ];
-    let budget = Budget {
-        high_bytes: 100,
-        low_bytes: 80,
-    };
-    assert_eq!(doomed(&all, &budget), vec![main(1).path(), main(2).path()]);
+    assert_eq!(queued(&all), vec![format!("{}/pr7/1-1", k.dir_name())]);
+}
+
+#[test]
+fn the_plan_does_not_depend_on_the_input_order() {
+    let k = rust();
+    let all = [
+        at(&k, main(1), NOW - 3 * DAY),
+        at(&k, pr(7, 1, 1), NOW - 2 * DAY),
+        at(&k, mg(2), NOW - DAY),
+        at(&k, main(3), NOW - 8 * DAY),
+    ];
+    let mut reversed = all.clone();
+    reversed.reverse();
+    assert_eq!(doomed(&all), doomed(&reversed));
+    assert_eq!(queued(&all), queued(&reversed));
 }
 
 #[test]
@@ -215,5 +266,26 @@ fn pull_request_count_never_removes_a_generation_under_the_six_hour_floor() {
         generation(&k, pr(7, 5, 1), "L", NOW - DAY),
         generation(&k, pr(7, 1, 1), "L", NOW - HOUR),
     ];
-    assert_eq!(doomed(&all, &unlimited()), Vec::<String>::new());
+    assert_eq!(doomed(&all), Vec::<String>::new());
+}
+
+#[test]
+fn a_key_without_main_protects_a_survivor_even_when_the_newest_is_age_doomed() {
+    let k = rust();
+    let all = [
+        at(&k, pr(7, 1, 1), NOW - 3 * DAY),
+        at(&k, mg(1), NOW - 2 * DAY),
+    ];
+    assert_eq!(doomed(&all), vec![mg(1).path()]);
+    assert_eq!(queued(&all), Vec::<String>::new());
+}
+
+#[test]
+fn a_key_with_main_protects_only_its_newest_main_from_space() {
+    let k = rust();
+    let all = [
+        at(&k, main(1), NOW - 3 * DAY),
+        at(&k, pr(7, 1, 1), NOW - DAY),
+    ];
+    assert_eq!(queued(&all), vec![format!("{}/pr7/1-1", k.dir_name())]);
 }

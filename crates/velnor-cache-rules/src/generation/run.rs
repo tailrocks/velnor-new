@@ -6,14 +6,69 @@ use crate::entry::Scope;
 use crate::generation::key::Sha;
 use crate::generation::scope::GenScope;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Head {
+    SameRepository,
+    Fork,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RunEvent {
+    Push {
+        branch: String,
+    },
+    Tag {
+        name: String,
+    },
+    PullRequest {
+        number: u64,
+        base_branch: String,
+        head: Head,
+    },
+    MergeGroup {
+        queue_branch: String,
+    },
+}
+
+impl RunEvent {
+    fn access_event(&self) -> Event {
+        match self {
+            Self::Push { branch } => Event::Push {
+                branch: branch.clone(),
+            },
+            Self::Tag { name } => Event::Tag { name: name.clone() },
+            Self::PullRequest {
+                number,
+                base_branch,
+                ..
+            } => Event::PullRequest {
+                number: *number,
+                base_branch: base_branch.clone(),
+            },
+            Self::MergeGroup { queue_branch } => Event::MergeGroup {
+                queue_branch: queue_branch.clone(),
+            },
+        }
+    }
+
+    fn is_fork(&self) -> bool {
+        matches!(
+            self,
+            Self::PullRequest {
+                head: Head::Fork,
+                ..
+            }
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Run {
-    pub event: Event,
+    pub event: RunEvent,
     pub default_branch: String,
     pub sha: Sha,
     pub run_id: u64,
     pub attempt: u32,
-    pub same_repository: bool,
     pub protected_ref: bool,
 }
 
@@ -26,10 +81,10 @@ pub(crate) enum Lane {
 
 impl Run {
     pub(crate) fn lanes(&self) -> Vec<Lane> {
-        if !self.same_repository {
+        if self.event.is_fork() {
             return Vec::new();
         }
-        let access = access_for(&self.event, &self.default_branch);
+        let access = access_for(&self.event.access_event(), &self.default_branch);
         let default_scope = Scope::branch(&self.default_branch);
         let mut lanes = Vec::new();
         if access.write == default_scope {
@@ -37,7 +92,7 @@ impl Run {
         }
         for scope in &access.read {
             match &self.event {
-                Event::PullRequest { number, .. } if *scope == Scope::pull_merge(*number) => {
+                RunEvent::PullRequest { number, .. } if *scope == Scope::pull_merge(*number) => {
                     lanes.push(Lane::Pr(*number));
                 }
                 _ if *scope == default_scope => lanes.push(Lane::Main),
@@ -49,19 +104,20 @@ impl Run {
 
     #[must_use]
     pub fn publishes(&self) -> Option<GenScope> {
-        let access = access_for(&self.event, &self.default_branch);
         match &self.event {
-            Event::Push { .. }
-                if self.protected_ref && access.write == Scope::branch(&self.default_branch) =>
-            {
+            RunEvent::Push { branch } if self.protected_ref && *branch == self.default_branch => {
                 Some(GenScope::Main {
                     sha: self.sha.clone(),
                 })
             }
-            Event::MergeGroup { .. } => Some(GenScope::Mg {
+            RunEvent::MergeGroup { .. } => Some(GenScope::Mg {
                 sha: self.sha.clone(),
             }),
-            Event::PullRequest { number, .. } if self.same_repository => Some(GenScope::Pr {
+            RunEvent::PullRequest {
+                number,
+                head: Head::SameRepository,
+                ..
+            } => Some(GenScope::Pr {
                 number: *number,
                 run_id: self.run_id,
                 attempt: self.attempt,

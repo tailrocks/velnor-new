@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_cache_rules::Event;
+use velnor_cache_rules::{Head, RunEvent};
 
 use crate::gen_support::{pull, push, queue, run};
 
@@ -41,15 +41,21 @@ fn same_repository_pull_request_publishes_a_new_name_per_run_and_attempt() {
 
 #[test]
 fn fork_pull_request_publishes_nothing() {
-    let mut fork = pull(7, 3);
-    fork.same_repository = false;
+    let fork = run(
+        RunEvent::PullRequest {
+            number: 7,
+            base_branch: "main".to_owned(),
+            head: Head::Fork,
+        },
+        3,
+    );
     assert_eq!(path(&fork), None);
 }
 
 #[test]
 fn tag_publishes_nothing() {
     let tag = run(
-        Event::Tag {
+        RunEvent::Tag {
             name: "v1".to_owned(),
         },
         4,

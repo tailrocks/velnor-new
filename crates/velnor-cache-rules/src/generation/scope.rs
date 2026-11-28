@@ -41,7 +41,6 @@ pub struct Generation {
     pub lock: String,
     pub born: Timestamp,
     pub published: Timestamp,
-    pub bytes: u64,
 }
 
 impl Generation {

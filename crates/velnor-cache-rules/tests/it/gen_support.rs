@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_cache_rules::{Event, GenKey, GenScope, Generation, Run, Sha, Timestamp};
+use velnor_cache_rules::{GenKey, GenScope, Generation, Head, Run, RunEvent, Sha, Timestamp};
 
 pub(crate) const DAY: u64 = 24 * 3600;
 pub(crate) const NOW: u64 = 100 * DAY;
@@ -45,25 +45,23 @@ pub(crate) fn generation(key: &GenKey, scope: GenScope, lock: &str, published: u
         lock: lock.to_owned(),
         born: Timestamp(published),
         published: Timestamp(published),
-        bytes: 1,
     }
 }
 
-pub(crate) fn run(event: Event, n: u8) -> Run {
+pub(crate) fn run(event: RunEvent, n: u8) -> Run {
     Run {
         event,
         default_branch: "main".to_owned(),
         sha: sha(n),
         run_id: 900,
         attempt: 2,
-        same_repository: true,
         protected_ref: true,
     }
 }
 
 pub(crate) fn push(branch: &str, n: u8) -> Run {
     run(
-        Event::Push {
+        RunEvent::Push {
             branch: branch.to_owned(),
         },
         n,
@@ -72,9 +70,10 @@ pub(crate) fn push(branch: &str, n: u8) -> Run {
 
 pub(crate) fn pull(number: u64, n: u8) -> Run {
     run(
-        Event::PullRequest {
+        RunEvent::PullRequest {
             number,
             base_branch: "main".to_owned(),
+            head: Head::SameRepository,
         },
         n,
     )
@@ -82,8 +81,19 @@ pub(crate) fn pull(number: u64, n: u8) -> Run {
 
 pub(crate) fn queue(n: u8) -> Run {
     run(
-        Event::MergeGroup {
+        RunEvent::MergeGroup {
             queue_branch: "gh-readonly-queue/main/pr-7".to_owned(),
+        },
+        n,
+    )
+}
+
+pub(crate) fn fork(number: u64, n: u8) -> Run {
+    run(
+        RunEvent::PullRequest {
+            number,
+            base_branch: "main".to_owned(),
+            head: Head::Fork,
         },
         n,
     )

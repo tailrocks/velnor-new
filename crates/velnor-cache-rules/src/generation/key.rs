@@ -15,7 +15,10 @@ impl fmt::Display for GenerationError {
         match self {
             Self::BadSha(text) => write!(f, "not a 40-hex commit sha: {text:?}"),
             Self::BadSlug(text) => write!(f, "not a job or root slug: {text:?}"),
-            Self::BadCompat(text) => write!(f, "not a compat digest of 16+ hex digits: {text:?}"),
+            Self::BadCompat(text) => write!(
+                f,
+                "not a compat digest of exactly 16 lowercase hex digits: {text:?}"
+            ),
         }
     }
 }
@@ -67,13 +70,14 @@ impl GenKey {
                 return Err(GenerationError::BadSlug(slug.to_owned()));
             }
         }
-        match compat.get(..COMPAT_DIGITS) {
-            Some(digits) if is_lower_hex(digits) => Ok(Self {
+        if compat.len() == COMPAT_DIGITS && is_lower_hex(compat) {
+            Ok(Self {
                 job: job.to_owned(),
                 root: root.to_owned(),
-                compat: digits.to_owned(),
-            }),
-            _ => Err(GenerationError::BadCompat(compat.to_owned())),
+                compat: compat.to_owned(),
+            })
+        } else {
+            Err(GenerationError::BadCompat(compat.to_owned()))
         }
     }
 

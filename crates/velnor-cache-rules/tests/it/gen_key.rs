@@ -7,7 +7,7 @@ use crate::gen_support::{key, sha};
 
 #[test]
 fn generation_key_names_job_root_and_sixteen_compat_digits() {
-    let named = key("rust", "root", "0123456789abcdef0123");
+    let named = key("rust", "root", "0123456789abcdef");
     assert_eq!(named.dir_name(), "rust.root-0123456789abcdef");
 }
 
@@ -34,6 +34,8 @@ fn generation_key_rejects_names_that_would_leave_their_directory() {
         ("rust", "root", "0123456789abcde"),
         ("rust", "root", "0123456789abcdeg"),
         ("rust", "root", "0123456789ABCDEF"),
+        ("rust", "root", "0123456789abcdef0"),
+        ("rust", "root", "0123456789abcdefNOT_HEX"),
     ] {
         assert!(
             GenKey::new(job, root, compat).is_err(),
