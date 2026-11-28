@@ -33,7 +33,6 @@ fn zero(sha: &str) -> bool {
     sha.bytes().all(|byte| byte == b'0')
 }
 
-/// Never fails: whatever it cannot establish is `Unknown`, which means "run everything".
 #[must_use]
 pub fn lock_change(github: &impl GitHub, repo: &Repo, before: &str, sha: &str) -> LockChange {
     if !commit(before) || zero(before) {
