@@ -55,10 +55,10 @@ pub(super) struct Job {
 
 #[derive(Serialize, Clone)]
 pub(super) struct Context {
-    event: &'static str,
-    branch_filters: Vec<String>,
+    pub(super) event: &'static str,
+    pub(super) branch_filters: Vec<String>,
     tag_filters: Vec<String>,
-    pull_request_base_branches: Vec<String>,
+    pub(super) pull_request_base_branches: Vec<String>,
 }
 
 impl Context {

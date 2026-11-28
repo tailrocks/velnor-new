@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use crate::error::HostError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use velnor_model::JobAuthorityLimit as Limit;
 
 use super::{ConnectionId, PullRequestRule, WorkflowEvent};
 pub(crate) use schema_probe::{
@@ -30,16 +31,18 @@ pub(crate) struct JobAuthorityLookup<'a> {
 
 const POLICY_SCHEMA: u32 = 2;
 const MAX_POLICIES: usize = 32;
-const MAX_WORKFLOWS: usize = velnor_model::JOB_AUTHORITY_MAX_WORKFLOWS;
-const MAX_JOBS: usize = velnor_model::JOB_AUTHORITY_MAX_JOBS;
-const MAX_CALLS: usize = 64;
-const MAX_CONTEXTS: usize = 6;
-const MAX_REFS: usize = 128;
-const MAX_SECRETS: usize = 128;
-const MAX_ENVIRONMENTS: usize = 32;
-const MAX_NEEDS: usize = 256;
-const MAX_TEXT_BYTES: usize = 512;
-const MAX_POLICY_BYTES: usize = 256 * 1024;
+const MAX_WORKFLOWS: usize = Limit::Workflows.max();
+const MAX_JOBS: usize = Limit::Jobs.max();
+const MAX_CALLS: usize = Limit::Calls.max();
+const MAX_CONTEXTS: usize = Limit::Contexts.max();
+const MAX_REFS: usize = Limit::Refs.max();
+const MAX_SECRETS: usize = Limit::Secrets.max();
+const MAX_ENVIRONMENTS: usize = Limit::Environments.max();
+const MAX_NEEDS: usize = Limit::Needs.max();
+const MAX_TEXT_BYTES: usize = Limit::TextBytes.max();
+const MAX_JOB_KEY_BYTES: usize = Limit::JobKeyBytes.max();
+const MAX_ENVIRONMENT_BYTES: usize = Limit::EnvironmentBytes.max();
+const MAX_POLICY_BYTES: usize = Limit::PolicyBytes.max();
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

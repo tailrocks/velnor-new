@@ -10,7 +10,7 @@ use velnor_gen::{
     GenerateError, JobAuthorityError, expected_with_notes, generated_with_notes, io::view_of,
     job_authority_identity,
 };
-use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoPath, RepoView};
+use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, JobAuthorityLimit, Platform, RepoPath, RepoView};
 use velnor_rust::{LOCK_PATH, RunningGenerator};
 
 use super::job_authority_inventory::{CI, GATED, HELPER, enabled, pinned};
@@ -134,9 +134,10 @@ fn more_workflows_than_the_host_accepts_are_refused_and_the_limit_itself_is_not(
     let over = expected_with_notes(&listed(33)?).err().ok_or("accepted")?;
     assert!(matches!(
         over,
-        GenerateError::JobAuthority(JobAuthorityError::TooManyWorkflows {
+        GenerateError::JobAuthority(JobAuthorityError::OverLimit {
+            limit: JobAuthorityLimit::Workflows,
             listed: 33,
-            limit: 32
+            ..
         })
     ));
     let at = expected_with_notes(&listed(32)?).err().ok_or("accepted")?;
@@ -160,14 +161,14 @@ fn jobs_listed(count: usize) -> Result<RepoView, Box<dyn Error>> {
 
 #[test]
 fn more_jobs_than_the_host_accepts_are_refused_and_the_limit_itself_is_not() -> TestResult {
-    let limit = velnor_model::JOB_AUTHORITY_MAX_JOBS;
+    let limit = JobAuthorityLimit::Jobs.max();
     let over = expected_with_notes(&jobs_listed(limit + 1)?)
         .err()
         .ok_or("accepted")?;
     assert!(matches!(
         over,
-        GenerateError::JobAuthority(JobAuthorityError::TooManyJobs { listed, limit: max })
-            if listed == limit + 1 && max == limit
+        GenerateError::JobAuthority(JobAuthorityError::OverLimit { limit: JobAuthorityLimit::Jobs, listed, .. })
+            if listed == limit + 1
     ));
     let (files, _) = expected_with_notes(&jobs_listed(limit)?)?;
     assert!(files.contains_key(&JOB_AUTHORITY_INVENTORY_PATH));
@@ -185,9 +186,7 @@ fn tracked(fixture: &Fixture) -> Result<BTreeSet<RepoPath>, Box<dyn Error>> {
         .collect()
 }
 
-#[test]
-fn check_of_an_unstamped_build_passes_on_a_correct_tree() -> TestResult {
-    let fixture = fixture()?;
+pub(super) fn written_tree(fixture: &Fixture) -> TestResult {
     fixture.write(
         ".velnor/job-authority.toml",
         "workflows = [\".github/workflows/ci.yml\"]\n",
@@ -204,7 +203,7 @@ fn check_of_an_unstamped_build_passes_on_a_correct_tree() -> TestResult {
     std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755))?;
     let (view, _) = view_of(
         &fixture.repo(),
-        tracked(&fixture)?,
+        tracked(fixture)?,
         BTreeSet::new(),
         BTreeSet::new(),
         false,
@@ -220,7 +219,27 @@ fn check_of_an_unstamped_build_passes_on_a_correct_tree() -> TestResult {
         fixture.write(path.as_str(), content)?;
     }
     git(&fixture.repo(), &["add", "--all"])?;
+    Ok(())
+}
+
+#[test]
+fn check_of_an_unstamped_build_passes_on_a_correct_tree_and_fails_on_a_changed_inventory()
+-> TestResult {
+    let fixture = fixture()?;
+    written_tree(&fixture)?;
     let output = fixture.velnor_gen("check")?;
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let inventory = fixture.read(JOB_AUTHORITY_INVENTORY_PATH.as_str())?;
+    let tampered = inventory.replacen("\"verification\"", "\"publication\"", 1);
+    assert_ne!(tampered, inventory);
+    fixture.write(JOB_AUTHORITY_INVENTORY_PATH.as_str(), &tampered)?;
+    git(&fixture.repo(), &["add", "--all"])?;
+    let output = fixture.velnor_gen("check")?;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains(JOB_AUTHORITY_INVENTORY_PATH.as_str()),
+        "{stderr}"
+    );
     Ok(())
 }

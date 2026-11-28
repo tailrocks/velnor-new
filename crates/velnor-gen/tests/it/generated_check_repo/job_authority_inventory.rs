@@ -181,7 +181,7 @@ fn check_tracks_the_committed_inventory_byte_for_byte() -> TestResult {
 }
 
 #[test]
-fn the_inventory_hashes_the_committed_bytes_of_a_crlf_workflow() -> TestResult {
+fn the_inventory_hashes_the_stored_bytes_of_a_workflow_that_git_keeps_as_crlf() -> TestResult {
     let view = enabled("full_run = \"off\"\n", None, &[CI])?;
     let (files, _) = generated(&view)?;
     let lf = &files[&RepoPath::new(CI)?];

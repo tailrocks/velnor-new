@@ -5,12 +5,13 @@ mod config;
 mod error;
 mod inventory;
 mod jobs;
+mod limits;
 mod triggers;
 
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    HelperRelease, JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, JOB_AUTHORITY_MAX_JOBS,
+    HelperRelease, JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_INVENTORY_PATH, JobAuthorityLimit,
     Platform, RepoFacts, RepoPath, RepoView,
 };
 use velnor_render::lf_normalized;
@@ -84,6 +85,10 @@ fn written_by(
     })
 }
 
+pub fn workflows(view: &RepoView) -> Result<Option<Vec<RepoPath>>, JobAuthorityError> {
+    config::workflows(view)
+}
+
 pub(crate) fn emit(
     view: &RepoView,
     facts: &RepoFacts,
@@ -110,12 +115,11 @@ pub(crate) fn emit(
         workflows.push(Workflow::new(&path, committed, jobs));
     }
     let listed: usize = workflows.iter().map(Workflow::job_count).sum();
-    if listed > JOB_AUTHORITY_MAX_JOBS {
-        return Err(JobAuthorityError::TooManyJobs {
-            listed,
-            limit: JOB_AUTHORITY_MAX_JOBS,
-        });
-    }
+    limits::within(
+        JobAuthorityLimit::Jobs,
+        || format!("the workflows listed in {JOB_AUTHORITY_CONFIG_PATH}"),
+        listed,
+    )?;
     let inventory = Inventory::new(source_sha, workflows)?;
     files.insert(JOB_AUTHORITY_INVENTORY_PATH, inventory.render()?);
     Ok(notes)

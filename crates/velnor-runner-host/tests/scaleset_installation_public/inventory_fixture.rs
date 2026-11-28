@@ -17,27 +17,27 @@ pub(crate) struct TestInventoryContext {
 }
 
 #[derive(Serialize)]
-struct TestInventoryJob {
-    root_path: String,
-    workflow_path: String,
-    job_key: String,
+pub(super) struct TestInventoryJob {
+    pub(super) root_path: String,
+    pub(super) workflow_path: String,
+    pub(super) job_key: String,
     role: &'static str,
-    contexts: Vec<TestInventoryContext>,
+    pub(super) contexts: Vec<TestInventoryContext>,
     permissions_declared: bool,
     permissions: std::collections::BTreeMap<&'static str, &'static str>,
     secrets: Vec<&'static str>,
     environments: Vec<&'static str>,
     condition_sha256: Option<&'static str>,
     concurrency: Option<&'static str>,
-    needs: Vec<&'static str>,
+    pub(super) needs: Vec<String>,
 }
 
 #[derive(Serialize)]
-struct TestInventoryWorkflow {
-    path: String,
+pub(super) struct TestInventoryWorkflow {
+    pub(super) path: String,
     content_sha256: String,
     calls: Vec<&'static str>,
-    jobs: Vec<TestInventoryJob>,
+    pub(super) jobs: Vec<TestInventoryJob>,
 }
 
 #[derive(Serialize)]
@@ -65,7 +65,16 @@ pub(super) fn inventory_json_of(
     count: usize,
     job_total: usize,
 ) -> TestResult<String> {
-    let workflows: Vec<TestInventoryWorkflow> = (0..count)
+    inventory_json_from(&workflows_of(contexts, permissions, count, job_total))
+}
+
+pub(super) fn workflows_of(
+    contexts: &[TestInventoryContext],
+    permissions: &BTreeMap<&'static str, &'static str>,
+    count: usize,
+    job_total: usize,
+) -> Vec<TestInventoryWorkflow> {
+    (0..count)
         .map(|index| {
             let path = if index == 0 {
                 ".github/workflows/ci.yml".to_owned()
@@ -99,17 +108,20 @@ pub(super) fn inventory_json_of(
                     .collect(),
             }
         })
-        .collect();
+        .collect()
+}
+
+pub(super) fn inventory_json_from(workflows: &[TestInventoryWorkflow]) -> TestResult<String> {
     let content = TestInventoryContent {
         schema_version: 1,
         generator_source_sha: SOURCE_SHA,
-        workflows: &workflows,
+        workflows,
     };
     let inventory_sha256 = hex_sha256(&serde_json::to_vec(&content)?);
     Ok(serde_json::to_string(&TestInventoryEnvelope {
         schema_version: 1,
         generator_source_sha: SOURCE_SHA,
         inventory_sha256,
-        workflows: &workflows,
+        workflows,
     })?)
 }

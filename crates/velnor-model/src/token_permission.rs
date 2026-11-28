@@ -71,6 +71,34 @@ mod tests {
     }
 
     #[test]
+    fn the_scope_names_are_the_ones_github_documents() {
+        let documented = [
+            "actions",
+            "artifact-metadata",
+            "attestations",
+            "checks",
+            "code-quality",
+            "contents",
+            "copilot-requests",
+            "deployments",
+            "discussions",
+            "id-token",
+            "issues",
+            "models",
+            "packages",
+            "pages",
+            "pull-requests",
+            "security-events",
+            "statuses",
+            "vulnerability-alerts",
+        ];
+        assert_eq!(
+            super::token_permission_scopes().collect::<Vec<_>>(),
+            documented
+        );
+    }
+
+    #[test]
     fn the_new_scopes_take_only_the_access_github_documents() {
         let take = |scope| token_permission_accesses(scope).map(<[&str]>::to_vec);
         assert_eq!(take("models"), Some(vec!["read", "none"]));

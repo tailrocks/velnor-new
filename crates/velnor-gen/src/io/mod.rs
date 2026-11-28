@@ -23,11 +23,15 @@ mod read;
 mod recorded;
 mod ruleset;
 mod sample;
+mod stored;
 mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{Drift, JobAuthorityIdentity, check_tag, job_authority_identity, notes, plan_generate};
+use crate::{
+    Drift, JobAuthorityIdentity, check_tag, job_authority_identity, job_authority_workflows, notes,
+    plan_generate,
+};
 pub use check::{Cargo, check_metadata};
 pub use error::Error;
 use pin::{check_lock, pin_helper, with_running};
@@ -39,6 +43,7 @@ pub use sample::{
     Recording, SAMPLE_REPOSITORY, SampleWriteOutcome, record_sample, recorded_files, recording_of,
     relocate_metadata, write_sample,
 };
+use stored::stored_bytes;
 use tracked::tracked_sizes;
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
@@ -177,9 +182,12 @@ fn execute(cli: &Cli) -> Result<(Vec<Drift>, Option<JobAuthorityIdentity>), Erro
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
     wanted.push(JOB_AUTHORITY_INVENTORY_PATH);
-    let workflows = read_files(&root, &wanted)?;
+    let mut workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
     let view = read_view(&root, false, None)?.0;
+    if let Ok(Some(listed)) = job_authority_workflows(&view) {
+        stored_bytes(&root, &mut workflows, &listed)?;
+    }
     let (expected, drifts) =
         plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
             .map_err(Error::Generate)?;

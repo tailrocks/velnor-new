@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::{ApprovedJobAuthorityPolicy, ConcurrencyControl, MAX_TEXT_BYTES};
+use super::super::{
+    ApprovedJobAuthorityPolicy, ConcurrencyControl, MAX_ENVIRONMENT_BYTES, MAX_JOB_KEY_BYTES,
+    MAX_TEXT_BYTES,
+};
 use crate::config::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
 use crate::error::HostError;
 
@@ -98,7 +101,7 @@ pub(super) fn valid_workflow_path(value: &str) -> bool {
 
 pub(super) fn valid_job_key(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 100
+        && value.len() <= MAX_JOB_KEY_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
@@ -114,7 +117,7 @@ pub(super) fn valid_identifier(value: &str) -> bool {
 
 pub(super) fn valid_environment(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 255
+        && value.len() <= MAX_ENVIRONMENT_BYTES
         && !value.contains("${{")
         && !value.chars().any(char::is_control)
 }

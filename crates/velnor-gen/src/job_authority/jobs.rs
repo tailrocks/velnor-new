@@ -7,7 +7,7 @@ use serde_json::Value;
 use velnor_model::RepoPath;
 use velnor_workflows::reads_secret_in_value;
 
-use super::{JobAuthorityError, inventory::Job, triggers};
+use super::{JobAuthorityError, inventory::Job, limits, triggers};
 use crate::workflow_triggers::parse_workflow;
 
 pub(super) fn inventory_jobs(
@@ -21,6 +21,7 @@ pub(super) fn inventory_jobs(
         .get("on")
         .ok_or_else(|| fail("has no `on` key".to_owned()))?;
     let contexts = triggers::contexts(on, default_branch).map_err(&fail)?;
+    limits::workflow(path, &contexts)?;
     let declared = jobs_of(&document).map_err(&fail)?;
     let workflow_permissions = document.get("permissions");
     let workflow_reads_secret = document.get("env").is_some_and(reads_secret_in_value);
@@ -37,6 +38,8 @@ pub(super) fn inventory_jobs(
         if job.get("uses").is_some() {
             return Err(fail(format!("job {key} calls a reusable workflow")));
         }
+        let needs = needs_of(job);
+        limits::job(path, key, &needs)?;
         let permissions = permissions_of(job.get("permissions").or(workflow_permissions))
             .map_err(|reason| fail(format!("job {key}: {reason}")))?;
         if workflow_reads_secret || needs_publication_authority(job, &permissions) {
@@ -45,13 +48,7 @@ pub(super) fn inventory_jobs(
             ));
             continue;
         }
-        jobs.push(Job::verification(
-            path,
-            key,
-            &contexts,
-            permissions,
-            needs_of(job),
-        ));
+        jobs.push(Job::verification(path, key, &contexts, permissions, needs));
     }
     Ok((jobs, omitted))
 }

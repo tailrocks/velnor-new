@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, RepoPath};
+use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, JobAuthorityLimit, RepoPath};
 use velnor_rust::LockError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,9 +14,15 @@ pub enum JobAuthorityError {
     NoDigest,
     NotLinux(Option<&'static str>),
     Lock(LockError),
-    TooManyWorkflows { listed: usize, limit: usize },
-    TooManyJobs { listed: usize, limit: usize },
-    CommitMismatch { running: String, pinned: String },
+    OverLimit {
+        limit: JobAuthorityLimit,
+        at: String,
+        listed: usize,
+    },
+    CommitMismatch {
+        running: String,
+        pinned: String,
+    },
     Workflow(RepoPath, String),
     Render(String),
 }
@@ -46,13 +52,11 @@ impl fmt::Display for JobAuthorityError {
                 f,
                 "this velnor-gen is not the binary .velnor/rust-ci.lock pins: {error}"
             ),
-            Self::TooManyWorkflows { listed, limit } => write!(
+            Self::OverLimit { limit, at, listed } => write!(
                 f,
-                "{JOB_AUTHORITY_CONFIG_PATH} lists {listed} workflows, but velnor-host accepts at most {limit}"
-            ),
-            Self::TooManyJobs { listed, limit } => write!(
-                f,
-                "the listed workflows hold {listed} jobs, but velnor-host accepts at most {limit} in the job-authority inventory"
+                "{at} has {listed} {}, but velnor-host accepts at most {}",
+                limit.counts(),
+                limit.max()
             ),
             Self::CommitMismatch { running, pinned } => write!(
                 f,

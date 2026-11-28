@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
+use velnor_model::JobAuthorityLimit;
 
 use super::inventory::Context;
 
 const EVENTS: [&str; 3] = ["pull_request", "push", "merge_group"];
+const _: () = assert!(EVENTS.len() <= JobAuthorityLimit::Contexts.max());
 const UNCOVERED: [&str; 2] = ["schedule", "workflow_dispatch"];
 
 static NO_CONFIG: Value = Value::Null;

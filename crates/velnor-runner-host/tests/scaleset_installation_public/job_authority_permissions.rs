@@ -33,17 +33,20 @@ fn policy(permission: &'static str) -> Result<String, HostError> {
 #[test]
 fn the_host_admits_exactly_the_scopes_velnor_model_lists() -> TestResult<()> {
     for scope in velnor_model::token_permission_scopes() {
-        policy(scope)?;
+        policy(scope).map_err(|error| format!("the host refused the scope {scope}: {error:?}"))?;
     }
     for scope in ["repository-projects", "no-such-permission"] {
-        assert!(matches!(policy(scope), Err(HostError::Config)), "{scope}");
+        assert!(
+            matches!(policy(scope), Err(HostError::Config)),
+            "the host admitted {scope}, which GitHub does not document"
+        );
     }
     Ok(())
 }
 
 #[test]
 fn the_host_workflow_limit_is_the_one_the_generator_applies() -> TestResult<()> {
-    let limit = velnor_model::JOB_AUTHORITY_MAX_WORKFLOWS;
+    let limit = velnor_model::JobAuthorityLimit::Workflows.max();
     policy_of("contents", limit, limit)?;
     assert!(matches!(
         policy_of("contents", limit + 1, limit + 1),
@@ -54,7 +57,7 @@ fn the_host_workflow_limit_is_the_one_the_generator_applies() -> TestResult<()> 
 
 #[test]
 fn the_host_job_limit_is_the_one_the_generator_applies() -> TestResult<()> {
-    let limit = velnor_model::JOB_AUTHORITY_MAX_JOBS;
+    let limit = velnor_model::JobAuthorityLimit::Jobs.max();
     policy_of("contents", 2, limit)?;
     assert!(matches!(
         policy_of("contents", 2, limit + 1),

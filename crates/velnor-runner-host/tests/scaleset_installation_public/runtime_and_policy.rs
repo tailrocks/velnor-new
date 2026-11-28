@@ -3,6 +3,8 @@
 
 #[path = "inventory_fixture.rs"]
 mod inventory_fixture;
+#[path = "job_authority_limits.rs"]
+mod job_authority_limits;
 #[path = "job_authority_permissions.rs"]
 mod job_authority_permissions;
 #[path = "offer_and_assigned.rs"]
