@@ -185,3 +185,34 @@ fn with_twin_leaves_the_twin_without_a_command_when_the_run_cannot_be_split()
     assert_eq!(steps[0].run.as_deref(), Some("cargo nextest run --no-run"));
     Ok(())
 }
+
+#[test]
+fn a_run_the_word_splitter_cannot_parse_is_refused() -> Result<(), Box<dyn std::error::Error>> {
+    let body = RenderedStep {
+        name: "Test".to_owned(),
+        run: Some("cargo nextest run -E 'unbalanced".to_owned()),
+        ..RenderedStep::default()
+    };
+    let job = RenderedJob {
+        id: "rust-root".to_owned(),
+        steps: with_twin(&test_step()?, body),
+        ..RenderedJob::default()
+    };
+    let refused: Vec<(usize, Rule)> = check_rules(&RenderedWorkflow { jobs: vec![job] })
+        .err()
+        .into_iter()
+        .flatten()
+        .map(|violation| (violation.step, violation.rule))
+        .collect();
+    assert_eq!(
+        refused,
+        [
+            (0, Rule::NotExactlyOneOfRunAndUses),
+            (
+                0,
+                Rule::BuildOnlyTwinUnparsable("Test (build only)".to_owned())
+            ),
+        ]
+    );
+    Ok(())
+}
