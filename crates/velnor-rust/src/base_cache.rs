@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, JobId,
-    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
-    RootSlug, RustRoot, Step, StepKind, When,
+    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, HelperRelease, Host,
+    InputsCli, JobId, LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict,
+    RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::lane::Lane;
@@ -197,10 +197,11 @@ fn sources_fetches(facts: &RepoFacts, lane: &RootSlug) -> Vec<Step> {
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
+    saving_helper(facts.helper.as_ref())
+}
+
+pub(crate) fn saving_helper(helper: Option<&HelperRelease>) -> bool {
+    helper.is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
 }
 
 pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {

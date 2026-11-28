@@ -5,6 +5,7 @@ use std::fs;
 
 use crate::io::Repo;
 
+use super::own_units::link_builds;
 use super::{
     audit, own_units, path_dependency_units, root_package_with_path_dependencies, unit,
     workspace_below_the_root,
@@ -18,7 +19,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
     unit(
         &repo,
         &format!("{target}/deps/app-0000000000000001.d"),
-        "out.d: app/src/lib.rs app/data.txt app/src/../../../shared/greeting.txt /elsewhere/src/lib.rs target/debug/build/lib-0000000000000005/out/gen.rs\n",
+        "out.d: app/src/lib.rs app/data.txt app/src/../../../shared/greeting.txt target/debug/build/lib-0000000000000005/out/gen.rs\n",
     );
     unit(
         &repo,
@@ -29,6 +30,21 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &repo,
         &format!("{target}/deps/it-0000000000000003.d"),
         "out.d: lib/tests/it.rs lib/tests/../../../shared/lib-test.txt\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/app-0000000000000001/lib-app"),
+        "",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/app-0000000000000002/test-integration-test-it"),
+        "",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/lib-0000000000000003/test-integration-test-it"),
+        "",
     );
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let root = root.display();
@@ -57,6 +73,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/build/app-000000000000000c/output"),
         "cargo:rerun-if-changed=../../shared/app-build.txt\n",
     );
+    link_builds(&repo, target);
     super::inventory::build(
         &repo,
         &format!("{target}/build/lib-0000000000000005/output"),
@@ -168,6 +185,7 @@ fn a_target_directory_that_contains_tracked_inputs_is_refused() {
         &format!("{target}/build/lib-0000000000000004/output"),
         "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
     );
+    link_builds(&repo, target);
     let output = audit(&repo, &["--write"]);
     assert!(!output.status.success(), "{output:?}");
     assert!(
@@ -186,6 +204,11 @@ fn a_built_target_that_needs_features_still_credits_its_reads() {
         &repo,
         &format!("{target}/deps/extra-f00000000000000e.d"),
         "out.d: app/src/extra.rs app/src/../../../shared/greeting.txt\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/extra-f00000000000000e/lib-extra"),
+        "",
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");

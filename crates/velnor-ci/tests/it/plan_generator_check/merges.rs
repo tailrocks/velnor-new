@@ -248,3 +248,26 @@ fn an_in_place_edit_of_a_program_the_cargo_config_names_runs_the_generated_check
     });
     assert_eq!(decision(&control), "skip");
 }
+
+#[test]
+fn a_package_level_dot_line_for_a_closure_crate_runs_the_generated_check() {
+    let lock = |extra: &str| {
+        format!(
+            "docs/note.md\tengine\tcrates/engine/Cargo.toml\nshared/borrowed.rs\tengine\tcrates/engine/Cargo.toml\n{extra}"
+        )
+    };
+    let edit = |repo: &Repo| repo.write("docs/goals.md", "goals\nmore\n");
+    let plain = world_over("gc-dot-without", FLAT, PINNED, |repo| {
+        repo.write_unstaged(".velnor/rust-inputs.lock", &lock(""));
+    });
+    merge(&plain, edit);
+    assert_eq!(decision(&plain), "skip");
+    let dotted = world_over("gc-dot-line", FLAT, PINNED, |repo| {
+        repo.write_unstaged(
+            ".velnor/rust-inputs.lock",
+            &lock(".\tengine\tcrates/engine/Cargo.toml\n"),
+        );
+    });
+    merge(&dotted, edit);
+    assert_eq!(decision(&dotted), "run");
+}

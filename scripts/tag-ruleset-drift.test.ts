@@ -22,9 +22,10 @@ const steps = array(drift.steps).map(object);
 const checkout = steps[0], step = steps[1];
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
+const owner = { actor_id: 139017, actor_type: "User", bypass_mode: "always" };
 const releaseRefs = ["refs/tags/rust-ci-v*", "refs/tags/velnor-ci-v*", "refs/tags/velnor-gen-v*"] satisfies [string, string, string];
 const toolsRef = "refs/tags/tools-v*";
-const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", conditions: { ref_name: { include: [...releaseRefs], exclude: [] } }, rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
+const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", conditions: { ref_name: { include: [...releaseRefs], exclude: [] } }, rules: [{ type: "creation" }], bypass_actors: [{ ...actor }, { ...owner }] });
 type Scenario = { rulesets?: Ruleset[]; token?: string; failure?: "" | "list" | "detail" };
 async function run({ rulesets = [baseline(), release()], token = "admin-read-token", failure = "" }: Scenario = {}) {
   const detailed: number[] = [];
@@ -51,7 +52,7 @@ async function run({ rulesets = [baseline(), release()], token = "admin-read-tok
   await checkTagRulesets({ context: { repo: { owner: "tailrocks", repo: "velnor-new" } }, process: { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } }, getOctokit });
   return detailed;
 }
-test("the recorded protection and pinned release app prove the expected tag policy", async () => {
+test("the recorded protection, the pinned release app and the owner prove the expected tag policy", async () => {
   expect(await run()).toEqual([recorded.id, recorded.id + 1]);
   const transition = release();
   transition.conditions.ref_name.include.push(toolsRef);
@@ -91,12 +92,20 @@ test("an unreadable bypass list cannot prove tag immutability", async () => {
   await expect(run({ rulesets: [rule, release()] })).rejects.toThrow("bypass_actors unreadable");
 });
 test.each([
-  ["an extra owner", [actor, { actor_id: 139017, actor_type: "User", bypass_mode: "always" }]],
-  ["a duplicate release app", [actor, actor]],
-  ["a missing release app", []],
-  ["a wrong app ID", [{ ...actor, actor_id: 139017 }]],
-  ["a wrong actor type", [{ ...actor, actor_type: "User" }]],
-  ["a wrong bypass mode", [{ ...actor, bypass_mode: "pull_request" }]],
+  ["the release app alone", [actor]],
+  ["the owner alone", [owner]],
+  ["a duplicate release app hiding the missing owner", [actor, actor]],
+  ["a duplicate owner hiding the missing release app", [owner, owner]],
+  ["a third actor", [actor, owner, { actor_id: 1, actor_type: "User", bypass_mode: "always" }]],
+  ["a third actor of the owner kind", [actor, owner, { ...owner, bypass_mode: "pull_request" }]],
+  ["a repository role instead of the owner", [actor, { actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }]],
+  ["a wrong owner ID", [actor, { ...owner, actor_id: 1 }]],
+  ["the owner as an Integration", [actor, { ...owner, actor_type: "Integration" }]],
+  ["the owner limited to pull requests", [actor, { ...owner, bypass_mode: "pull_request" }]],
+  ["no bypass actors", []],
+  ["a wrong app ID", [{ ...actor, actor_id: 1 }, owner]],
+  ["a wrong release app actor type", [{ ...actor, actor_type: "User" }, owner]],
+  ["a wrong release app bypass mode", [{ ...actor, bypass_mode: "pull_request" }, owner]],
 ])("release-tags rejects %s", async (_name, actors) => {
   await expect(run({ rulesets: [baseline(), { ...release(), bypass_actors: actors }] })).rejects.toThrow("release-tags: tag immutability bypass actors detected");
 });

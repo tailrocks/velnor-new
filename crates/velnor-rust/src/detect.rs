@@ -135,7 +135,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             });
         }
     }
-    let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots)?;
+    let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots, &config)?;
     let inputs_lock_identified = view
         .files
         .get(&INPUTS_LOCK)
