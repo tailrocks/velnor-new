@@ -88,7 +88,7 @@ fn pull_request_source_json(
 }
 
 fn repository_policy(connection: &RepositoryConnection) -> TestResult<ApprovedJobAuthorityPolicy> {
-    let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+    let inventory = inventory_json_for_contexts(&[TestInventoryContext {
         event: "pull_request",
         branch_filters: Vec::new(),
         tag_filters: Vec::new(),
@@ -218,7 +218,7 @@ fn public_branch_restricted_connection_refuses_a_rule_free_pull_request_context(
     let config = HostConfig::parse_draft(&host_toml(BRANCH_POLICY_TOML))?;
     let id = ConnectionId::parse("lab")?;
     let connection = config.connection(&id).ok_or("connection lab")?;
-    let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+    let inventory = inventory_json_for_contexts(&[TestInventoryContext {
         event: "pull_request",
         branch_filters: Vec::new(),
         tag_filters: Vec::new(),
@@ -264,7 +264,7 @@ fn repository_config_and_policy() -> TestResult<(HostConfig, ConnectionId, Strin
     let config = HostConfig::parse_draft(&host_toml(REPOSITORY_POLICY_TOML))?;
     let id = ConnectionId::parse("lab")?;
     let connection = config.connection(&id).ok_or("connection lab")?;
-    let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+    let inventory = inventory_json_for_contexts(&[TestInventoryContext {
         event: "pull_request",
         branch_filters: Vec::new(),
         tag_filters: Vec::new(),

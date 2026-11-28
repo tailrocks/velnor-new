@@ -127,27 +127,7 @@ pub(super) fn unique_environments(values: &[String]) -> bool {
 }
 
 pub(super) fn valid_permission(value: &str) -> bool {
-    matches!(
-        value,
-        "actions"
-            | "artifact-metadata"
-            | "attestations"
-            | "checks"
-            | "code-quality"
-            | "contents"
-            | "deployments"
-            | "discussions"
-            | "id-token"
-            | "issues"
-            | "models"
-            | "packages"
-            | "pages"
-            | "pull-requests"
-            | "repository-projects"
-            | "security-events"
-            | "statuses"
-            | "vulnerability-alerts"
-    )
+    velnor_model::token_permission_accesses(value).is_some()
 }
 
 pub(super) fn valid_concurrency(value: &ConcurrencyControl) -> bool {

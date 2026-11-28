@@ -202,7 +202,7 @@ fn persisted_execution_source_json(
 fn public_persisted_execution_source_normalizes_merge_group_queue_ref_to_base_branch()
 -> TestResult<()> {
     let connection = sample_connection(vec![WorkflowEvent::MergeGroup], Vec::new())?;
-    let inventory_json = inventory_json_for_contexts(vec![TestInventoryContext {
+    let inventory_json = inventory_json_for_contexts(&[TestInventoryContext {
         event: "merge_group",
         branch_filters: vec!["main"],
         tag_filters: Vec::new(),
@@ -255,7 +255,7 @@ fn public_job_authority_policy_admits_release_and_workflow_dispatch_tags_under_s
         vec![WorkflowEvent::Release, WorkflowEvent::WorkflowDispatch],
         vec!["v".to_owned()],
     )?;
-    let valid_inventory = inventory_json_for_contexts(vec![
+    let valid_inventory = inventory_json_for_contexts(&[
         TestInventoryContext {
             event: "release",
             branch_filters: Vec::new(),
@@ -287,19 +287,18 @@ fn public_job_authority_policy_admits_release_and_workflow_dispatch_tags_under_s
         );
     }
 
-    let unmatched_tag_inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+    let unmatched_tag_inventory = inventory_json_for_contexts(&[TestInventoryContext {
         event: "workflow_dispatch",
         branch_filters: Vec::new(),
         tag_filters: vec!["other-1.0.0"],
         pull_request_base_branches: Vec::new(),
     }])?;
-    let release_with_branches_inventory =
-        inventory_json_for_contexts(vec![TestInventoryContext {
-            event: "release",
-            branch_filters: vec!["main"],
-            tag_filters: vec!["v1.2.3"],
-            pull_request_base_branches: Vec::new(),
-        }])?;
+    let release_with_branches_inventory = inventory_json_for_contexts(&[TestInventoryContext {
+        event: "release",
+        branch_filters: vec!["main"],
+        tag_filters: vec!["v1.2.3"],
+        pull_request_base_branches: Vec::new(),
+    }])?;
     for invalid_inventory in [&unmatched_tag_inventory, &release_with_branches_inventory] {
         assert!(matches!(
             build_job_authority_policy_json(

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::Value;
+
 use crate::expression::{is_secret, scan};
 
 #[must_use]
@@ -10,10 +12,22 @@ pub fn reads_secret_in_text(text: &str) -> bool {
 
 #[must_use]
 pub fn reads_secret_in_condition(text: &str) -> bool {
-    if text.contains("${{") {
-        reads_secret_in_text(text)
-    } else {
-        reads_secret(text)
+    reads_secret(&text.replace("${{", " ").replace("}}", " "))
+}
+
+#[must_use]
+pub fn reads_secret_in_value(value: &Value) -> bool {
+    match value {
+        Value::String(text) => reads_secret_in_text(text),
+        Value::Array(items) => items.iter().any(reads_secret_in_value),
+        Value::Object(map) => map.iter().any(|(key, value)| {
+            reads_secret_in_text(key)
+                || match value {
+                    Value::String(text) if key == "if" => reads_secret_in_condition(text),
+                    _ => reads_secret_in_value(value),
+                }
+        }),
+        _ => false,
     }
 }
 

@@ -83,14 +83,6 @@ fn written_by(
     })
 }
 
-pub fn inventory_summary(
-    path: &RepoPath,
-    text: &str,
-    default_branch: &str,
-) -> Result<(usize, Vec<String>), JobAuthorityError> {
-    jobs::inventory_jobs(path, text, default_branch).map(|(jobs, notes)| (jobs.len(), notes))
-}
-
 pub(crate) fn emit(
     view: &RepoView,
     facts: &RepoFacts,

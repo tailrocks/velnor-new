@@ -749,6 +749,14 @@
               ]
             },
             {
+              "name": "serde_json",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
+            },
+            {
               "name": "toml",
               "kind": "normal",
               "manifest": null
@@ -1896,6 +1904,11 @@
               ]
             },
             {
+              "name": "velnor-model",
+              "kind": "normal",
+              "manifest": "crates/velnor-model/Cargo.toml"
+            },
+            {
               "name": "velnor-resource-probe",
               "kind": "normal",
               "manifest": "crates/velnor-resource-probe/Cargo.toml"
@@ -2437,13 +2450,13 @@
     "crates/velnor-runner-cli/Cargo.toml": "1d69b372dc551524c8358efa05c0d35f9019d8a65785280a399e03b846eae595",
     "crates/velnor-runner-core/Cargo.toml": "840a5d400de507934a9977b52967e0e593e2e48ca5eadc248fae44cbca6f005e",
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
-    "crates/velnor-runner-host/Cargo.toml": "98e8d5b178f2fa7039a39c77edbd74c5c2f8be7390253dea1da6ec08f04b614b",
+    "crates/velnor-runner-host/Cargo.toml": "1c760cb53d983c8ce3206eacfee4c1c0f7b4a6621f6c2cbedfe855abb627bd5c",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
     "crates/velnor-runner/Cargo.toml": "50fb117a44114380598cc6f92ce159846ce4e7b81a8b2ddc12731fa67d923e5a",
     "crates/velnor-rust/Cargo.toml": "c9be26a0cb2e638e019b6660a3a1204aea86063f479c1ea015724dd6957ba5d8",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
-    "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
+    "crates/velnor-workflows/Cargo.toml": "bc00d8eb2af26ef6bfb8601e325ae837846d2711848cf1854e5b91cceb36b6de"
   },
   "layout": "6addfdb8dadc38d381e0874c81c97cb4afc0d24279ca25b111747b7c458b6324"
 }

@@ -42,5 +42,5 @@ pub use plan::{
     LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
     TrustedPool, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };
-pub use secret_reads::{reads_secret_in_condition, reads_secret_in_text};
+pub use secret_reads::{reads_secret_in_condition, reads_secret_in_text, reads_secret_in_value};
 pub use wrappers::{Invoked, invoked};

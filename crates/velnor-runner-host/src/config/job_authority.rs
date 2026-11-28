@@ -30,7 +30,7 @@ pub(crate) struct JobAuthorityLookup<'a> {
 
 const POLICY_SCHEMA: u32 = 2;
 const MAX_POLICIES: usize = 32;
-const MAX_WORKFLOWS: usize = 32;
+const MAX_WORKFLOWS: usize = velnor_model::JOB_AUTHORITY_MAX_WORKFLOWS;
 const MAX_JOBS: usize = 512;
 const MAX_CALLS: usize = 64;
 const MAX_CONTEXTS: usize = 6;

@@ -30,7 +30,6 @@ pub use helper_gate::require_compatible;
 pub use image_error::ImageError;
 pub use job_authority::{
     Identity as JobAuthorityIdentity, JobAuthorityError, identity_of as job_authority_identity,
-    inventory_summary as job_authority_summary,
 };
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use tag::check_tag;

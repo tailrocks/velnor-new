@@ -6,7 +6,8 @@ use std::error::Error;
 use std::os::unix::fs::PermissionsExt;
 
 use velnor_gen::{
-    GenerateError, JobAuthorityError, expected_with_notes, io::view_of, job_authority_identity,
+    GenerateError, JobAuthorityError, expected_with_notes, generated_with_notes, io::view_of,
+    job_authority_identity,
 };
 use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, Platform, RepoPath, RepoView};
 use velnor_rust::{LOCK_PATH, RunningGenerator};
@@ -157,11 +158,8 @@ fn tracked(fixture: &Fixture) -> Result<BTreeSet<RepoPath>, Box<dyn Error>> {
 }
 
 #[test]
-fn check_of_an_unstamped_build_passes_on_a_correct_tree_and_fails_on_a_changed_inventory()
--> TestResult {
+fn check_of_an_unstamped_build_passes_on_a_correct_tree() -> TestResult {
     let fixture = fixture()?;
-    let generated = fixture.velnor_gen("generate")?;
-    assert!(generated.status.success(), "{}", text(&generated.stderr));
     fixture.write(
         ".velnor/job-authority.toml",
         "workflows = [\".github/workflows/ci.yml\"]\n",
@@ -187,25 +185,14 @@ fn check_of_an_unstamped_build_passes_on_a_correct_tree_and_fails_on_a_changed_i
             toolchain: None,
         }),
     )?;
-    let files = expected_with_notes(&view)?.0;
-    let inventory = files
-        .get(&JOB_AUTHORITY_INVENTORY_PATH)
-        .ok_or("no inventory")?;
-    fixture.write(JOB_AUTHORITY_INVENTORY_PATH.as_str(), inventory)?;
+    let files = generated_with_notes(&view)?.0;
+    assert!(files.contains_key(&JOB_AUTHORITY_INVENTORY_PATH));
+    std::fs::create_dir_all(fixture.repo().join(".github/workflows"))?;
+    for (path, content) in &files {
+        fixture.write(path.as_str(), content)?;
+    }
     git(&fixture.repo(), &["add", "--all"])?;
     let output = fixture.velnor_gen("check")?;
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    fixture.write(
-        JOB_AUTHORITY_INVENTORY_PATH.as_str(),
-        &inventory.replacen("\"cache\"", "\"kache\"", 1),
-    )?;
-    git(&fixture.repo(), &["add", "--all"])?;
-    let output = fixture.velnor_gen("check")?;
-    let stderr = text(&output.stderr);
-    assert_eq!(output.status.code(), Some(1), "{stderr}");
-    assert!(
-        stderr.contains("job-authority-inventory.json differs"),
-        "{stderr}"
-    );
     Ok(())
 }

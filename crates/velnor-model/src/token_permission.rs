@@ -29,6 +29,10 @@ const TOKEN_PERMISSIONS: [(&str, &[&str]); 18] = [
     ("vulnerability-alerts", READ_NONE),
 ];
 
+pub fn token_permission_scopes() -> impl Iterator<Item = &'static str> {
+    TOKEN_PERMISSIONS.iter().map(|(name, _)| *name)
+}
+
 /// The access levels a `GITHUB_TOKEN` scope takes, or `None` for a name that is
 /// not a scope.
 #[must_use]

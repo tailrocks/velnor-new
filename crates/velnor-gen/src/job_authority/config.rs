@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, RepoPath, RepoView};
+use velnor_model::{JOB_AUTHORITY_CONFIG_PATH, JOB_AUTHORITY_MAX_WORKFLOWS, RepoPath, RepoView};
 
 use super::JobAuthorityError;
 
-const MAX_WORKFLOWS: usize = 32;
+const MAX_WORKFLOWS: usize = JOB_AUTHORITY_MAX_WORKFLOWS;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

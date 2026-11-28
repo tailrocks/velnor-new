@@ -18,8 +18,8 @@ pub(crate) struct TestInventoryContext {
 
 #[derive(Serialize)]
 struct TestInventoryJob {
-    root_path: &'static str,
-    workflow_path: &'static str,
+    root_path: String,
+    workflow_path: String,
     job_key: &'static str,
     role: &'static str,
     contexts: Vec<TestInventoryContext>,
@@ -34,7 +34,7 @@ struct TestInventoryJob {
 
 #[derive(Serialize)]
 struct TestInventoryWorkflow {
-    path: &'static str,
+    path: String,
     content_sha256: String,
     calls: Vec<&'static str>,
     jobs: Vec<TestInventoryJob>,
@@ -55,35 +55,43 @@ struct TestInventoryEnvelope<'a> {
     workflows: &'a [TestInventoryWorkflow],
 }
 
-pub(super) fn inventory_json_for_contexts(
-    contexts: Vec<TestInventoryContext>,
-) -> TestResult<String> {
-    inventory_json(contexts, BTreeMap::from([("contents", "read")]))
+pub(super) fn inventory_json_for_contexts(contexts: &[TestInventoryContext]) -> TestResult<String> {
+    inventory_json_of(contexts, &BTreeMap::from([("contents", "read")]), 1)
 }
 
-pub(super) fn inventory_json(
-    contexts: Vec<TestInventoryContext>,
-    permissions: BTreeMap<&'static str, &'static str>,
+pub(super) fn inventory_json_of(
+    contexts: &[TestInventoryContext],
+    permissions: &BTreeMap<&'static str, &'static str>,
+    count: usize,
 ) -> TestResult<String> {
-    let workflows = vec![TestInventoryWorkflow {
-        path: ".github/workflows/ci.yml",
-        content_sha256: "a".repeat(64),
-        calls: Vec::new(),
-        jobs: vec![TestInventoryJob {
-            root_path: ".github/workflows/ci.yml",
-            workflow_path: ".github/workflows/ci.yml",
-            job_key: "build",
-            role: "verification",
-            contexts,
-            permissions_declared: true,
-            permissions,
-            secrets: Vec::new(),
-            environments: Vec::new(),
-            condition_sha256: None,
-            concurrency: None,
-            needs: Vec::new(),
-        }],
-    }];
+    let workflows: Vec<TestInventoryWorkflow> = (0..count)
+        .map(|index| {
+            let path = if index == 0 {
+                ".github/workflows/ci.yml".to_owned()
+            } else {
+                format!(".github/workflows/w{index}.yml")
+            };
+            TestInventoryWorkflow {
+                path: path.clone(),
+                content_sha256: "a".repeat(64),
+                calls: Vec::new(),
+                jobs: vec![TestInventoryJob {
+                    root_path: path.clone(),
+                    workflow_path: path,
+                    job_key: "build",
+                    role: "verification",
+                    contexts: contexts.to_vec(),
+                    permissions_declared: true,
+                    permissions: permissions.clone(),
+                    secrets: Vec::new(),
+                    environments: Vec::new(),
+                    condition_sha256: None,
+                    concurrency: None,
+                    needs: Vec::new(),
+                }],
+            }
+        })
+        .collect();
     let content = TestInventoryContent {
         schema_version: 1,
         generator_source_sha: SOURCE_SHA,
