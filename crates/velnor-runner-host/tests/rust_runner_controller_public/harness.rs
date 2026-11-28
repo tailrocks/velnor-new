@@ -20,6 +20,7 @@ const FAKE_GITHUB: [&str; 6] = [
     "fake_github_queue.ts",
     "fake_github_shapes.ts",
 ];
+const FINISH_MARGIN: Duration = Duration::from_secs(15);
 pub(super) const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_CONTROLLER_CHILD";
 
 pub(super) struct World {
@@ -245,17 +246,19 @@ impl World {
         );
     }
 
-    pub(super) fn finish(&mut self, seconds: u64) -> TestResult<String> {
+    pub(super) fn finish(&mut self) -> TestResult<String> {
         let started = Instant::now();
         let mut child = self.child.take().ok_or("no controller child")?;
-        let deadline = started + Duration::from_secs(seconds);
+        let deadline = started + finish_budget();
         let status = loop {
             if let Some(status) = child.try_wait()? {
                 break status;
             }
             if Instant::now() > deadline {
                 self.child = Some(child);
-                return Err(format!("the controller did not exit within {seconds} s").into());
+                return Err(
+                    format!("the controller did not exit within {:?}", finish_budget()).into(),
+                );
             }
             std::thread::sleep(Duration::from_millis(50));
         };
@@ -383,4 +386,13 @@ impl Drop for World {
         );
         eprintln!("--- child stderr ---\n{}", self.child_stderr());
     }
+}
+
+fn finish_budget() -> Duration {
+    velnor_runner_host::CONTROLLER_STOP_BUDGET + FINISH_MARGIN
+}
+
+#[test]
+fn the_finish_budget_outlasts_the_controller_stop() {
+    assert!(finish_budget() > velnor_runner_host::CONTROLLER_STOP_BUDGET);
 }

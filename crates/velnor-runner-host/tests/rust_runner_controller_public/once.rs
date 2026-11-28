@@ -48,7 +48,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         })
     });
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_canaries(&world, first, second);
     Ok(())

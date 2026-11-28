@@ -85,7 +85,7 @@ pub(super) fn reopens_for_a_binary_replaced_while_the_failing_job_ran(
     world.release(&jit_name(fourth))?;
     proven(&world, fourth);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -117,7 +117,7 @@ pub(super) fn keeps_the_health_across_a_config_reload(test: &str) -> TestResult<
         "a config reload reset the runner health"
     );
     world.terminate()?;
-    assert_eq!(world.finish(30)?, "Ok(())");
+    assert_eq!(world.finish()?, "Ok(())");
     Ok(())
 }
 
@@ -149,7 +149,7 @@ fn run(test: &str, failing: &str) -> TestResult<()> {
         "the log must say how to reopen admission"
     );
     closed_until_the_binary_changes(&world)?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
@@ -183,7 +183,7 @@ fn breaches_leave_admission_open(test: &str) -> TestResult<()> {
     world.release(&jit_name(fourth))?;
     proven(&world, fourth);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

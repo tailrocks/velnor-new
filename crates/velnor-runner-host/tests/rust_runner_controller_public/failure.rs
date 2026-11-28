@@ -64,7 +64,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     failed_jit(&world)?;
     unsafe_binary(&world)?;
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
@@ -193,7 +193,7 @@ pub(super) fn retries_a_failed_jit_for_the_acquired_job(test: &str) -> TestResul
     );
     wait_for("the proof of offer A", 40, || removed(&world, 1));
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
@@ -223,7 +223,7 @@ pub(super) fn refuses_a_jit_for_another_runner(test: &str) -> TestResult<()> {
     assert_eq!(acquired, ["1", "2", "3"]);
     assert_eq!(world.gh("jit").len(), 3, "a refused identity was retried");
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

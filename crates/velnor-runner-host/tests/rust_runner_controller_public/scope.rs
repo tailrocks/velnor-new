@@ -44,7 +44,7 @@ pub(super) fn leaves_a_runner_of_another_scale_set(test: &str) -> TestResult<()>
         "the runner of another scale set was removed, or ours was left"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

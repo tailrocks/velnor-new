@@ -108,7 +108,7 @@ fn refused(test: &str, tag: &'static str, replies: &Value) -> TestResult<()> {
         "a refused source check must not acquire"
     );
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -157,7 +157,7 @@ fn deferred(
     assert!(polls >= 2, "message 91 was polled {polls} times");
     after(&world)?;
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }

@@ -32,14 +32,14 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let second = held_job(&world, 2);
     unreadable_config(&world)?;
     changed_config(&world, second)?;
-    assert_eq!(world.finish(40)?, "Ok(ConfigChanged)");
+    assert_eq!(world.finish()?, "Ok(ConfigChanged)");
     assert_clean(&world, "2");
     Ok(())
 }
 
 fn mismatched_config(world: &mut World, test: &str) -> TestResult<()> {
     world.spawn_controller(test, &[(PASSED_MAX_JOBS, "1")])?;
-    assert_eq!(world.finish(20)?, "Ok(ConfigChanged)");
+    assert_eq!(world.finish()?, "Ok(ConfigChanged)");
     assert!(
         world.gh("session.create").is_empty() && world.gh("poll").is_empty(),
         "a controller whose passed config differs from host.toml must exit before it opens a session or polls"
@@ -188,6 +188,6 @@ pub(super) fn probes_the_machine_while_idle(test: &str) -> TestResult<()> {
         acquire_ids(&world) == ["1"]
     });
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }

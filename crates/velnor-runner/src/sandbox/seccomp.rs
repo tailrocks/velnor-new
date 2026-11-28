@@ -28,6 +28,8 @@ const BTRFS_FAMILY: u64 = 0x9400;
 const FAMILY_MASK: u64 = 0xff00;
 const REFLINK_REQUESTS: [u64; 3] = [0x4004_9409, 0x4020_940d, 0xc018_9436];
 
+const TERMINAL_INJECTION: [(u64, i32); 2] = [(0x5412, libc::ENOTTY), (0x541c, libc::EPERM)];
+
 type Rules = Vec<(i64, Vec<SeccompRule>)>;
 
 fn argument(
@@ -99,6 +101,18 @@ fn btrfs_ioctls() -> Result<Rules> {
     )])
 }
 
+fn terminal_injection(request: u64) -> Result<Rules> {
+    Ok(vec![(
+        libc::SYS_ioctl,
+        vec![argument(
+            1,
+            SeccompCmpArgLen::Dword,
+            SeccompCmpOp::Eq,
+            request,
+        )?],
+    )])
+}
+
 fn user_namespaces() -> Result<Rules> {
     let flag = u64::try_from(libc::CLONE_NEWUSER).context("read CLONE_NEWUSER")?;
     Ok(vec![
@@ -124,11 +138,28 @@ fn user_namespaces() -> Result<Rules> {
 }
 
 pub(super) fn filters() -> Result<Vec<BpfProgram>> {
-    Ok(vec![
+    let mut programs = vec![
         refuse(vsock()?, libc::EAFNOSUPPORT)?,
         refuse(user_namespaces()?, libc::EPERM)?,
         refuse(whole(&ABSENT), libc::ENOSYS)?,
         refuse(whole(&NO_XATTRS), libc::ENOTSUP)?,
         refuse(btrfs_ioctls()?, libc::ENOTTY)?,
-    ])
+    ];
+    for (request, errno) in TERMINAL_INJECTION {
+        programs.push(refuse(terminal_injection(request)?, errno)?);
+    }
+    Ok(programs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tiocsti_and_tioclinux_are_refused_with_an_errno_the_kernel_does_not_give() {
+        assert_eq!(
+            TERMINAL_INJECTION,
+            [(0x5412, libc::ENOTTY), (0x541c, libc::EPERM)]
+        );
+    }
 }

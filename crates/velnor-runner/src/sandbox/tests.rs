@@ -307,7 +307,7 @@ fn normalized_paths_have_no_dots_and_start_at_the_root() {
 fn seccomp_programs_compile_for_vsock_user_namespaces_absent_calls_and_xattrs() {
     assert_eq!(
         super::seccomp::filters().map(|filters| filters.len()).ok(),
-        Some(5)
+        Some(7)
     );
 }
 

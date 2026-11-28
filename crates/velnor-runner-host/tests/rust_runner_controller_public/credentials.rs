@@ -44,7 +44,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         Some("waiting_for_credentials")
     );
     world.write_host_toml_text(&official_host_toml(&world.root, &reference))?;
-    assert_eq!(world.finish(90)?, "Err(keychain)");
+    assert_eq!(world.finish()?, "Err(keychain)");
     assert!(
         world
             .child_stderr()

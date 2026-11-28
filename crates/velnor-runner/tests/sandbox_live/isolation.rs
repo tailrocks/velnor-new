@@ -4,7 +4,9 @@
 use std::io::{BufRead, BufReader};
 use std::process::Command;
 
-use super::support::{BTRFS_IOCTL, Sandbox, failed, succeeded, text, unstarted};
+use super::support::{
+    BTRFS_IOCTL, Sandbox, TERMINAL_INJECTION, failed, succeeded, text, unstarted,
+};
 
 const SYSCALL: &str = "import ctypes, os, sys\nlibc = ctypes.CDLL(None, use_errno=True)\nnumber = int(sys.argv[1])\nresult = libc.syscall(number, 0, 0, 0, 0, 0, 0)\nprint(result, ctypes.get_errno())\n";
 
@@ -208,4 +210,12 @@ fn btrfs_subvolume_snapshot_and_property_ioctls_answer_enotty_while_reflinks_wor
             .output(),
     ));
     assert_eq!(control.trim(), "created");
+}
+
+#[test]
+fn tiocsti_and_tioclinux_on_a_pty_are_refused_with_enotty_and_eperm() {
+    let sandbox = Sandbox::new("injection");
+    let inside = succeeded(&sandbox.run_on_a_pty(&["/usr/bin/python3", "-c", TERMINAL_INJECTION]));
+    let expected = format!("{} {}\n{} {}", 0x5412, libc::ENOTTY, 0x541c, libc::EPERM);
+    assert_eq!(inside.replace('\r', "").trim(), expected);
 }

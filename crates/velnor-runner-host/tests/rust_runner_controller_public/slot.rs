@@ -63,7 +63,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         "{state:?}"
     );
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_eq!(acquire_ids(&world), ["1", "2", "3", "4"]);
     assert_eq!(

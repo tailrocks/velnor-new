@@ -40,7 +40,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let before = world.events().last().map_or(0, |event| event.seq);
     let stopped = Instant::now();
     world.stop()?;
-    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert!(stopped.elapsed().as_secs() <= 20);
     wait_for("the stand-in and its child to end", 10, || {
         !process_exists(&pid) && !process_exists(&child)
@@ -117,7 +117,7 @@ fn launching(test: &str) -> TestResult<()> {
         },
     );
     std::fs::write(world.seen.join("release-acquire"), "")?;
-    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     let events = world.events();
     let created = events
         .iter()
@@ -151,7 +151,7 @@ pub(super) fn closes_sessions_under_one_deadline(test: &str) -> TestResult<()> {
         },
     );
     std::fs::write(world.seen.join("release-session"), "")?;
-    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -169,7 +169,7 @@ pub(super) fn proves_a_job_that_will_not_stop(test: &str) -> TestResult<()> {
         world.pid_of(&name).is_some() && world.seen.join(format!("{name}.child")).exists()
     });
     world.stop()?;
-    assert_eq!(world.finish(60)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     let removed = world.events().iter().any(|event| {
         event.label == "runner.delete"
             && event.field("name") == runner_name(job)

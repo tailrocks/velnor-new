@@ -83,7 +83,7 @@ fn unconfirmed_sweep(world: &mut World, test: &str) -> TestResult<()> {
     );
     let stopped = Instant::now();
     world.stop()?;
-    assert_eq!(world.finish(10)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert!(stopped.elapsed().as_secs() < 10);
     assert!(world.gh("session.delete").is_empty());
     Ok(())
@@ -159,7 +159,7 @@ fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     assert!(state.jobs.iter().all(|name| name == &job_dir_name(own)) || state.jobs.is_empty());
     assert_capacity(world, "1");
     world.stop()?;
-    assert_eq!(world.finish(10)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -213,7 +213,7 @@ fn shutdown_with_a_stuck_removal(world: &mut World, test: &str) -> TestResult<()
     });
     let stopped = Instant::now();
     world.stop()?;
-    assert_eq!(world.finish(10)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert!(stopped.elapsed().as_secs() < 10);
     let events = world.events();
     let refused = events

@@ -63,7 +63,7 @@ pub(super) fn holds_a_matching_set_nobody_recorded(test: &str) -> TestResult<()>
         "the runners of a set nobody recorded were cleared"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -86,7 +86,7 @@ pub(super) fn adopts_a_set_after_a_recorded_intent(test: &str) -> TestResult<()>
         "the intent must end with the record"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
@@ -115,7 +115,7 @@ pub(super) fn records_the_intent_before_it_creates_a_set(test: &str) -> TestResu
         "the intent must end with the record"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -126,7 +126,7 @@ pub(super) fn refuses_a_set_the_record_assigns_to_another_id(test: &str) -> Test
     held(&world, "a set the record assigns to id 9");
     assert_eq!(recorded(&world)?["created"]["lab"], 9);
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -136,7 +136,7 @@ pub(super) fn refuses_a_set_with_other_labels(test: &str) -> TestResult<()> {
     started(&mut world, test, Some(&["velnor", "another-label"]))?;
     held(&world, "a recorded set that carries other labels");
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -155,7 +155,7 @@ pub(super) fn forgets_its_intent_after_a_refused_create(test: &str) -> TestResul
         || recorded(&world).is_ok_and(|records| records["intended"] == json!([])),
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     std::fs::remove_file(world.seen.join("stop"))?;
     world.write_state(true, &[("another-host-1", 300)])?;
     started(&mut world, test, None)?;
@@ -175,7 +175,7 @@ pub(super) fn forgets_its_intent_after_a_refused_create(test: &str) -> TestResul
         "a runner of a set made by another host was deleted"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }
 
@@ -195,6 +195,6 @@ pub(super) fn refuses_a_created_set_that_keeps_other_labels(test: &str) -> TestR
         "a created set that persisted other labels was recorded"
     );
     world.stop()?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish()?, "Ok(Shutdown)");
     Ok(())
 }

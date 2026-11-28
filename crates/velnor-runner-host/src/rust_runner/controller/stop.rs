@@ -12,6 +12,13 @@ const ACQUIRE_STOP_SLACK: Duration = Duration::from_secs(2);
 const PROOF_WAIT: Duration = Duration::from_secs(30);
 const PROOF_RETRY: Duration = Duration::from_secs(1);
 
+pub const CONTROLLER_STOP_BUDGET: Duration = Duration::from_secs(
+    JOB_STOP_WAIT.as_secs()
+        + ACQUIRE_BUDGET.as_secs()
+        + ACQUIRE_STOP_SLACK.as_secs()
+        + PROOF_WAIT.as_secs(),
+);
+
 impl Run<'_> {
     pub(super) async fn stop(&mut self) -> Result<(), ListenFault> {
         self.stopping = true;
@@ -50,5 +57,17 @@ impl Run<'_> {
         }
         self.close_sessions().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_stop_budget_covers_every_wait_of_a_stop() {
+        let longest_drain = JOB_STOP_WAIT.max(ACQUIRE_BUDGET + ACQUIRE_STOP_SLACK);
+        assert!(CONTROLLER_STOP_BUDGET >= longest_drain + PROOF_WAIT);
+        assert!(CONTROLLER_STOP_BUDGET >= JOB_STOP_WAIT + PROOF_WAIT);
     }
 }

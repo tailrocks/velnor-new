@@ -46,6 +46,7 @@ use startup::Started;
 pub use pats::ConnectionPats;
 pub(crate) use readiness::assess as heartbeat_readiness;
 pub(crate) use run_blocking::{Handover, run_blocking};
+pub use stop::CONTROLLER_STOP_BUDGET;
 
 const TICK: Duration = Duration::from_secs(2);
 const POLL_WAKE: Duration = Duration::from_millis(500);

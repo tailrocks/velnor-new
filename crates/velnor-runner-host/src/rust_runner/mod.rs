@@ -20,7 +20,9 @@ mod store;
 mod sweep;
 mod trusted;
 
-pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
+pub use controller::{
+    CONTROLLER_STOP_BUDGET, ConnectionPats, RustRunnerExit, run_rust_runner_host,
+};
 pub use guest_user::GuestUser;
 pub(crate) use job::JobBreach;
 pub use job::RunningJob;

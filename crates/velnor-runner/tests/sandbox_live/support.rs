@@ -123,6 +123,18 @@ impl Sandbox {
         )
     }
 
+    pub(crate) fn run_on_a_pty(&self, command: &[&str]) -> Output {
+        let sandbox = self.command(command);
+        unstarted(
+            Command::new("python3")
+                .args(["-I", "-c", ON_A_PTY])
+                .arg(sandbox.get_program())
+                .args(sandbox.get_args())
+                .stdin(Stdio::null())
+                .output(),
+        )
+    }
+
     pub(crate) fn shell(&self, script: &str) -> Output {
         self.run(&["/bin/sh", "-c", script])
     }
@@ -255,3 +267,6 @@ pub(crate) fn killed_with(sandbox: &Sandbox, script: &[&str], message: &str, kin
         "the breach record outlived the cleanup"
     );
 }
+
+pub(crate) const TERMINAL_INJECTION: &str = "import fcntl\nfor request in (0x5412, 0x541c):\n    try:\n        fcntl.ioctl(1, request, b'x')\n        print(request, 'injected')\n    except OSError as error:\n        print(request, error.errno)\n";
+const ON_A_PTY: &str = "import pty, sys\nsys.exit(pty.spawn(sys.argv[1:]) >> 8)";
