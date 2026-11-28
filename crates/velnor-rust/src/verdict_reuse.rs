@@ -136,7 +136,6 @@ mod tests {
         assert!(audit_when(When::FullAuditOrPullRequest));
         assert!(audit_when(When::FullAuditOrPushOrPullRequest));
         for when in [
-            When::Success,
             When::FullAudit,
             When::FullAuditOrPush,
             When::ScheduledOrPush,

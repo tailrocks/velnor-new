@@ -33,3 +33,22 @@ impl Reuse {
         }
     }
 }
+
+#[must_use]
+pub fn no_run<S: AsRef<str>>(command: &[S]) -> Vec<String> {
+    let end = command
+        .iter()
+        .position(|word| word.as_ref() == "--")
+        .unwrap_or(command.len());
+    let mut built: Vec<String> = command[..end]
+        .iter()
+        .map(AsRef::as_ref)
+        .filter(|word| {
+            !matches!(*word, "--no-fail-fast" | "--fail-fast") && !word.starts_with("--no-tests=")
+        })
+        .map(str::to_owned)
+        .collect();
+    built.push("--no-run".to_owned());
+    built.extend(command[end..].iter().map(|word| word.as_ref().to_owned()));
+    built
+}

@@ -14,6 +14,7 @@ pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) struct Tests {
     lanes: Vec<RootSlug>,
     skippable: bool,
+    reusable: Vec<RootSlug>,
 }
 
 impl Tests {
@@ -32,6 +33,16 @@ impl Tests {
                 lanes.push(plan.slug.clone());
             }
         }
+        let reusable = job
+            .steps
+            .iter()
+            .filter(|step| step.reuse.is_some())
+            .filter_map(|step| match &step.kind {
+                StepKind::Cargo(command) if reports_tests(command) => step.reads.as_ref(),
+                _ => None,
+            })
+            .map(|plan| plan.slug.clone())
+            .collect();
         let skippable = job.steps.iter().any(|step| {
             matches!(
                 &step.kind,
@@ -39,12 +50,16 @@ impl Tests {
                     if !packages.is_empty()
             )
         });
-        Self { lanes, skippable }
+        Self {
+            lanes,
+            skippable,
+            reusable,
+        }
     }
 
-    fn read(&self, id: &str, name: &str) -> String {
+    fn read(&self, id: &str, name: &str, slug: Option<&RootSlug>) -> String {
         let output = format!("steps.{id}.outputs.{name}");
-        if !self.skippable {
+        if !self.skippable || slug.is_some_and(|slug| self.reusable.contains(slug)) {
             return format!("${{{{ {output} }}}}");
         }
         if [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
@@ -89,11 +104,14 @@ impl Tests {
                 .map(|slug| {
                     (
                         format!("{name}_{slug}"),
-                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name),
+                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name, Some(slug)),
                     )
                 })
                 .collect();
         }
-        vec![(name.to_owned(), self.read(TEST_STEP_ID, name))]
+        vec![(
+            name.to_owned(),
+            self.read(TEST_STEP_ID, name, self.lanes.first()),
+        )]
     }
 }

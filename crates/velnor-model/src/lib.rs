@@ -97,7 +97,7 @@ pub use repo::{
     TargetKind, TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest,
     Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
-pub use reuse::{Reuse, ReuseStep};
+pub use reuse::{Reuse, ReuseStep, no_run};
 pub use runner_protocol::RUNNER_PROTOCOL_VERSION;
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{

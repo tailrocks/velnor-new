@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
-use super::artifact_api::ArtifactApi;
+use super::artifact_api::{ArtifactApi, Bound};
 use super::{EVENT_VARIABLE, api_url, append_outputs, http, read_limited};
 use crate::cli::VerdictCommand;
 use crate::error::CiError;
@@ -129,7 +129,7 @@ fn decide() -> Result<(String, Vec<String>), String> {
         .filter(|path| !path.is_empty())
         .map_or_else(std::env::temp_dir, PathBuf::from);
     let downloads = Downloads {
-        api: ArtifactApi::new(api_url(), token),
+        api: ArtifactApi::new(api_url(), token, Bound::REUSE),
         scratch: temp.join(format!("velnor-verdict-{}.zip", std::process::id())),
     };
     let reuse = evaluate(&github, &downloads, &context, &own, &reusable)

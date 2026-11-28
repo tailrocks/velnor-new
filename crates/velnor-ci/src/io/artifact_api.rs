@@ -4,6 +4,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
+use std::time::Duration;
 
 use ureq::http::Response;
 
@@ -16,22 +17,45 @@ const PAGE_SIZE: usize = 100;
 const PAGE_LIMIT: usize = 50;
 const LISTING_LIMIT: u64 = 16 << 20;
 const ARCHIVE_LIMIT: u64 = 256 << 20;
-const ATTEMPTS: u32 = 3;
+const REUSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Bound {
+    pub(super) timeout: Duration,
+    pub(super) attempts: u32,
+}
+
+impl Bound {
+    pub(super) const DEFAULT: Self = Self {
+        timeout: DEFAULT_TIMEOUT,
+        attempts: 3,
+    };
+    pub(super) const REUSE: Self = Self {
+        timeout: REUSE_TIMEOUT,
+        attempts: 1,
+    };
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct ArtifactApi {
     agent: ureq::Agent,
     api: String,
     token: String,
+    bound: Bound,
 }
 
 impl ArtifactApi {
-    pub(super) fn new(api: String, token: String) -> Self {
+    pub(super) fn new(api: String, token: String, bound: Bound) -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(DEFAULT_TIMEOUT))
+            .timeout_global(Some(bound.timeout))
             .build()
             .into();
-        Self { agent, api, token }
+        Self {
+            agent,
+            api,
+            token,
+            bound,
+        }
     }
 
     fn get(&self, path: &str) -> Result<Response<ureq::Body>, CiError> {
@@ -85,12 +109,15 @@ impl ArtifactApi {
         Ok(file)
     }
 
-    fn retrying<T>(mut attempt_once: impl FnMut() -> Result<T, CiError>) -> Result<T, CiError> {
+    fn retrying<T>(
+        bound: Bound,
+        mut attempt_once: impl FnMut() -> Result<T, CiError>,
+    ) -> Result<T, CiError> {
         let mut attempt = 1;
         loop {
             match attempt_once() {
                 Ok(value) => return Ok(value),
-                Err(error) if error.is_missing() || attempt == ATTEMPTS => {
+                Err(error) if error.is_missing() || attempt == bound.attempts => {
                     return Err(error.context(&format!("failed after {attempt} attempts")));
                 }
                 Err(_) => attempt += 1,
@@ -99,7 +126,7 @@ impl ArtifactApi {
     }
 
     fn fetch_retrying(&self, path: &str, limit: u64) -> Result<Vec<u8>, CiError> {
-        Self::retrying(|| self.fetch(path, limit))
+        Self::retrying(self.bound, || self.fetch(path, limit))
     }
 
     pub(super) fn list(&self, repo: &Repo, run_id: u64) -> Result<Vec<Listed>, CiError> {
@@ -126,6 +153,8 @@ impl ArtifactApi {
     /// Streams the archive into `scratch`, an unlinked file, so no archive is held in memory.
     pub(super) fn download(&self, repo: &Repo, id: u64, scratch: &Path) -> Result<File, CiError> {
         let path = format!("/repos/{repo}/actions/artifacts/{id}/zip");
-        Self::retrying(|| self.fetch_to_file(&path, ARCHIVE_LIMIT, scratch))
+        Self::retrying(self.bound, || {
+            self.fetch_to_file(&path, ARCHIVE_LIMIT, scratch)
+        })
     }
 }

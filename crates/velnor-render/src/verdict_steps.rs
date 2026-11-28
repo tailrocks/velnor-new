@@ -209,11 +209,18 @@ pub(crate) fn with_twin(step: &Step, mut body: RenderedStep) -> Vec<RenderedStep
 }
 
 fn build_only(run: &str) -> String {
-    let kept: Vec<&str> = run
-        .split(' ')
-        .filter(|word| !word.starts_with("--no-tests="))
-        .collect();
-    format!("{} --no-run", kept.join(" "))
+    let words: Vec<&str> = run.split(' ').collect();
+    let at = words
+        .iter()
+        .position(|word| word.starts_with("cargo"))
+        .unwrap_or(0);
+    let (wrapper, command) = words.split_at(at);
+    wrapper
+        .iter()
+        .map(|word| (*word).to_owned())
+        .chain(velnor_model::no_run(command))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub(crate) fn for_body(extra: Vec<String>, body: &RenderedStep, replanned: bool) -> Vec<String> {

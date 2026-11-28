@@ -91,7 +91,8 @@ fn audit_condition(on_main: &str) -> Result<(String, String), Box<dyn std::error
 }
 
 #[test]
-fn the_per_root_audit_gets_its_id_in_every_event_mode() -> TestResult {
+fn the_per_root_audit_gets_its_id_with_on_main_affected_and_with_on_main_everything() -> TestResult
+{
     let id = "rust-root.inputs-audit-1";
     for on_main in ["affected", "everything"] {
         let (condition, list) = audit_condition(on_main)?;

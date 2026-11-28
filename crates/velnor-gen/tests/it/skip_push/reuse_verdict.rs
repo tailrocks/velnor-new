@@ -181,7 +181,10 @@ fn a_reused_test_step_still_builds_its_tests_in_a_twin_that_runs_exactly_then() 
     );
     let run = twin["run"].as_str().unwrap_or_default();
     assert!(
-        run.ends_with(" --no-run") && !run.contains("--no-tests"),
+        run.ends_with(" --no-run")
+            && !run.contains("--no-tests")
+            && !run.contains("--no-fail-fast")
+            && !run.contains("--fail-fast"),
         "{run}"
     );
     assert!(

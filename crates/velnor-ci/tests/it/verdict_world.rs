@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::process::{Command, Output};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use serde_json::{Value, json};
@@ -23,6 +24,7 @@ const ARTIFACT: u64 = 5000;
 pub(crate) struct Reuse {
     pub(crate) output: Output,
     pub(crate) outputs: BTreeMap<String, String>,
+    pub(crate) requests: Vec<String>,
 }
 
 impl Reuse {
@@ -176,6 +178,8 @@ impl World {
 
     pub(crate) fn run(&self) -> Reuse {
         let routes = self.routes.clone();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&seen);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
         let address = listener
             .local_addr()
@@ -191,6 +195,9 @@ impl World {
                 }
                 let text = String::from_utf8_lossy(&request).into_owned();
                 let target = text.split_whitespace().nth(1).unwrap_or_default();
+                if let Ok(mut served) = log.lock() {
+                    served.push(target.to_owned());
+                }
                 let (status, body) = routes
                     .get(target)
                     .map_or(("404 Not Found", Vec::new()), |body| {
@@ -244,6 +251,11 @@ impl World {
             .filter_map(|line| line.split_once('='))
             .map(|(key, value)| (key.to_owned(), value.to_owned()))
             .collect();
-        Reuse { output, outputs }
+        let requests = seen.lock().map(|served| served.clone()).unwrap_or_default();
+        Reuse {
+            output,
+            outputs,
+            requests,
+        }
     }
 }
