@@ -14,6 +14,7 @@ pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) struct Tests {
     lanes: Vec<RootSlug>,
     skippable: bool,
+    reusable: Vec<(RootSlug, String)>,
 }
 
 impl Tests {
@@ -32,6 +33,16 @@ impl Tests {
                 lanes.push(plan.slug.clone());
             }
         }
+        let reusable = job
+            .steps
+            .iter()
+            .filter_map(|step| match (&step.kind, &step.reuse, &step.reads) {
+                (StepKind::Cargo(command), Some(reuse), Some(plan)) if reports_tests(command) => {
+                    Some((plan.slug.clone(), crate::verdict_steps::reused_term(reuse)))
+                }
+                _ => None,
+            })
+            .collect();
         let skippable = job.steps.iter().any(|step| {
             matches!(
                 &step.kind,
@@ -39,21 +50,34 @@ impl Tests {
                     if !packages.is_empty()
             )
         });
-        Self { lanes, skippable }
+        Self {
+            lanes,
+            skippable,
+            reusable,
+        }
     }
 
-    fn read(&self, id: &str, name: &str) -> String {
+    fn read(&self, id: &str, name: &str, slug: Option<&RootSlug>) -> String {
         let output = format!("steps.{id}.outputs.{name}");
+        let fallback = if [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
+            "0"
+        } else if name == TESTS_BY_PACKAGE_OUTPUT {
+            EMPTY_PACKAGE_MAP
+        } else {
+            return format!("${{{{ {output} }}}}");
+        };
         if !self.skippable {
             return format!("${{{{ {output} }}}}");
         }
-        if [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
-            return format!("${{{{ {output} || '0' }}}}");
+        let reused = slug.and_then(|slug| {
+            self.reusable
+                .iter()
+                .find_map(|(lane, term)| (lane == slug).then_some(term))
+        });
+        match reused {
+            Some(term) => format!("${{{{ {output} || (!{term} && '{fallback}' || '') }}}}"),
+            None => format!("${{{{ {output} || '{fallback}' }}}}"),
         }
-        if name == TESTS_BY_PACKAGE_OUTPUT {
-            return format!("${{{{ {output} || '{EMPTY_PACKAGE_MAP}' }}}}");
-        }
-        format!("${{{{ {output} }}}}")
     }
 
     pub(crate) fn id(&self, slug: Option<&RootSlug>) -> String {
@@ -89,11 +113,14 @@ impl Tests {
                 .map(|slug| {
                     (
                         format!("{name}_{slug}"),
-                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name),
+                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name, Some(slug)),
                     )
                 })
                 .collect();
         }
-        vec![(name.to_owned(), self.read(TEST_STEP_ID, name))]
+        vec![(
+            name.to_owned(),
+            self.read(TEST_STEP_ID, name, self.lanes.first()),
+        )]
     }
 }

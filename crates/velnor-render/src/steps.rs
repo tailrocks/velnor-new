@@ -26,10 +26,10 @@ pub(crate) use crate::install_steps::install_helper;
 use crate::install_steps::{
     generator_check_step, install_generator_step, install_mise, install_tools,
 };
+use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
-use crate::{permission_pairs, plan_modes::plan_modes};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -52,7 +52,8 @@ mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
 use steps_helpers::{
-    after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps, variable,
+    after_setup, extra_conditions, leading_steps, report_env, root_key, rustup_add, trailing_steps,
+    variable,
 };
 use steps_outputs::{merge_group_output, test_outputs};
 pub(crate) const CACHE_RESTORE: &str =
@@ -67,6 +68,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
+    crate::verdict_steps::qualify_shared(&mut steps);
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
     env.extend(SaveGate::of(job).mode_env());
@@ -79,13 +81,16 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             comment: job.comment.clone(),
             env,
             needs: job.needs.iter().map(ToString::to_string).collect(),
-            condition: Some(crate::base_steps::audited_lane(
-                admission(
-                    job.when,
-                    job.gate.as_ref(),
-                    job.pr,
-                    &job.needs,
-                    job.skip_after_merge_group.as_ref(),
+            condition: Some(crate::verdict_steps::job_condition(
+                crate::base_steps::audited_lane(
+                    admission(
+                        job.when,
+                        job.gate.as_ref(),
+                        job.pr,
+                        &job.needs,
+                        job.skip_after_merge_group.as_ref(),
+                    ),
+                    job,
                 ),
                 job,
             )),
@@ -109,6 +114,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
                 }))
                 .chain(test_outputs(job, &tests))
                 .chain(merge_group_output(job))
+                .chain(crate::verdict_steps::outputs(job))
                 .chain(crate::tools_steps::anchor_outputs(job))
                 .chain(lane_outputs(&job.steps))
                 .chain(crate::base_steps::public::job_output(&job.steps))
@@ -201,13 +207,12 @@ fn rendered_steps(
     lane: CargoLane,
     around: &Around<'_>,
 ) -> Vec<RenderedStep> {
-    let job_name = around.job_name;
     let mut rendered = leading_steps(step, audit, lane);
     let mut body = step_body(step, audit, tests, lane);
     if body.id.is_none() {
         body.id = around.id.map(str::to_owned);
     }
-    rendered.push(body);
+    rendered.extend(crate::verdict_steps::with_twin(step, body));
     rendered.extend(trailing_steps(&step.kind, lane));
     for body in &mut rendered {
         if let (
@@ -228,23 +233,12 @@ fn rendered_steps(
         {
             body.env.push(crate::cargo::offline_env());
         }
-        if matches!(step.kind, StepKind::ReportCaches { .. })
-            && let Some(name) = job_name
-        {
-            body.env.push((
-                "VELNOR_REPORT_JOB_NAME".to_owned(),
-                Value::Text(name.to_owned()),
-            ));
-        }
-        if matches!(step.kind, StepKind::ReportCaches { .. })
-            && let Some(gate) = around.privacy_gate
-        {
-            body.env.push((
-                "VELNOR_REPORT_PLAN_MODE".to_owned(),
-                Value::Expr(plan_modes(gate, setup)),
-            ));
-        }
-        let extra = extra_conditions(step, setup, &around.after_setup);
+        report_env(step, body, (around.job_name, around.privacy_gate), setup);
+        let extra = crate::verdict_steps::for_body(
+            extra_conditions(step, setup, &around.after_setup),
+            body,
+            setup == Setup::Replanned,
+        );
         body.condition = chained_save::combined(
             around.chained,
             step,
@@ -262,18 +256,19 @@ fn rendered_steps(
             body.id = None;
         }
     }
-    if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.last_mut())
-    {
+    if let (Some(plan), StepKind::Cargo(command)) = (&step.reads, &step.kind) {
         let source = plan_source(&plan.from);
-        main.env.extend(command.plan_values().iter().map(|need| {
-            let key = output(&plan.slug, *need);
-            let read = plan_read(&source, &key, setup);
-            (
-                variable(*need).to_owned(),
-                Value::Expr(format!("${{{{ {read} }}}}")),
-            )
-        }));
+        let mains = 1 + usize::from(step.reuse.is_some());
+        for main in rendered.iter_mut().rev().take(mains) {
+            main.env.extend(command.plan_values().iter().map(|need| {
+                let key = output(&plan.slug, *need);
+                let read = plan_read(&source, &key, setup);
+                (
+                    variable(*need).to_owned(),
+                    Value::Expr(format!("${{{{ {read} }}}}")),
+                )
+            }));
+        }
     }
     if let Some(verify) = rendered
         .first()
@@ -351,6 +346,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         }
         StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::MergeQueueCheck => crate::helper_steps::merge_queue_step(),
+        StepKind::Reuse(step) => crate::verdict_steps::reuse_step(step),
         StepKind::TestGroupsCheck(g) => crate::helper_steps::test_groups_step(g, &step.features),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),

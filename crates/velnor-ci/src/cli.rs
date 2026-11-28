@@ -194,8 +194,25 @@ pub enum Command {
         about = "Exit 1 unless VELNOR_EVIDENCE_ARTIFACT_ID is a canonical positive decimal integer of at most 16 digits that does not exceed 9007199254740991"
     )]
     ValidateArtifactId,
+    #[command(
+        subcommand,
+        about = "Record and reuse the verdict of a green pull request run"
+    )]
+    Verdict(VerdictCommand),
     #[command(subcommand, about = "Decide the qualification workflow")]
     Qualification(QualificationCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum VerdictCommand {
+    #[command(
+        about = "On a pull_request run, write $RUNNER_TEMP/velnor-verdict/verdict.json for the artifact velnor-verdict: GITHUB_RUN_ATTEMPT, the checkout's HEAD^{tree}, and the plan outputs of the run (PLAN_JSON, a JSON object of strings). The file is written to a temporary path and renamed into place"
+    )]
+    Record,
+    #[command(
+        about = "On a merge_group run, write the step outputs reuse, reuse_run and reused to $GITHUB_OUTPUT. reuse=true only when the queue entry's pull request (VELNOR_MERGE_GROUP_HEAD_REF) is from this repository, its head commit is not behind VELNOR_MERGE_GROUP_BASE_SHA and has this checkout's tree, the branch the queue entry targets has an active non_fast_forward rule, a pull_request run of this workflow on that head passed the job named by VELNOR_REQUIRED_CHECK, and that run's velnor-verdict artifact names the run's latest attempt, this tree, and these plan outputs (PLAN_JSON). reused lists, space-delimited, the ids of VELNOR_REUSABLE (a JSON list of id, job and optional step) whose job, or step of that job, concluded success in that run, unless that run's job has more than one step of that name, which refuses the reuse. Fails safe: every error or refusal writes reuse=false and exits 0, printing the first reason. Reads GITHUB_TOKEN, which needs actions: read, contents: read and pull-requests: read"
+    )]
+    Reuse,
 }
 
 #[derive(Debug, Subcommand)]

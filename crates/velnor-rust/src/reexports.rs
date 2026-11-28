@@ -74,9 +74,10 @@ pub use crate::target_dir::{NESTED_ROOTS_FOLDER, default_folder};
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{
-    JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts, package_token,
-    verdict,
+    Counted, JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts,
+    package_token, verdict,
 };
 pub use crate::verdict_plan::{Need, PlanOutput};
+pub use crate::verdict_reuse::check_reuse;
 pub use crate::weaken::introduced;
 pub use velnor_cache_rules::DEFAULT_CACHE_BUDGET_BYTES;

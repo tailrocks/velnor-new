@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Instant;
 
-use super::artifact_api::ArtifactApi;
+use super::artifact_api::{ArtifactApi, Bound};
 use super::artifact_unzip::{Budget, extract};
 use super::read_limited;
 use crate::cli::FetchReportsArgs;
@@ -32,7 +32,7 @@ pub(super) fn run_fetch_reports(args: &FetchReportsArgs) -> Result<String, CiErr
     if expected.is_empty() {
         return Ok("plan.json expects no report artifacts\n".to_owned());
     }
-    let api = ArtifactApi::new(super::api_url(), super::token()?);
+    let api = ArtifactApi::new(super::api_url(), super::token()?, Bound::DEFAULT);
     let started = Instant::now();
     let selection = select(&expected, &api.list(&repo, args.run_id)?);
     let reports = args.run_dir.join("reports");

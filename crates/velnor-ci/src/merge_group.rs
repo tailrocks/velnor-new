@@ -32,10 +32,9 @@ fn run_everything(why: impl Into<String>) -> SkipPush {
     }
 }
 
-fn workflow_file(context: &Context) -> Option<&str> {
-    let path = context
-        .workflow_ref
-        .strip_prefix(&context.repository)?
+pub(crate) fn workflow_file<'a>(repository: &str, workflow_ref: &'a str) -> Option<&'a str> {
+    let path = workflow_ref
+        .strip_prefix(repository)?
         .strip_prefix('/')?
         .split_once("@refs/")?
         .0;
@@ -59,7 +58,7 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
     let Ok(repo) = Repo::parse(&context.repository) else {
         return run_everything("GITHUB_REPOSITORY is not owner/name");
     };
-    let Some(file) = workflow_file(context) else {
+    let Some(file) = workflow_file(&context.repository, &context.workflow_ref) else {
         return run_everything("GITHUB_WORKFLOW_REF does not name a workflow of this repository");
     };
     let body = match github.get(&merge_group_runs_path(&repo, file, &context.sha)) {

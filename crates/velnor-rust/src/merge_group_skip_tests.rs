@@ -23,6 +23,7 @@ fn job(id: JobId, kinds: Vec<StepKind>) -> Job {
         timeout_minutes: 30,
         gate: None,
         skip_after_merge_group: None,
+        reuse: None,
         plan_outputs: Vec::new(),
         group_outputs: Vec::new(),
         reports_ignored: false,

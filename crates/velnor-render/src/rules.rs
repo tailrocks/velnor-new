@@ -16,7 +16,7 @@ mod model;
 pub use check::check_rules;
 pub use model::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedTrusted, RenderedWorkflow, Value,
+    RenderedReuse, RenderedStep, RenderedTrusted, RenderedWorkflow, Value,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
@@ -85,6 +85,9 @@ pub enum Rule {
     ExpressionTooLong(usize),
     ConditionTooLong(usize),
     ImageBoundary(&'static str),
+    ReusableStepNameShared(String),
+    JobNameShared(String),
+    BuildOnlyTwinUnparsable(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,6 +162,18 @@ impl fmt::Display for RuleViolation {
                 "an if condition is {length} characters, and GitHub fails a step whose expression is over {MAX_EXPRESSION_CHARACTERS}; narrow the gate or read the selection from fewer places"
             ),
             Rule::ImageBoundary(why) => f.write_str(why),
+            Rule::ReusableStepNameShared(name) => write!(
+                f,
+                "the step {name:?} can be reused from a pull request run, which matches steps by name, and another step of the job has the same name; rename one of them"
+            ),
+            Rule::JobNameShared(name) => write!(
+                f,
+                "the job {name:?} shares its name with another job's name or id, and a pull request verdict matches a job by name; rename one of them"
+            ),
+            Rule::BuildOnlyTwinUnparsable(name) => write!(
+                f,
+                "the step {name:?} has a command the build-only twin cannot be derived from, because it holds a command substitution, ANSI-C quoting, a backtick or an unbalanced quote; simplify the filter"
+            ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"

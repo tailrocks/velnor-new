@@ -16,6 +16,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "plan",
     "merge-group-passed",
     "merge-queue-check",
+    "verdict",
     "write-request",
     "resolve-qualification",
     "prepare",

@@ -204,6 +204,7 @@ fn step_of(kind: StepKind) -> Step {
         reads: None,
         setup_order: SetupOrder::Unordered,
         skip_after_merge_group: None,
+        reuse: None,
         skip_when_cold: false,
         private_repo: false,
         hosted_only: false,
@@ -246,6 +247,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,
+            reuse: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             steps: vec![

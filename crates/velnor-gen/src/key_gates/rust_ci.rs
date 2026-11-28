@@ -71,6 +71,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "check_configurations.root", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.88 via 5e731ce593
     gate(RustCi, "ci", (0, 1, 88)),
+    gate_untagged(RustCi, "ci.reuse_pr_verdict", (0, 1, 118)),
     // helper-gate: first in tools-v0.1.88 via 5e731ce593
     gate(RustCi, "ci.skip_push_after_merge_group", (0, 1, 88)),
     gate(RustCi, "ci_debuginfo", HELPER_MINIMUM),

@@ -73,12 +73,27 @@ pub struct VerdictJob {
     pub id: JobId,
     pub when: Vec<JobCondition>,
     pub tests: Vec<RootSlug>,
+    pub reusable: bool,
+    pub reusable_tests: BTreeMap<RootSlug, Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerdictSpec {
     pub plan: JobId,
     pub jobs: Vec<VerdictJob>,
+}
+
+impl VerdictJob {
+    #[must_use]
+    pub fn new(id: JobId, when: Vec<JobCondition>, tests: Vec<RootSlug>) -> Self {
+        Self {
+            id,
+            when,
+            tests,
+            reusable: false,
+            reusable_tests: BTreeMap::new(),
+        }
+    }
 }
 
 const ALWAYS: &str = "always";
@@ -108,11 +123,7 @@ impl VerdictSpec {
                 })
                 .transpose()?
                 .unwrap_or_default();
-            parsed.push(VerdictJob {
-                id,
-                when,
-                tests: slugs,
-            });
+            parsed.push(VerdictJob::new(id, when, slugs));
         }
         if let Some(id) = tests.keys().next() {
             return Err(format!("--tests names {id}, which no --job names"));
@@ -120,10 +131,38 @@ impl VerdictSpec {
         Ok(Self { plan, jobs: parsed })
     }
 
+    fn reuse(mut self, jobs: &[String], tests: &[String]) -> Result<Self, String> {
+        for name in jobs {
+            let job = self.job_mut(name, "--reuse")?;
+            job.reusable = true;
+        }
+        for (name, lanes) in pairs(tests, "--reuse-tests")? {
+            let job = self.job_mut(name.as_str(), "--reuse-tests")?;
+            for lane in lanes.split(';') {
+                let (slug, ids) = lane
+                    .split_once(':')
+                    .ok_or_else(|| format!("--reuse-tests expects ROOT:ID,ID, not `{lane}`"))?;
+                let slug = RootSlug::new(slug).map_err(|e| e.to_string())?;
+                let ids = ids.split(',').map(str::to_owned).collect();
+                job.reusable_tests.insert(slug, ids);
+            }
+        }
+        Ok(self)
+    }
+
+    fn job_mut(&mut self, name: &str, flag: &str) -> Result<&mut VerdictJob, String> {
+        self.jobs
+            .iter_mut()
+            .find(|job| job.id.as_str() == name)
+            .ok_or_else(|| format!("{flag} names {name}, which no --job names"))
+    }
+
     pub fn from_text(text: &str) -> Result<Self, String> {
         let mut plan = None;
         let mut jobs = Vec::new();
         let mut tests = Vec::new();
+        let mut reuse = Vec::new();
+        let mut reuse_tests = Vec::new();
         let mut words = text.split_whitespace();
         while let Some(flag) = words.next() {
             let value = words
@@ -134,11 +173,13 @@ impl VerdictSpec {
                 "--plan" => return Err("the gate spec names --plan twice".to_owned()),
                 "--job" => jobs.push(value.to_owned()),
                 "--tests" => tests.push(value.to_owned()),
+                "--reuse" => reuse.push(value.to_owned()),
+                "--reuse-tests" => reuse_tests.push(value.to_owned()),
                 other => return Err(format!("the gate spec holds `{other}`")),
             }
         }
         let plan = plan.ok_or("the gate spec has no --plan")?;
-        Self::parse(&plan, &jobs, &tests)
+        Self::parse(&plan, &jobs, &tests)?.reuse(&reuse, &reuse_tests)
     }
 
     #[must_use]
@@ -155,6 +196,25 @@ impl VerdictSpec {
                     .join(&JOIN.to_string())
             };
             parts.push(format!("--job {}={when}", job.id));
+        }
+        parts.extend(
+            self.jobs
+                .iter()
+                .filter(|job| job.reusable)
+                .map(|job| format!("--reuse {}", job.id)),
+        );
+        for job in self
+            .jobs
+            .iter()
+            .filter(|job| !job.reusable_tests.is_empty())
+        {
+            let lanes = job
+                .reusable_tests
+                .iter()
+                .map(|(slug, ids)| format!("{slug}:{}", ids.join(",")))
+                .collect::<Vec<_>>()
+                .join(";");
+            parts.push(format!("--reuse-tests {}={lanes}", job.id));
         }
         for job in &self.jobs {
             if !job.tests.is_empty() {

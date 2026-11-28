@@ -26,6 +26,15 @@ pub struct RenderedStep {
     pub run: Option<String>,
     pub shared: bool,
     pub share_run: bool,
+    pub reuse: Option<RenderedReuse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedReuse {
+    pub id: String,
+    pub plan: String,
+    pub build_only: bool,
+    pub root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

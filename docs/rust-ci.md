@@ -122,7 +122,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |
 | `skip_draft_pull_requests` | `false` | draft pull requests run nothing |
-| `ci` | none | table; `skip_push_after_merge_group = true` skips checks and archived test jobs the merge queue already ran (needs `velnor-ci` 0.1.103); from `velnor-ci` 0.1.117, a push that changes a `Cargo.lock` is never skipped |
+| `ci` | none | table; `skip_push_after_merge_group = true` skips checks and archived test jobs the merge queue already ran (needs `velnor-ci` 0.1.103); from `velnor-ci` 0.1.117, a push that changes a `Cargo.lock` is never skipped; `reuse_pr_verdict = true` lets the merge queue reuse the checks of a green pull request run on the same tree and plan (needs `velnor-ci` 0.1.117; see [the generator configuration](../generator/CONFIG.md#reuse-a-pull-request-verdict-in-the-merge-queue)) |
 | `docs` | `"always"` | `post_merge` runs `cargo doc` only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |

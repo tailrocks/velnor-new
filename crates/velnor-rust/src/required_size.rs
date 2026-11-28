@@ -3,10 +3,10 @@
 
 use velnor_model::{
     CACHE_KEY_MAX_UNITS, GateNeed, JSON_UNIT_MAX_BYTES, Job, JobId, MERGE_GROUP_SKIP_OUTPUT,
-    RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
-    TOOLS_ANCHOR_OUTPUT, ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes,
-    json_string_bytes,
+    REUSE_OUTPUT, REUSE_RUN_MAX_BYTES, REUSE_RUN_OUTPUT, REUSED_OUTPUT, RepoFacts, ReuseStep,
+    RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
+    ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -15,6 +15,8 @@ pub(crate) fn needs_max_bytes<'a>(
     facts: &RepoFacts,
     jobs: impl IntoIterator<Item = &'a Job>,
 ) -> usize {
+    let jobs: Vec<&Job> = jobs.into_iter().collect();
+    let reuse = reuse_bytes(&jobs);
     jobs.into_iter().fold(4_usize, |total, job| {
         let outputs = job
             .plan_outputs
@@ -60,8 +62,18 @@ pub(crate) fn needs_max_bytes<'a>(
         } else {
             0
         };
+        let reuse = if job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::Reuse(ReuseStep::Decide { .. })))
+        {
+            reuse
+        } else {
+            0
+        };
         total
             .saturating_add(64)
+            .saturating_add(reuse)
             .saturating_add(skip_push)
             .saturating_add(anchor_bytes(job))
             .saturating_add(json_string_bytes(job.id.as_str()))
@@ -80,6 +92,22 @@ pub(crate) fn needs_max_bytes<'a>(
                     }),
             )
     })
+}
+
+fn reuse_bytes(jobs: &[&Job]) -> usize {
+    let ids = jobs
+        .iter()
+        .flat_map(|job| {
+            job.reuse
+                .iter()
+                .chain(job.steps.iter().filter_map(|step| step.reuse.as_ref()))
+        })
+        .fold(2_usize, |total, reuse| {
+            total.saturating_add(json_string_bytes(&reuse.id))
+        });
+    property_bytes(REUSE_OUTPUT, 5)
+        .saturating_add(property_bytes(REUSE_RUN_OUTPUT, REUSE_RUN_MAX_BYTES))
+        .saturating_add(property_bytes(REUSED_OUTPUT, ids))
 }
 
 fn anchor_bytes(job: &Job) -> usize {
@@ -192,3 +220,7 @@ fn filter_char_bytes(c: char) -> usize {
         c => json_char_bytes(c),
     }
 }
+
+#[cfg(test)]
+#[path = "required_size_tests.rs"]
+mod tests;

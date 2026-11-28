@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{CacheKey, RepoFacts, RepoPath, RepoView, StepKind, WorkflowPlan};
 use velnor_render::{MAX_WORKFLOW_BYTES, Rule, RuleViolation, render};
 use velnor_rust::{
-    attach_ansible, check_required_check, finish_present, plan, plan_without_deltas,
+    attach_ansible, check_required_check, check_reuse, finish_present, plan, plan_without_deltas,
 };
 
 use crate::GenerateError;
@@ -25,6 +25,7 @@ fn prepared(
     }
     delta_cache::validate_staging(view, &plan)?;
     check_required_check(facts, &plan)?;
+    check_reuse(facts, &plan).map_err(GenerateError::Detect)?;
     Ok(plan)
 }
 

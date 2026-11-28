@@ -8,13 +8,11 @@ use super::{
 };
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{credential_rules, pin_rules};
-use velnor_model::CACHE_KEY_MAX_UNITS;
+use velnor_model::{CACHE_KEY_MAX_UNITS, REUSE_STEP};
 
 pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>> {
-    let violations: Vec<RuleViolation> = workflow
-        .jobs
-        .iter()
-        .flat_map(|job| {
+    let violations: Vec<RuleViolation> = shared_job_names(workflow)
+        .chain(workflow.jobs.iter().flat_map(|job| {
             let holds_token = holds_app_token(job);
             let last = job.steps.len().saturating_sub(1);
             let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
@@ -36,14 +34,76 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
                 step: 0,
                 rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
             });
-            step_violations.chain(runner)
-        })
+            step_violations
+                .chain(runner)
+                .chain(shared_names(job))
+                .chain(unparsable_twins(job))
+        }))
         .collect();
     if violations.is_empty() {
         Ok(())
     } else {
         Err(violations)
     }
+}
+
+fn shared_job_names(workflow: &RenderedWorkflow) -> impl Iterator<Item = RuleViolation> + '_ {
+    let reuses = workflow
+        .jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .any(|step| step.id.as_deref() == Some(REUSE_STEP));
+    workflow
+        .jobs
+        .iter()
+        .enumerate()
+        .filter(move |(index, job)| {
+            let shown = job.name.as_ref().unwrap_or(&job.id);
+            reuses
+                && workflow.jobs.iter().enumerate().any(|(other, rival)| {
+                    other != *index
+                        && (rival.name.as_ref().unwrap_or(&rival.id) == shown || rival.id == *shown)
+                })
+        })
+        .map(|(_, job)| RuleViolation {
+            job: job.id.clone(),
+            step: 0,
+            rule: Rule::JobNameShared(job.name.clone().unwrap_or_else(|| job.id.clone())),
+        })
+}
+
+fn shared_names(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, step)| {
+            let reusable = step.reuse.is_some();
+            let shared = job
+                .steps
+                .iter()
+                .filter(|other| other.name == step.name)
+                .count()
+                > 1;
+            (reusable && shared).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: index,
+                rule: Rule::ReusableStepNameShared(step.name.clone()),
+            })
+        })
+}
+
+fn unparsable_twins(job: &RenderedJob) -> impl Iterator<Item = RuleViolation> + '_ {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, step)| {
+            let twin = step.reuse.as_ref().is_some_and(|reuse| reuse.build_only);
+            (twin && step.run.is_none()).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: index,
+                rule: Rule::BuildOnlyTwinUnparsable(step.name.clone()),
+            })
+        })
 }
 
 fn holds_app_token(job: &RenderedJob) -> bool {

@@ -254,6 +254,11 @@ mod trusted_event_parity;
 mod trusted_roots;
 mod unit_test_targets;
 mod unowned;
+mod verdict;
+mod verdict_bound;
+mod verdict_gate;
+mod verdict_hostile;
+mod verdict_world;
 mod version;
 mod write_request;
 

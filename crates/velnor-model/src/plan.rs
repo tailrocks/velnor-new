@@ -30,6 +30,12 @@ pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 pub const EMPTY_PACKAGE_MAP: &str = "{}";
 pub const MERGE_GROUP_STEP: &str = "merge_group";
 pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
+pub const REUSE_STEP: &str = "verdict_reuse";
+pub const REUSE_OUTPUT: &str = "reuse";
+pub const REUSE_RUN_OUTPUT: &str = "reuse_run";
+pub const REUSE_RUN_MAX_BYTES: usize =
+    "https://github.com".len() + 1 + 39 + 1 + 100 + "/actions/runs/".len() + 20;
+pub const REUSED_OUTPUT: &str = "reused";
 pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
 pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 pub const TOOLS_ANCHOR_DIGEST_BYTES: usize = 64;
@@ -114,6 +120,7 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub skip_after_merge_group: Option<PlanFrom>,
+    pub reuse: Option<crate::Reuse>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
@@ -135,6 +142,7 @@ pub struct Step {
     pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,
+    pub reuse: Option<crate::Reuse>,
     pub skip_when_cold: bool,
     pub private_repo: bool,
     pub pr: PrRun,

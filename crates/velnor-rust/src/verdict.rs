@@ -119,11 +119,19 @@ pub fn package_token(name: &str) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Counted {
+    Absent,
+    Malformed,
+    Parsed(TestCounts),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub passed: bool,
     pub rows: Vec<(JobId, String, String)>,
     pub problems: Vec<String>,
     pub warnings: Vec<String>,
+    pub notes: Vec<String>,
 }
 
 impl Verdict {
@@ -134,6 +142,7 @@ impl Verdict {
             rows: Vec::new(),
             problems: vec![problem.into()],
             warnings: Vec::new(),
+            notes: Vec::new(),
         }
     }
 
@@ -160,14 +169,21 @@ impl Verdict {
                 .iter()
                 .map(|text| format!("- warning: {text}")),
         );
+        lines.extend(self.notes.iter().map(|text| format!("- {text}")));
         lines.join("\n") + "\n"
     }
 }
 
-fn judge(out: &mut Verdict, job: &JobId, scheduled: bool, result: Option<&JobResult>) {
+fn judge(
+    out: &mut Verdict,
+    job: &JobId,
+    (scheduled, reused): (bool, bool),
+    result: Option<&JobResult>,
+) {
     match (scheduled, result) {
         (_, None) => out.problems.push(format!("{job} has no result in needs")),
         (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
+        (true, Some(JobResult::Skipped)) if reused => {}
         (true, Some(other)) => out.problems.push(format!(
             "{job} was scheduled by the plan and its result is {}",
             other.name()
@@ -186,13 +202,14 @@ fn judge(out: &mut Verdict, job: &JobId, scheduled: bool, result: Option<&JobRes
 pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
-    tests: &BTreeMap<(JobId, RootSlug), Option<TestCounts>>,
+    tests: &BTreeMap<(JobId, RootSlug), Counted>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
         rows: Vec::new(),
         problems: Vec::new(),
         warnings: Vec::new(),
+        notes: Vec::new(),
     };
     for (job, scheduled) in &plan.planned {
         let result = results.get(job);
@@ -207,14 +224,30 @@ pub fn verdict(
             .to_owned(),
             shown.to_owned(),
         ));
-        judge(&mut out, job, *scheduled, result);
+        judge(
+            &mut out,
+            job,
+            (*scheduled, plan.reused_jobs.contains(job)),
+            result,
+        );
     }
     for (slug, jobs) in &plan.test_lanes {
-        let counts: Vec<Option<TestCounts>> = jobs
+        let mut covered = false;
+        let mut counts: Vec<Option<TestCounts>> = Vec::new();
+        for job in jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(&(job.clone(), slug.clone())).cloned().flatten())
-            .collect();
+        {
+            let key = (job.clone(), slug.clone());
+            match tests.get(&key).cloned().unwrap_or(Counted::Absent) {
+                Counted::Absent if plan.reused_lanes.contains(&key) => covered = true,
+                Counted::Parsed(found) => counts.push(Some(found)),
+                Counted::Absent | Counted::Malformed => counts.push(None),
+            }
+        }
+        if counts.is_empty() && covered {
+            continue;
+        }
         if counts.is_empty() {
             out.problems.push(format!(
                 "no scheduled job reports {TESTS_BY_PACKAGE_OUTPUT} for {slug}, whose selected packages have tests"
@@ -224,10 +257,11 @@ pub fn verdict(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
-            let lane_empty = counts
-                .iter()
-                .flatten()
-                .all(|job| job.listed == 0 && job.run == 0 && job.ignored.unwrap_or(0) == 0);
+            let lane_empty = !covered
+                && counts
+                    .iter()
+                    .flatten()
+                    .all(|job| job.listed == 0 && job.run == 0 && job.ignored.unwrap_or(0) == 0);
             for job in counts.iter().flatten() {
                 if job.listed == 0
                     && job.run == 0
@@ -249,6 +283,7 @@ pub fn verdict(
             }
         }
     }
+    out.notes.clone_from(&plan.reuse_notes);
     out.passed = out.problems.is_empty();
     out
 }

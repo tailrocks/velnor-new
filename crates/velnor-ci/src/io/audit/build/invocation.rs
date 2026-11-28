@@ -120,20 +120,7 @@ impl Invocation {
         } else if compilation && words.contains(&"--open") && !doctests {
             Some(without_open(command))
         } else {
-            ((nextest || test && !doctest) && !compiler).then(|| {
-                let end = command
-                    .iter()
-                    .position(|word| word == "--")
-                    .unwrap_or(command.len());
-                let mut preflight: Vec<String> = command[..end]
-                    .iter()
-                    .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
-                    .cloned()
-                    .collect();
-                preflight.push("--no-run".to_owned());
-                preflight.extend(command[end..].iter().cloned());
-                preflight
-            })
+            ((nextest || test && !doctest) && !compiler).then(|| velnor_model::no_run(command))
         };
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())

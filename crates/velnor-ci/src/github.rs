@@ -319,7 +319,7 @@ pub fn run_jobs_path(repo: &Repo, run_id: u64, page: u32) -> String {
     format!("/repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100&page={page}")
 }
 
-fn encode(text: &str) -> String {
+pub(crate) fn encode(text: &str) -> String {
     text.bytes()
         .map(|byte| {
             if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {

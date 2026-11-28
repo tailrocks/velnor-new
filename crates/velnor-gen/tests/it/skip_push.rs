@@ -5,6 +5,11 @@ use serde_json::Value;
 use velnor_gen::expected_with_notes;
 use velnor_model::RepoView;
 
+mod reuse_counts;
+mod reuse_hardening;
+mod reuse_roots;
+mod reuse_verdict;
+
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 

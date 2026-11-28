@@ -198,6 +198,7 @@ pub enum StepKind {
     MergeGroupPassed {
         required: String,
     },
+    Reuse(crate::ReuseStep),
     MergeQueueCheck,
 }
 
@@ -287,6 +288,7 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
+            | Self::Reuse(_)
             | Self::MergeQueueCheck { .. }
             | Self::Ansible { .. } => false,
         }

@@ -132,6 +132,7 @@ mod units;
 mod unowned;
 mod verdict;
 mod verdict_plan;
+mod verdict_reuse;
 mod weaken;
 mod weaken_nextest;
 mod weaken_scope;

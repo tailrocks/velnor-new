@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, VerdictSpec,
-    group_output_name,
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, REUSE_OUTPUT, REUSE_RUN_OUTPUT,
+    REUSED_OUTPUT, RootSlug, VerdictSpec, group_output_name,
 };
 
 const SCHEDULE: &str = "schedule";
@@ -21,6 +21,20 @@ pub struct Need {
 pub struct PlanOutput {
     pub planned: BTreeMap<JobId, bool>,
     pub test_lanes: BTreeMap<RootSlug, Vec<JobId>>,
+    pub reused_lanes: BTreeSet<(JobId, RootSlug)>,
+    pub reused_jobs: BTreeSet<JobId>,
+    pub reuse_notes: Vec<String>,
+}
+
+fn reused_ids<'a>(outputs: &'a BTreeMap<String, String>, event: Option<&str>) -> BTreeSet<&'a str> {
+    let verified = event == Some("merge_group")
+        && outputs.get(REUSE_OUTPUT).map(String::as_str) == Some("true");
+    outputs
+        .get(REUSED_OUTPUT)
+        .filter(|_| verified)
+        .into_iter()
+        .flat_map(|ids| ids.split_whitespace())
+        .collect()
 }
 
 impl PlanOutput {
@@ -49,8 +63,11 @@ impl PlanOutput {
         };
         let merge_group_ran = event == Some(PUSH)
             && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        let reused = reused_ids(outputs, event);
+        let mut reused_jobs = BTreeSet::new();
         let mut planned = BTreeMap::new();
         let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
+        let mut reused_lanes = BTreeSet::new();
         for job in &spec.jobs {
             let mut holds = true;
             for condition in &job.when {
@@ -92,18 +109,35 @@ impl PlanOutput {
                 };
             }
             planned.insert(job.id.clone(), holds);
+            if job.reusable && reused.contains(job.id.as_str()) {
+                reused_jobs.insert(job.id.clone());
+            }
             for slug in &job.tests {
                 let expected = flag(GateNeed::TestsExpected.output_name(slug), "run", "skip")?;
+                let lane_reused = job
+                    .reusable_tests
+                    .get(slug)
+                    .is_some_and(|ids| ids.iter().all(|id| reused.contains(id.as_str())));
                 let jobs = test_lanes.entry(slug.clone()).or_default();
                 if expected {
                     jobs.push(job.id.clone());
+                    if lane_reused {
+                        reused_lanes.insert((job.id.clone(), slug.clone()));
+                    }
                 }
             }
         }
         test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
+        let run = outputs.get(REUSE_RUN_OUTPUT).map_or("", String::as_str);
         Ok(Self {
             planned,
             test_lanes,
+            reused_lanes,
+            reused_jobs,
+            reuse_notes: reused
+                .iter()
+                .map(|id| format!("reused: {id} passed in {run}"))
+                .collect(),
         })
     }
 }
@@ -125,11 +159,11 @@ mod tests {
         let job = JobId::from_static("rust-test-default");
         let spec = VerdictSpec {
             plan: JobId::from_static("rust-plan"),
-            jobs: vec![VerdictJob {
-                id: job.clone(),
-                when: vec![JobCondition::MergeGroupNotPassed],
-                tests: Vec::new(),
-            }],
+            jobs: vec![VerdictJob::new(
+                job.clone(),
+                vec![JobCondition::MergeGroupNotPassed],
+                Vec::new(),
+            )],
         };
         let outputs = BTreeMap::from([(MERGE_GROUP_SKIP_OUTPUT.to_owned(), skip.to_owned())]);
         PlanOutput::resolve(&spec, &outputs, Some(event))
