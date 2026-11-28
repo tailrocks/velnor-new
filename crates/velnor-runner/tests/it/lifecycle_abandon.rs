@@ -35,11 +35,14 @@ async fn lifecycle_sends_no_step_update_after_the_completion_of_an_abandoned_job
     tokio::time::sleep(LATE_WINDOW).await;
 
     assert_stopped_at_the_deadline(&mock, &scratch, outcome)?;
-    let completed = mock.server.only_request("POST", "/run/completejob")?.at;
+    let completed = mock
+        .server
+        .only_request("POST", "/run/completejob")?
+        .arrived();
     let updates = mock.requests_to("POST", RESULTS_STEPS_UPDATE)?;
     let late = updates
         .iter()
-        .filter(|update| update.at > completed)
+        .filter(|update| update.arrived() > completed)
         .count();
     assert!(!updates.is_empty(), "the job reported no step at all");
     assert_eq!(late, 0, "step updates arrived after the completion");

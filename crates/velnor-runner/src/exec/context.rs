@@ -133,7 +133,7 @@ impl JobContext {
         self.tracking.clone()
     }
 
-    pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {
+    fn step_github(&self, step: &ActionStep) -> ContextValue {
         let repository = step
             .reference
             .as_ref()
@@ -150,11 +150,21 @@ impl JobContext {
                     reference.git_ref.as_deref().unwrap_or_default(),
                 ))
             });
-        self.github = with_action(
+        with_action(
             &self.github,
             step.name.as_deref().unwrap_or_default(),
             repository,
-        );
+        )
+    }
+
+    pub(super) fn admission_env(&self, step: &ActionStep) -> Result<ExprEnv, ExecError> {
+        let mut env = self.base.clone();
+        put(&mut env, RootContext::Github, &self.step_github(step))?;
+        Ok(env)
+    }
+
+    pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {
+        self.github = self.step_github(step);
         put(&mut self.base, RootContext::Github, &self.github)?;
         self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await

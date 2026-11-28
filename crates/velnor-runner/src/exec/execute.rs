@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use super::adapter::{AdapterCall, invoke};
+use super::adapter::{AdapterCall, ResultsScope, invoke};
 use super::contexts::{github_token, set_output};
 use super::env_files::{Collected, FileCommands, failure, save_summary};
 use super::evaluate;
@@ -157,6 +157,7 @@ impl Job<'_> {
             cancel: limits.cancel.cloned(),
             timeout: limits.timeout,
             groups: limits.groups,
+            results: ResultsScope::from_message(self.message),
         };
         invoke(adapter, call, out).await
     }

@@ -81,6 +81,16 @@ pub(crate) fn http_client() -> Result<Client> {
     }
 }
 
+pub(crate) fn idle_http_client(idle: Duration) -> Result<Client> {
+    Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(RUNNER_USER_AGENT)
+        .connect_timeout(idle)
+        .read_timeout(idle)
+        .build()
+        .map_err(|error| anyhow::anyhow!("build GitHub HTTP client: {error}"))
+}
+
 pub async fn github_json_http_response(
     method: Method,
     url: &str,
@@ -88,29 +98,57 @@ pub async fn github_json_http_response(
     json_body: Option<String>,
     timeout: Duration,
 ) -> Result<GithubHttpResponse> {
+    github_json_http_response_on(
+        &http_client()?,
+        method,
+        url,
+        bearer_token,
+        json_body,
+        Some(timeout),
+    )
+    .await
+}
+
+pub(crate) async fn github_json_http_response_on(
+    client: &Client,
+    method: Method,
+    url: &str,
+    bearer_token: &str,
+    json_body: Option<String>,
+    timeout: Option<Duration>,
+) -> Result<GithubHttpResponse> {
     validate_authenticated_url(url)?;
     let safe_url = redacted_authenticated_url(url);
-    let mut request = http_client()?
+    let mut request = client
         .request(method.clone(), url)
         .bearer_auth(bearer_token)
-        .header(ACCEPT, "application/json")
-        .timeout(timeout);
+        .header(ACCEPT, "application/json");
+    if let Some(timeout) = timeout {
+        request = request.timeout(timeout);
+    }
     if let Some(body) = json_body {
         request = request.header(CONTENT_TYPE, "application/json").body(body);
     }
     let response = request.send().await.map_err(|error| {
-        anyhow::anyhow!(
-            "send {method} {safe_url}: {}",
-            redacted_reqwest_error(&error)
-        )
+        anyhow::Error::new(SendError {
+            message: format!(
+                "send {method} {safe_url}: {}",
+                redacted_reqwest_error(&error)
+            ),
+            network_code: network_code(&error),
+        })
     })?;
     let status = response.status().as_u16();
     let headers = response.headers().clone();
     let body = response.text().await.map_err(|error| {
-        anyhow::anyhow!(
-            "read {method} {safe_url} response: {}",
-            redacted_reqwest_error(&error)
-        )
+        anyhow::Error::new(ReadError {
+            message: format!(
+                "read {method} {safe_url} response: {}",
+                redacted_reqwest_error(&error)
+            ),
+            status,
+            headers: Secret::new(headers.clone()),
+        })
     })?;
     Ok(GithubHttpResponse {
         status,
@@ -261,6 +299,38 @@ pub fn redacted_authenticated_url(raw: &str) -> String {
     url.set_query(None);
     url.set_fragment(None);
     url.to_string()
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub(crate) struct ReadError {
+    message: String,
+    pub(crate) status: u16,
+    pub(crate) headers: Secret<HeaderMap>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub(crate) struct SendError {
+    message: String,
+    pub(crate) network_code: Option<&'static str>,
+}
+
+fn network_code(error: &reqwest::Error) -> Option<&'static str> {
+    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(current) = source {
+        if let Some(io_error) = current.downcast_ref::<std::io::Error>() {
+            match io_error.kind() {
+                std::io::ErrorKind::ConnectionRefused => return Some("ECONNREFUSED"),
+                std::io::ErrorKind::ConnectionReset => return Some("ECONNRESET"),
+                std::io::ErrorKind::HostUnreachable => return Some("EHOSTUNREACH"),
+                std::io::ErrorKind::TimedOut if error.is_connect() => return Some("ETIMEDOUT"),
+                _ => {}
+            }
+        }
+        source = current.source();
+    }
+    None
 }
 
 pub(crate) fn redacted_reqwest_error(error: &reqwest::Error) -> &'static str {

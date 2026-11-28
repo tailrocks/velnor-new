@@ -107,6 +107,7 @@ pub enum StepKind {
     Cargo(CargoCommand),
     Helper(HelperCommand),
     Prepare(PrepareLocks),
+    ToolsComponents,
     InputsAuditRoot(Option<RepoPath>),
     InputsSave {
         target: RepoPath,
@@ -255,6 +256,7 @@ impl StepKind {
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)
+            | Self::ToolsComponents
             | Self::InputsAuditRoot(_)
             | Self::InputsSave { .. }
             | Self::InputsRestore { .. }

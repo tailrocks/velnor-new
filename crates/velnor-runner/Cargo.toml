@@ -13,6 +13,9 @@ autotests = false
 [features]
 test-support = []
 
+[package.metadata.cargo-machete]
+ignored = ["flate2"]
+
 [lints]
 workspace = true
 
@@ -34,7 +37,9 @@ required-features = ["test-support"]
 anyhow = { workspace = true }
 base64 = { workspace = true }
 clap = { workspace = true }
+flate2 = { workspace = true }
 futures-util = { workspace = true }
+jiff = { version = "=1.0.1", default-features = false, features = ["std", "tzdb-bundle-always"] }
 reqwest = { workspace = true }
 ring = { workspace = true }
 regex-automata = { workspace = true }
@@ -51,6 +56,7 @@ url = { workspace = true }
 velnor-model = { workspace = true }
 uuid = { workspace = true }
 velnor-cache-rules = { path = "../velnor-cache-rules", version = "=0.0.0" }
+zip = { workspace = true }
 
 [dev-dependencies]
 rsa = { workspace = true }

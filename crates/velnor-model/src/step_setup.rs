@@ -51,6 +51,7 @@ impl StepKind {
             | Self::DownloadArchive { .. }
             | Self::Cargo(_)
             | Self::Prepare(_)
+            | Self::ToolsComponents
             | Self::InputsAuditRoot(_)
             | Self::InputsSave { .. }
             | Self::InputsRestore { .. }

@@ -5,7 +5,10 @@ use serde_json::{Map, Value as Json};
 
 use super::{DeclaredInputs, InputValue};
 use crate::context_value::ordinal_ignore_case_eq;
-use crate::expr::{ExprEnv, ExprError, Value, evaluate_expression, evaluate_template};
+use crate::expr::{
+    ExprEnv, ExprError, Value, evaluate_expression, evaluate_template, expression_reads_step_state,
+    template_reads_step_state,
+};
 use crate::job_message::context_data::member;
 use crate::job_message::template_token::token_literal;
 
@@ -79,6 +82,21 @@ fn declared_value(token: &Json) -> Result<InputValue, ExprError> {
         Scalar::Plain(text) => InputValue::Literal(text),
         Scalar::Template(_) | Scalar::Expression(_) => InputValue::Deferred,
     })
+}
+
+pub(super) fn scalar_before_steps(
+    token: &Json,
+    env: &ExprEnv,
+) -> Result<Option<String>, ExprError> {
+    let reads_step_state = match classify(token)? {
+        Scalar::Template(text) => template_reads_step_state(text, env)?,
+        Scalar::Expression(source) => expression_reads_step_state(source, env)?,
+        Scalar::Plain(_) => false,
+    };
+    if reads_step_state {
+        return Ok(None);
+    }
+    scalar(token, env).map(Some)
 }
 
 pub(super) fn declared(token: &Json) -> Result<DeclaredInputs, ExprError> {

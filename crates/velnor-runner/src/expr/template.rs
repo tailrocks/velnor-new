@@ -98,3 +98,9 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
     }
     Ok(rendered)
 }
+
+pub fn template_reads_step_state(source: &str, env: &ExprEnv) -> Result<bool, ExprError> {
+    Ok(split(source, env)?
+        .iter()
+        .any(|part| matches!(part, Part::Expression { node, .. } if node.reads_step_state())))
+}

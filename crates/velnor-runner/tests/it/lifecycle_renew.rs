@@ -108,11 +108,14 @@ async fn lifecycle_keeps_renewing_the_job_lock_until_the_completion_is_sent() ->
     .await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
-    let completing = mock.server.only_request("POST", "/run/completejob")?.at;
+    let completing = mock
+        .server
+        .only_request("POST", "/run/completejob")?
+        .arrived();
     let renewed_meanwhile = mock
         .requests_to("POST", "/run/renewjob")?
         .iter()
-        .filter(|renew| renew.at > completing)
+        .filter(|renew| renew.arrived() > completing)
         .count();
     assert!(
         renewed_meanwhile >= 2,

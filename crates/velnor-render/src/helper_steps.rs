@@ -352,6 +352,14 @@ pub(crate) fn merge_queue_step() -> RenderedStep {
     }
 }
 
+pub(crate) fn components_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci prepare components".to_owned(),
+        run: Some("velnor-ci prepare --no-locks".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn prepare_step(locks: &PrepareLocks) -> RenderedStep {
     let mut run = "velnor-ci prepare".to_owned();
     match locks {

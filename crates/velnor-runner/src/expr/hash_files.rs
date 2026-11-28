@@ -3,7 +3,7 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
 use super::error::ExprError;
-use super::glob::PatternSet;
+use super::glob::{PatternSet, WalkOptions};
 use super::pattern::GlobError;
 use super::pattern::trim_line;
 use super::seam::Seam;
@@ -65,7 +65,7 @@ impl Job {
         let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
         let mut aggregate = Context::new(&SHA256);
         let mut count = 0_usize;
-        for found in patterns.walk(&root, self.deadline, &self.seam) {
+        for found in patterns.walk(&root, self.deadline, &self.seam, WalkOptions::HASH_FILES) {
             let mut found = match found {
                 Ok(found) => found,
                 Err(GlobError::TimedOut) => return Err(self.timed_out()),

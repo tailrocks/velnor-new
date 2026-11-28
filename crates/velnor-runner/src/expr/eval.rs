@@ -23,6 +23,10 @@ pub fn evaluate_expression(source: &str, env: &ExprEnv) -> Result<Value, ExprErr
     }
 }
 
+pub fn expression_reads_step_state(source: &str, env: &ExprEnv) -> Result<bool, ExprError> {
+    Ok(parse(source, env)?.is_some_and(|node| node.reads_step_state()))
+}
+
 pub fn evaluate_condition(source: &str, env: &ExprEnv) -> Result<bool, ExprError> {
     if source.trim().is_empty() {
         return Ok(env.status == JobStatus::Success);
