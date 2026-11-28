@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::own_units::link_script;
 use super::{inventory, placed, unit};
 use crate::io::Repo;
 
@@ -86,6 +87,22 @@ pub(crate) fn path_dependency_units_in(repo: &Repo, target: &str) {
         &format!("{target}/build/leaf-0000000000000009/output"),
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
     );
+    for (compiled, run) in [
+        (
+            "mid-0000000000000006/build_script_build-0000000000000006.d",
+            "mid-0000000000000004",
+        ),
+        (
+            "leaf-0000000000000008/build_script_build-0000000000000008.d",
+            "leaf-0000000000000009",
+        ),
+    ] {
+        link_script(
+            repo,
+            &format!("{target}/build/{compiled}"),
+            &format!("{target}/build/{run}/output"),
+        );
+    }
     prepare_path_dependency_outputs(repo, target);
 }
 

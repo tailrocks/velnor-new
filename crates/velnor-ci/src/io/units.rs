@@ -64,6 +64,7 @@ pub(super) enum UnitFile {
     Script {
         profile: String,
         package: String,
+        hash: String,
     },
     BuildOutput {
         configuration: String,
@@ -237,11 +238,12 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
                 hash: hash.to_owned(),
             })
         }
-        (Some("build"), Some((package, _))) => {
+        (Some("build"), Some((package, hash))) => {
             name.strip_suffix(".d").and_then(split).and_then(|_| {
                 Some(UnitFile::Script {
                     profile: profile(&configuration(2)?).to_owned(),
                     package: package.to_owned(),
+                    hash: hash.to_owned(),
                 })
             })
         }
@@ -293,6 +295,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
                 return Some(UnitFile::Script {
                     profile: profile(&configuration).to_owned(),
                     package,
+                    hash,
                 });
             }
             Some(UnitFile::DepInfo {

@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{CheckoutScope, GroupArtifact, PathGlob, RepoFacts, RepoPath, RustRoot, Unread};
+use velnor_model::{
+    CheckoutScope, GroupArtifact, InputKey, PathGlob, RepoFacts, RepoPath, RustRoot, Unread,
+};
 
 const TOP_FILES: &[&str] = &[
     "Cargo.toml",
@@ -46,7 +48,7 @@ pub(crate) fn with_artifacts(
 fn listing(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
     if roots.is_empty()
         || !facts.config.test_setup.is_empty()
-        || facts.compile_inputs.contains_key(&None)
+        || facts.compile_inputs.keys().any(|key| key.path().is_none())
     {
         return None;
     }
@@ -73,7 +75,7 @@ fn listing(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
         facts
             .compile_inputs
             .keys()
-            .flatten()
+            .filter_map(InputKey::path)
             .map(|path| format!("/{path}")),
     );
     paths.extend(
